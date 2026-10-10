@@ -154,6 +154,7 @@ export const uarKeys = {
   details: () => [...uarKeys.all, "detail"] as const,
   detail: () => [...uarKeys.details(), "status"] as const,
   models: () => [...uarKeys.lists(), "models"] as const,
+  delegation: (bossTaskId: string) => [...uarKeys.details(), "delegation", bossTaskId] as const,
 };
 
 // Credential pools (#4965) — per-provider multi-key rotation status. Kept

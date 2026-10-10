@@ -14,6 +14,12 @@ The final fixture correction updates `scripts/integration/bauar-harness-gate.mjs
 It uses the packaged sidecar's persistent stdin handshake and actual READY port, supplies immutable application-configured run credentials and MCP grants, separates model credentials from launch/service credentials, and preserves bounded failure checkpoints.
 The receiver's production authentication and grant enforcement were not weakened.
 
+## Main integration resolution
+
+The publication merge retains the newer origin/main ordinary workflow delegation and terminal replay draining alongside selected durable job routing.
+Three observation/preflight conflicts were resolved by keeping both selected response handling and workflow event handling, returning all terminal replay events while rejecting an incomplete EOF frame, and applying the newer delegated-host-context capability and projection fields in the selected preflight constructor.
+These merge adaptations have not been compiled or runtime tested because the operator stopped further checks; the next session must verify the merged source before treating it as a certified candidate.
+
 ## Actual completed evidence
 
 The harness-only integration executed on local unsigned macOS arm64 on 2026-10-10, with actual process exit 0 and confirmed cleanup: the owned process group was absent and no unknown descendants remained.

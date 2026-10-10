@@ -157,6 +157,11 @@ impl UarRunClient {
         }
 
         let mut body = admission.run.clone();
+        if body.get("delegated_host_context_id").is_some_and(|value| {
+            value.as_str().is_none_or(|id| id.trim().is_empty())
+        }) {
+            return Err(UarRunClientError::InvalidAdmission("delegated_host_context_id must be a non-empty opaque identity".into()));
+        }
         body.insert(
             "admission_id".into(),
             Value::String(admission.admission_key.clone()),

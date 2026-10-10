@@ -65,7 +65,7 @@ pub(crate) async fn connections(
             } else {
                 "reattachment_required"
             };
-            connections.push(serde_json::json!({"bossTaskId":projection.boss_task_id,"workspaceId":projection.workspace_id,"selectedInstanceId":projection.selected_instance_id,"effectiveBinding":projection.effective_binding,"runtimeEpoch":projection.runtime_epoch,"executionState":projection.execution_state,"admissionState":projection.admission_state,"cancellation":projection.cancellation,"credentialState":credential_state}));
+            connections.push(serde_json::json!({"bossTaskId":projection.boss_task_id,"workspaceId":projection.workspace_id,"selectedInstanceId":projection.selected_instance_id,"effectiveBinding":projection.effective_binding,"runtimeEpoch":projection.runtime_epoch,"delegatedHostContextId":projection.delegated_host_context_id,"executionState":projection.execution_state,"admissionState":projection.admission_state,"cancellation":projection.cancellation,"credentialState":credential_state}));
         }
         Json(serde_json::json!({"connections":connections})).into_response()
     }
@@ -88,6 +88,7 @@ pub(crate) struct RefreshRequest {
     workspace_id: String,
     instance: UarServiceInstanceConfig,
     bearer: String,
+    delegated_host_contexts: Option<Vec<librefang_types::uar_run::UarDelegatedHostContext>>,
 }
 
 #[cfg(feature = "uar-driver")]
@@ -98,6 +99,8 @@ pub(crate) async fn refresh(
 ) -> Response {
     #[cfg(feature = "uar-driver")]
     {
+        // Original transport renewal cannot publish new-admission context selection.
+        let _ = request.delegated_host_contexts;
         if api_user
             .as_ref()
             .is_none_or(|user| user.0.role != UserRole::Owner)

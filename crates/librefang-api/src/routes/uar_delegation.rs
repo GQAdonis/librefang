@@ -13,6 +13,8 @@ mod errors;
 mod observation;
 #[cfg(feature = "uar-driver")]
 mod storage;
+#[cfg(feature = "uar-driver")]
+pub(crate) mod workflow;
 #[cfg(not(feature = "uar-driver"))]
 pub fn router() -> axum::Router<Arc<AppState>> {
     axum::Router::new().route("/uar/jobs/{job_id}/admission", axum::routing::post(|| async {
@@ -21,7 +23,7 @@ pub fn router() -> axum::Router<Arc<AppState>> {
     }))
 }
 #[cfg(feature = "uar-driver")]
-mod enabled {
+pub(crate) mod enabled {
     use super::errors::{client_error, delegation_not_found};
     use super::storage::{persist_and_sync, persist_initial, saved_view};
     use super::*;
@@ -102,7 +104,7 @@ mod enabled {
         api_user: Option<Extension<AuthenticatedApiUser>>,
         Json(admission): Json<UarRunAdmission>,
     ) -> Response {
-        admit_source(state, api_user, admission, false).await
+        admit_source(state, api_user, admission, false, None).await
     }
 
     pub(super) async fn admit_source(
@@ -110,6 +112,7 @@ mod enabled {
         api_user: Option<Extension<AuthenticatedApiUser>>,
         mut admission: UarRunAdmission,
         inline_diagnostic: bool,
+        workflow: Option<librefang_types::uar_run::UarWorkflowCorrelation>,
     ) -> Response {
         let Some(verified_user) = api_user.as_ref() else {
             return api_error(
@@ -173,13 +176,14 @@ mod enabled {
             );
         }
         let client = state.uar_run_control.as_ref();
-        let pending = match client
+        let mut pending = match client
             .prepare_projection(&admission, &prepared, &verified_principal)
             .await
         {
             Ok(projection) => projection,
             Err(error) => return client_error(error),
         };
+        pending.workflow = workflow;
         let pending = match persist_initial(
             &state,
             A2aTask {
@@ -197,7 +201,11 @@ mod enabled {
             Err(response) => return response,
         };
         match client.admit(&admission, &prepared, &pending).await {
-            Ok(projection) => saved_view(&state, projection, StatusCode::CREATED),
+            Ok(mut projection) => {
+                projection.workflow = pending.workflow;
+                if projection.workflow.is_some() { projection.cursor = 0; }
+                saved_view(&state, projection, StatusCode::CREATED)
+            }
             Err(error) if outcome_uncertain(&error) => {
                 let mut unresolved = pending;
                 unresolved.admission_state = "unresolved".to_string();
@@ -430,7 +438,7 @@ mod enabled {
         }
         saved_view(state, projection, StatusCode::ACCEPTED)
     }
-    pub(super) fn stored_delegation(
+    pub(crate) fn stored_delegation(
         state: &Arc<AppState>,
         task_id: &str,
         api_user: Option<&Extension<AuthenticatedApiUser>>,

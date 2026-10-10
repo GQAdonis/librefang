@@ -37,6 +37,9 @@ impl UarRunClient {
             .runtime_descriptor(&transport, &admission.workspace_id)
             .await?;
         descriptor.validate()?;
+        if prepared.body.get("delegated_host_context_id").is_some() && !descriptor.delegated_host_context_v1 {
+            return Err(UarRunClientError::InvalidAdmission("UAR does not advertise delegated_host_context_v1".into()));
+        }
         // Legacy/manual retains its existing profile. Selected atomic cursor
         // projection requires the full-harness provider's explicit wire profile.
         if admission.boss_task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX)
@@ -54,6 +57,7 @@ impl UarRunClient {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            delegated_host_context_id: admission.run.get("delegated_host_context_id").and_then(Value::as_str).map(str::to_owned),
             definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: transport.binding.instance_id.clone(),
@@ -82,6 +86,9 @@ impl UarRunClient {
             created_at: None,
             terminal_at: None,
             links: Map::new(),
+            workflow: None,
+            output: None,
+            pending_approval: None,
         };
         let secrets = presentation::CapturedSecrets::capture(&transport, &admission.run);
         Ok(PendingUarAdmission { projection, transport, secrets })

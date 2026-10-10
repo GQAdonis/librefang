@@ -54,7 +54,7 @@ pub(super) async fn diagnostic(
         Ok(admission) => admission,
         Err(error) => return super::errors::client_error(error),
     };
-    super::enabled::admit_source(state, api_user, admission, true).await
+    super::enabled::admit_source(state, api_user, admission, true, None).await
 }
 
 /// Authenticated Owner-only full-run diagnostic; no catalog installation.

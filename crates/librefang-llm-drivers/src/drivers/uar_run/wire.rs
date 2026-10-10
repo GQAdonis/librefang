@@ -22,6 +22,8 @@ pub(super) struct WireReceipt {
     #[serde(default)]
     run_id: Option<String>,
     #[serde(default)]
+    root_run_id: Option<String>,
+    #[serde(default)]
     runtime_epoch: Option<String>,
     #[serde(default)]
     workspace_id: Option<String>,
@@ -61,6 +63,8 @@ pub(super) struct WireRuntimeDescriptor {
     pub(super) recovery: String,
     pub(super) retention: WireRetention,
     pub(super) steer_supported: bool,
+    #[serde(default)]
+    pub(super) delegated_host_context_v1: bool,
 }
 
 impl WireRuntimeDescriptor {
@@ -177,6 +181,7 @@ impl WireReceipt {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            delegated_host_context_id: admission.run.get("delegated_host_context_id").and_then(Value::as_str).map(str::to_owned),
             definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: binding.instance_id.clone(),
@@ -186,7 +191,7 @@ impl WireReceipt {
             remote_diagnostics: self.diagnostics,
             uar_task_id: self.task_id,
             uar_thread_id: None,
-            uar_root_run_id: None,
+            uar_root_run_id: self.root_run_id,
             uar_run_id: self.run_id,
             admission_state: if state == "rejected" {
                 "refused".into()
@@ -209,6 +214,9 @@ impl WireReceipt {
             created_at: self.created_at,
             terminal_at: self.terminal_at,
             links: self.links,
+            workflow: None,
+            output: None,
+            pending_approval: None,
         })
     }
 
@@ -217,6 +225,27 @@ impl WireReceipt {
         projection: &UarDelegatedRunProjection,
         binding: UarEffectiveBinding,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
+        // A receipt may advance state, never replace the admitted authority.
+        for (field, known, observed) in [
+            ("task_id", projection.uar_task_id.as_deref(), self.task_id.as_deref()),
+            ("run_id", projection.uar_run_id.as_deref(), self.run_id.as_deref()),
+            ("runtime_epoch", projection.runtime_epoch.as_deref(), self.runtime_epoch.as_deref()),
+        ] {
+            if known.is_some() && known != observed {
+                return Err(UarRunClientError::InvalidResponse {
+                    operation: "task lookup",
+                    message: format!("receipt original {field} identity changed"),
+                });
+            }
+        }
+        if let (Some(known), Some(observed)) = (&projection.uar_root_run_id, &self.root_run_id) {
+            if known != observed {
+                return Err(UarRunClientError::InvalidResponse {
+                    operation: "task lookup",
+                    message: "receipt original root_run_id identity changed".into(),
+                });
+            }
+        }
         let prepared = PreparedAdmission {
             request_digest: projection.request_digest.clone(),
             definition_mode: projection.definition_mode,
@@ -239,6 +268,15 @@ impl WireReceipt {
             &projection.verified_principal,
         )?;
         merged.boss_projection_retention = projection.boss_projection_retention;
+        merged.delegated_host_context_id.clone_from(&projection.delegated_host_context_id);
+        merged.workflow.clone_from(&projection.workflow);
+        merged.output.clone_from(&projection.output);
+        // Workflow output advances only with consumed events. A status receipt's
+        // advertised high-water must not skip unread output on a UI lookup.
+        if projection.workflow.is_some() { merged.cursor = projection.cursor; }
+        if merged.execution_state == "input_required" {
+            merged.pending_approval.clone_from(&projection.pending_approval);
+        }
         // UAR's execution receipt has no evidence that a previously uncertain
         // external effect or BossFang recovery outcome has been settled.
         merged.effect_state.clone_from(&projection.effect_state);
@@ -249,9 +287,9 @@ impl WireReceipt {
             }
         }
         merged.uar_thread_id.clone_from(&projection.uar_thread_id);
-        merged
-            .uar_root_run_id
-            .clone_from(&projection.uar_root_run_id);
+        if merged.uar_root_run_id.is_none() {
+            merged.uar_root_run_id.clone_from(&projection.uar_root_run_id);
+        }
         Ok(merged)
     }
 }

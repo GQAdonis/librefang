@@ -16,6 +16,74 @@ pub struct UarDefinitionIdentity {
     pub digest: String,
 }
 
+/// Public authored target for one ordinary workflow step. Private runtime
+/// credentials and host grants are attached by their existing trusted owner.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarWorkflowStepTarget {
+    pub target_binding_id: String,
+    pub workspace_id: String,
+    pub definition: UarDefinitionIdentity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
+    #[serde(default)]
+    pub run: serde_json::Map<String, serde_json::Value>,
+}
+
+impl UarWorkflowStepTarget {
+    /// Check the authored workflow persistence boundary, not UAR execution policy.
+    pub fn validate(&self) -> Result<(), String> {
+        if [&self.target_binding_id, &self.workspace_id, &self.definition.id,
+            &self.definition.version, &self.definition.digest]
+            .iter().any(|value| value.trim().is_empty())
+        {
+            return Err("UAR target requires binding, workspace and exact definition identity".into());
+        }
+        if self.delegated_host_context_id.as_ref().is_some_and(|id| id.trim().is_empty()) {
+            return Err("UAR delegated host context identity must not be empty".into());
+        }
+        for (key, value) in &self.run {
+            let valid = match key.as_str() {
+                "working_directory" | "reasoning_effort" => value.as_str().is_some(),
+                "skill_attachments" => value.as_array().is_some_and(|values| values.iter().all(serde_json::Value::is_string)),
+                _ => return Err(format!("UAR workflow run field '{key}' is not public authored configuration")),
+            };
+            if !valid { return Err(format!("UAR workflow run field '{key}' has an invalid public value type")); }
+        }
+        Ok(())
+    }
+}
+
+/// Public identity of a host-registered context. Callback resources stay private.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContext {
+    pub context_id: String,
+    pub workspace_id: String,
+    pub runtime_epoch: String,
+    pub definition: UarDefinitionIdentity,
+    pub binding: UarDelegatedHostContextBinding,
+    pub expires_at: String,
+}
+
+/// Binding revision captured by the host context's original admission authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContextBinding {
+    pub id: String,
+    pub revision: u64,
+    pub digest: String,
+}
+
+/// Correlation only: the workflow engine and UAR keep their original authorities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UarWorkflowCorrelation {
+    pub workflow_id: String,
+    pub workflow_run_id: String,
+    pub step_name: String,
+}
+
 /// One non-secret compiler or activation diagnostic retained with a definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +142,9 @@ pub struct UarDelegatedRunProjection {
     pub request_digest: String,
     /// Empty only for the explicitly authored inline diagnostic.
     pub target_binding_id: String,
+    /// Original context reference, retained independently of new-run selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
     #[serde(default)]
     pub definition_mode: UarDefinitionMode,
     pub workspace_id: String,
@@ -115,6 +186,14 @@ pub struct UarDelegatedRunProjection {
     pub terminal_at: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub links: serde_json::Map<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<UarWorkflowCorrelation>,
+    /// Actual UAR message deltas, retained for the owning ordinary workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// Existing host-issued event, never a locally generated approval request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_approval: Option<UarRunEvent>,
 }
 
 /// Admission input accepted by BossFang's control seam.
