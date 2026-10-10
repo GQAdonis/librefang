@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "expectedBossSource": "ff98af813c59e7c2733db74306ebfe087fec069a",
+  "expectedUarSource": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+  "isolatedProfile": true,
+  "retainedProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-29WEuI",
+  "expectedGatewayEndpoint": "http://127.0.0.1:4000",
+  "priorInferenceEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-9a197eed-660e-44b6-aebe-5d409ab79570/evidence.json",
+  "applicabilityReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-retained-evidence-applicability-20261010.md"
+}
