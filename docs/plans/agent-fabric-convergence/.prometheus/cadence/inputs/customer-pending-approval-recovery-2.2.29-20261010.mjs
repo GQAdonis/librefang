@@ -53,6 +53,8 @@ export default async function run({ evaluate, signal, onObservation }, configura
     return { instanceId: row.instanceId, lifecycle: row.lifecycle, recovery: row.recovery,
       epoch: row.epoch, revision: row.revision, commandCount: row.commands.length,
       lastErrorCode: /^[A-Za-z0-9_.:-]{1,100}$/.test(row.lastErrorCode ?? '') ? row.lastErrorCode : null,
+      activeRunId: row.activeRunId ?? null, activeCommandId: row.activeCommandId ?? null,
+      activeAttemptId: row.activeAttemptId ?? null,
       commandId: command?.commandId ?? null, attemptId: command?.attemptId ?? null,
       runId: command?.rootRunId ?? null, commandStatus: command?.status ?? null }
   }
@@ -116,9 +118,17 @@ export default async function run({ evaluate, signal, onObservation }, configura
     const after = await instance()
     const afterCommand = after.commands.find(row => row.commandId === state.command.commandId)
     result.after = commandProjection(after, afterCommand)
+    // controller.load latches orphaned attempts as failed/effect_uncertain;
+    // pump settlement can instead confirm cancellation before graceful shutdown.
+    const inactive = !after.activeRunId && !after.activeCommandId && !after.activeAttemptId &&
+      ['dormant', 'disabled', 'failed'].includes(after.lifecycle)
+    const uncertain = afterCommand?.status === 'uncertain' && after.lifecycle === 'failed' && after.recovery === 'effect_uncertain'
+    const cancelled = afterCommand?.status === 'cancelled' && after.recovery === 'ready'
     requireFact(afterCommand?.rootRunId === state.runId && after.commands.length === prior.commands.length &&
-      afterCommand.status === 'uncertain' && after.recovery !== 'ready', 'PENDING_RECOVERY_UNCERTAINTY_NOT_PRESERVED')
-    result.checks.push({ name: 'same-command-retained-with-visible-uncertainty-and-no-new-command', passed: true })
+      inactive && (uncertain || cancelled), 'PENDING_RECOVERY_INTERRUPTION_NOT_PRESERVED')
+    result.interruptionOutcome = uncertain ? 'uncertain-reconciliation-required' : 'confirmed-cancellation'
+    result.checks.push({ name: 'same-command-retained-with-terminal-interruption-and-no-replay', passed: true,
+      outcome: result.interruptionOutcome })
     const response = await request('prometheus.uar.durable.run', { ...selector(), runId: state.runId, after: 0 })
     if (!response?.ok) {
       result.afterRestartHistory = { available: false, approvalState: 'unknown', successfulEffects: 'unknown',
