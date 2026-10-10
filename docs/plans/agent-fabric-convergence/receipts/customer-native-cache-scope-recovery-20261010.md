@@ -20,3 +20,11 @@ Packaging must run on that same branch after a successful native build and exact
 Cancellation was also requested for redundant tag-scoped Mac ARM64 native run38019878840 after the actual local native build and its complete public payload passed checksum/download/closure verification. Public Mac installer38021122789 remains active and uses that completed local payload. Its artifact retains its actual source and signing/notarization evidence.
 
 These requests do not prove terminal cancellation, cache restoration, replacement build success, packaging, publication or installed acceptance. Read the actual jobs and receipts before advancing. The existing clock, fifteen delivery count, old failures and publication obligations are untouched.
+
+## Subsequent observed progress
+
+At 04:02 UTC, the Windows x64 replacement had completed the cache-restore step at 03:58:17 UTC and entered native compilation. The step conclusion alone is not an exact-cache-hit receipt. Windows ARM64 was restoring its cache. The old producer's Mac Intel native job completed compilation and its cache save; a new Intel repair producer, run38022665581, was therefore dispatched on the same branch at workflow source8119fd7c83248cdf0d0cde4496cb33c569761a71, retaining repaired UAR308aea46. Its outcome remains pending.
+
+The public Apple Silicon installer run38021122789 had reached its actual signing/notarization and DMG/ZIP packaging path. Live logs include the custom `Notarized app` message, but final signature/notarization and downloadable bytes still require the completed installer manifest and public artifact receipt. Local signing evidence does not substitute for that public receipt.
+
+Automatic PR/main CI had started unit/renderer suites despite the operator's boundary policy. The lead did not manually invoke those suites and does not use them as qualification evidence. Cancellation was requested for owned superseded runs38021763537,38004056095,38003361131 and38003339139, then for merge-triggered run38021802875. The first replacement-head PR run38021763537 was observed terminal cancelled. Other terminal outcomes must be read from GitHub; no zero-run claim or retrospective cost measurement is made. Actual native and installer jobs remain active.
