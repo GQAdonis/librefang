@@ -18,7 +18,7 @@ const receipt = { schemaVersion: 1, kind: 'actual-corrective-mac-installer-build
   startedAt: new Date().toISOString(), source, uarSource: record.source,
   nativeArchiveSha256: record.sha256, workingDirectory: repository,
   executable: 'pnpm', args: ['build:mac:arm64'], version: '2.2.26',
-  reason: 'Complete observed grant, native-tool startup and team-policy repairs with desktop controls',
+  reason: 'Repair observed host allowlist omission for owner-scoped durable UAR turn submission; previous e27bafa build preserved',
   status: 'running', newCadenceDelivery: false }
 const receiptPath = path.join(directory, 'build.json')
 fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
