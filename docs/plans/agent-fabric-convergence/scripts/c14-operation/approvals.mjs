@@ -25,23 +25,50 @@ const reservation = (value) => fields(value, ['tokens', 'costMicrounits', 'elaps
   Number.isInteger(value.costMicrounits) && value.costMicrounits >= 0 && value.costMicrounits <= 1000000 &&
   Number.isInteger(value.elapsedSeconds) && value.elapsedSeconds >= 1 && value.elapsedSeconds <= 300
 
+const canonical = (value) => Array.isArray(value) ? value.map(canonical) : record(value)
+  ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+    .map(([key, entry]) => [key, canonical(entry)])) : value
+const canonicalDigest = (value) => digest(JSON.stringify(canonical(value)))
+const sha256 = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+
+function fixtureEditAllowed(edit, current, expected, diagnostic) {
+  if (!constraints(diagnostic, [['FILESYSTEM_EDIT_DIGESTS_VALID', record(edit) &&
+    sha256(edit.oldStringSha256) && sha256(edit.newStringSha256) &&
+    Number.isSafeInteger(edit.oldStringLength) && edit.oldStringLength > 0 && edit.oldStringLength <= current.length &&
+    Number.isSafeInteger(edit.newStringLength) && edit.newStringLength >= 0 && edit.newStringLength <= expected.length &&
+    typeof edit.replaceAll === 'boolean']])) return false
+  for (let offset = 0; offset <= current.length - edit.oldStringLength; offset++) {
+    const oldText = current.slice(offset, offset + edit.oldStringLength)
+    if (digest(oldText) !== edit.oldStringSha256) continue
+    const first = current.indexOf(oldText)
+    const newText = expected.slice(first, first + edit.newStringLength)
+    if (digest(newText) !== edit.newStringSha256) continue
+    const result = edit.replaceAll ? current.split(oldText).join(newText)
+      : current.slice(0, first) + newText + current.slice(first + oldText.length)
+    return constraints(diagnostic, [['FILESYSTEM_EDIT_OLD_TEXT_PRESENT', true],
+      ['FILESYSTEM_EDIT_EXACT_MATCH_UNIQUE', edit.replaceAll || first === current.lastIndexOf(oldText)],
+      ['FILESYSTEM_EDIT_EXACT_RESULT', result === expected]])
+  }
+  return constraints(diagnostic, [['FILESYSTEM_EDIT_EXACT_RESULT', false]])
+}
+
 async function peerEffectAllowed(evaluate, request, args, attempt, summary, scope, diagnostic) {
   const selector = { workspaceId: scope.instance.workspaceId, teamInstanceId: scope.instance.id }
   const context = await ipc(evaluate, 'prometheus.uar.teams.context', { ...selector, attemptId: attempt.id })
-  const root = summary.attempts.find((item) => scope.roles[item.memberId] === 'coordinator' && !item.continuationOfWaitId)
+  const coordinator = summary.attempts.find((item) => scope.roles[item.memberId] === 'coordinator' && !item.continuationOfWaitId)
   const authority = context.authority
   requireFact(constraints(diagnostic, [
-    ['PEER_ROOT_ID_PRESENT', root?.rootId], ['PEER_APPROVAL_SCOPE_PRESENT', root?.approvalScopeId],
-    ['PEER_ATTEMPT_ROOT_MATCH', attempt.rootId === root?.rootId],
-    ['PEER_ATTEMPT_APPROVAL_SCOPE_MATCH', attempt.approvalScopeId === root?.approvalScopeId],
-    ['PEER_CONTEXT_ROOT_MATCH', context.rootId === root?.rootId],
-    ['PEER_CONTEXT_APPROVAL_SCOPE_MATCH', context.approvalScopeId === root?.approvalScopeId],
+    ['PEER_ROOT_ID_PRESENT', id(attempt.rootId)], ['PEER_APPROVAL_SCOPE_PRESENT', id(attempt.approvalScopeId)],
+    ['PEER_ATTEMPT_ROOT_MATCH', attempt.rootId === context.rootId],
+    ['PEER_ATTEMPT_APPROVAL_SCOPE_MATCH', attempt.approvalScopeId === attempt.rootId],
+    ['PEER_CONTEXT_ROOT_MATCH', context.rootId === attempt.rootId],
+    ['PEER_CONTEXT_APPROVAL_SCOPE_MATCH', context.approvalScopeId === attempt.approvalScopeId],
     ['PEER_OWNER_MATCH', authority.ownerId === scope.instance.ownerId],
     ['PEER_WORKSPACE_MATCH', authority.workspaceId === selector.workspaceId],
     ['PEER_TEAM_MATCH', authority.teamId === selector.teamInstanceId],
     ['PEER_ATTEMPT_MATCH', authority.attemptId === attempt.id], ['PEER_RUN_MATCH', authority.runId === attempt.runId],
     ['PEER_MEMBER_MATCH', authority.memberId === attempt.memberId], ['PEER_TASK_MATCH', authority.taskId === attempt.taskId],
-    ['PEER_COORDINATOR_MATCH', context.coordinatorMemberId === root?.memberId],
+    ['PEER_COORDINATOR_MATCH', context.coordinatorMemberId === coordinator?.memberId],
     ['PEER_SELF_MEMBER_MATCH', context.self.memberId === attempt.memberId],
     ['PEER_SELF_ROLE_MATCH', context.self.role === scope.roles[attempt.memberId]],
     ['PEER_BINDING_MATCH', authority.binding.id === scope.instance.binding.id],
@@ -56,6 +83,10 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
   ]), 'C14_PEER_APPROVAL_TEAM_UNAVAILABLE')
   const senderRole = scope.roles[attempt.memberId]
   const recipientId = request.tool === 'team_delegate' ? args.recipientMemberId : args.recipient?.memberId
+  diagnostic.peerResolver = { schema: 'native-team-tool-canonical-arguments',
+    resolver: 'exact-member-id-and-authorized-context-roster',
+    members: team.members.slice(0, 50).map((item) => ({ id: item.id, status: item.status, role: item.role })),
+    roster: context.roster.slice(0, 50).map((item) => ({ memberId: item.memberId, role: item.role })) }
   const recipient = team.members.find((item) => item.id === recipientId &&
     !['revoked', 'stopped', 'cancelled'].includes(item.status))
   const rosterPeer = context.roster.find((item) => item.memberId === recipientId)
@@ -65,9 +96,14 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
     ['PEER_RECIPIENT_ROSTER_ROLE_MATCH', recipient && rosterPeer?.role === recipient.role],
     ['PEER_AUTHORIZED_EDGE', authorizedEdge]])) return false
   const page = await scope.artifacts()
-  const rootedAttempts = summary.attempts.filter((item) => item.rootId === root.rootId &&
-    item.approvalScopeId === root.approvalScopeId)
-  const workerAttempts = rootedAttempts.filter((item) => scope.roles[item.memberId] === 'worker' &&
+  const attributedAttempts = summary.attempts.filter((item) => item.ownerId === authority.ownerId &&
+    item.workspaceId === authority.workspaceId && item.teamId === authority.teamId &&
+    (item.id === attempt.id || context.targetOutcomes.some((outcome) => outcome.attemptId === item.id &&
+      outcome.taskId === item.taskId && outcome.memberId === item.memberId &&
+      outcome.executionOutcome === item.executionOutcome && outcome.effectDisposition === 'confirmed' &&
+      item.effectDisposition === 'confirmed')))
+  const workerAttempts = attributedAttempts.filter((item) => scope.roles[item.memberId] === 'worker' &&
+    item.effectDisposition === 'confirmed' &&
     (item.status === 'succeeded' || item.executionOutcome === 'succeeded'))
   const workerArtifacts = page.artifacts.filter((item) => workerAttempts.some((worker) =>
     worker.id === item.attemptId && worker.taskId === item.taskId && worker.memberId === item.memberId))
@@ -101,7 +137,7 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
     ['SEND_PAYLOAD_FIXTURE_EXACT', args.payload?.text === (senderRole === 'coordinator' ? scope.texts[recipient.role] : scope.texts.message)],
     ['SEND_RECIPIENT_TASK_MATCH', args.recipient?.taskId === undefined || team.tasks.some((task) => task.id === args.recipient.taskId &&
       task.role === recipient.role && task.assigneeMemberId === recipientId)]])) return false
-  const attributable = page.artifacts.filter((item) => rootedAttempts.some((source) => source.id === item.attemptId &&
+  const attributable = page.artifacts.filter((item) => attributedAttempts.some((source) => source.id === item.attemptId &&
     source.taskId === item.taskId && source.memberId === item.memberId &&
     (source.memberId === attempt.memberId || context.targetOutcomes.some((outcome) => outcome.attemptId === source.id &&
       outcome.artifactIds.includes(item.id)))))
@@ -146,34 +182,54 @@ export async function approveFixtureRequests(evaluate, signal, configuration, su
       requireFact(constraints(diagnostic, [['APPROVAL_TOOL_OWNER_MATCH',
         peer ? pending.admissionOwner === 'uar-runtime' : pending.admissionOwner === 'paired-host' &&
         ['worker', 'reviewer'].includes(roles[attempt.memberId])]]), 'C14_APPROVAL_TOOL_OWNER_UNAVAILABLE')
+      if (peer) {
+        // Native pending approvals carry the trusted action display, not bare tool arguments.
+        requireFact(constraints(diagnostic, [
+          ['PEER_ACTION_DISPLAY_FIELDS_EXACT', fields(args, ['operation', 'arguments'])],
+          ['PEER_ACTION_DISPLAY_OPERATION_MATCH', args.operation === request.tool],
+          ['PEER_ACTION_DISPLAY_ARGUMENTS_OBJECT', record(args.arguments)]
+        ]), 'C14_PEER_APPROVAL_ACTION_DISPLAY_UNAVAILABLE')
+        args = args.arguments
+      }
       const file = path.join(configuration.workspaceDirectory, 'README.md')
       let allowed = peer && await peerEffectAllowed(evaluate, request, args, attempt, summary, { ...scope, roles }, diagnostic)
-      const atFile = typeof args.file_path === 'string' && path.resolve(configuration.workspaceDirectory, args.file_path) === file &&
-        fs.realpathSync(file) === file
+      const effect = pending.preparedEffect
+      if (!peer) {
+        requireFact(constraints(diagnostic, [['PREPARED_EFFECT_PRESENT', record(effect) && effect.version === 1],
+          ['PREPARED_EFFECT_ADMISSION_MATCH', effect?.admissionId === pending.admissionId && id(pending.admissionId)],
+          ['PREPARED_EFFECT_INVOCATION_PRESENT', id(effect?.invocationId)],
+          ['PREPARED_EFFECT_TOOL_CALL_MATCH', effect?.toolCallId === pending.toolCallId && id(pending.toolCallId)],
+          ['PREPARED_EFFECT_CALL_INDEX_MATCH', effect?.callIndex === pending.callIndex && Number.isInteger(pending.callIndex)],
+          ['PREPARED_EFFECT_ROOT_RUN_MATCH', effect?.rootRunId === pending.rootRunId && pending.rootRunId === attempt.runId],
+          ['PREPARED_EFFECT_RUN_MATCH', effect?.runId === attempt.runId],
+          ['PREPARED_EFFECT_OWNER_MATCH', effect?.ownerId === scope.instance.ownerId],
+          ['PREPARED_EFFECT_WORKSPACE_MATCH', effect?.workspace === configuration.workspaceDirectory],
+          ['PREPARED_EFFECT_TOOL_MATCH', effect?.toolName === request.tool],
+          ['PREPARED_EFFECT_ARGUMENT_DIGEST_VALID', sha256(effect?.argumentsSha256)],
+          ['PREPARED_EFFECT_DISPLAY_DIGEST_MATCH', effect?.actionDisplaySha256 === canonicalDigest(args)]]),
+          'C14_APPROVAL_PREPARED_EFFECT_UNAVAILABLE')
+        diagnostic.preparedEffect = { admissionId: effect.admissionId, invocationId: effect.invocationId,
+          toolCallId: effect.toolCallId, callIndex: effect.callIndex, argumentsSha256: effect.argumentsSha256,
+          actionDisplaySha256: effect.actionDisplaySha256 }
+      }
+      const atFile = !peer && effect.targetPath === file && fs.realpathSync(file) === file
       if (request.tool === 'filesystem__read') allowed = constraints(diagnostic, [['FILESYSTEM_READ_EXACT_FIXTURE', atFile]])
       if (['filesystem__ls', 'filesystem__glob', 'filesystem__grep'].includes(request.tool)) {
-        const target = args.path === undefined ? configuration.workspaceDirectory :
-          typeof args.path === 'string' ? path.resolve(configuration.workspaceDirectory, args.path) : null
         allowed = constraints(diagnostic, [['FILESYSTEM_QUERY_EXACT_FIXTURE',
-          target === configuration.workspaceDirectory || request.tool === 'filesystem__grep' && target === file]])
+          effect.targetPath === configuration.workspaceDirectory || request.tool === 'filesystem__grep' && atFile]])
       }
       if (roles[attempt.memberId] === 'worker' && atFile) {
         if (request.tool === 'filesystem__write') allowed = constraints(diagnostic, [['FILESYSTEM_WRITE_EXACT_CONTENT',
-          args.content === configuration.repository.after]])
-        if (request.tool === 'filesystem__edit' && typeof args.old_string === 'string' && args.old_string &&
-            typeof args.new_string === 'string') {
+          effect.write?.contentSha256 === digest(configuration.repository.after)]])
+        if (request.tool === 'filesystem__edit') {
           const current = fs.readFileSync(file, 'utf8')
-          const result = args.replace_all ? current.split(args.old_string).join(args.new_string)
-            : current.replace(args.old_string, () => args.new_string)
-          allowed = constraints(diagnostic, [['FILESYSTEM_EDIT_OLD_TEXT_PRESENT', current.includes(args.old_string)],
-            ['FILESYSTEM_EDIT_EXACT_RESULT', result === configuration.repository.after]])
+          allowed = fixtureEditAllowed(effect.edit, current, configuration.repository.after, diagnostic)
         }
       }
       if (!allowed && !diagnostic.failedConstraint) {
         if (['filesystem__write', 'filesystem__edit'].includes(request.tool)) constraints(diagnostic, [
           ['FILESYSTEM_WRITE_WORKER_ROLE', roles[attempt.memberId] === 'worker'], ['FILESYSTEM_WRITE_EXACT_FIXTURE', atFile],
-          ['FILESYSTEM_EDIT_ARGUMENTS_VALID', request.tool !== 'filesystem__edit' ||
-            typeof args.old_string === 'string' && args.old_string && typeof args.new_string === 'string']])
+          ['FILESYSTEM_EDIT_ARGUMENTS_VALID', request.tool !== 'filesystem__edit' || record(effect.edit)]])
         else constraints(diagnostic, [['TOOL_SUPPORTED_FOR_FIXTURE', false]])
       }
       requireFact(allowed, 'C14_APPROVAL_OUTSIDE_AUTHORIZED_FIXTURE_EFFECT')
@@ -185,7 +241,8 @@ export async function approveFixtureRequests(evaluate, signal, configuration, su
       receipts.push({ id: request.id, attemptId: attempt.id, runId: attempt.runId, tool: request.tool,
         eventId: pending.eventId, cursor: pending.cursor, admissionOwner: pending.admissionOwner,
         ...(peer ? { rootId: attempt.rootId, approvalScopeId: attempt.approvalScopeId,
-          workspaceId: attempt.workspaceId, teamId: attempt.teamId, memberId: attempt.memberId } : {}),
+          workspaceId: attempt.workspaceId, teamId: attempt.teamId, memberId: attempt.memberId }
+          : { preparedEffect: diagnostic.preparedEffect }),
         requestSha256: digest(request.argumentsJson), decisionSurface: 'Work exact approval control' })
       diagnostic.decision = 'acknowledged-via-Work-control'
     } catch (error) {

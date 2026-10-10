@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "version": "2.2.15",
+  "platform": "win32-x64",
+  "source": "997247b431593e4339d73398ac1409fdf4332e50",
+  "manifestUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/release-platform-v2.2.15-uar-enabled-win32-x64-997247b431593e4339d73398ac1409fdf4332e50.json",
+  "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-win-x64-setup.exe",
+  "sha256": "91cf56f4944683ce22f4f7e3dbd881aa28d430200eea38e686b9caa69e02dda8",
+  "size": 530891553,
+  "signingStatus": "unsigned",
+  "startedAt": "2026-10-08T10:25:08.503Z",
+  "finishedAt": "2026-10-08T10:25:17.417Z",
+  "status": "passed",
+  "installedAcceptance": "pending"
+}

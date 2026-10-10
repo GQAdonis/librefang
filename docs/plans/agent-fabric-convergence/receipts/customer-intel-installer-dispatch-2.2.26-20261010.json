@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-installer-dispatch",
+  "recordedAt": "2026-10-10T01:36:17.523Z",
+  "version": "2.2.26",
+  "platform": "darwin-x64",
+  "source": "b4bdf91a0fd624dba99dc9535c703d184d596211",
+  "uarSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "nativeEvidence": "customer-native-darwin-x64-2.2.26-20261010.json",
+  "pullRequest": 68,
+  "mergeCommit": "380e3bfcb8b660572b1454c27080838b41c50acb",
+  "installerRun": 38013695897,
+  "installerStatus": "queued-at-dispatch",
+  "publication": "pending",
+  "installedAcceptance": "pending",
+  "newCadenceDelivery": false
+}

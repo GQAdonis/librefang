@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "exact-source-windows-installer-dispatch",
+  "version": "2.2.26",
+  "source": "d241809cf8c9059b1ac9461804f731363a49346b",
+  "nativeSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "workflowRun": 38012115496,
+  "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38012115496",
+  "platforms": [
+    "win32-x64",
+    "win32-arm64"
+  ],
+  "createdAt": "2026-10-10T01:10:15Z",
+  "status": "dispatched",
+  "verificationReceipts": [
+    "customer-native-win32-x64-2.2.26-20261010.json",
+    "customer-native-win32-arm64-2.2.26-20261010.json"
+  ],
+  "publicApplicationArtifacts": "pending",
+  "installedOperation": "pending",
+  "website": "pending",
+  "replacePublishedPlatforms": false,
+  "newCadenceDelivery": false
+}

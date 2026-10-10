@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-corrective-local-build-installation",
+  "recordedAt": "2026-10-10T03:29:34.284Z",
+  "version": "2.2.29",
+  "platform": "darwin-arm64",
+  "sources": {
+    "boss": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569"
+  },
+  "nativeBuild": {
+    "status": "passed",
+    "sourceAfter": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "startedAt": "2026-10-10T03:14:34.011Z",
+    "finishedAt": "2026-10-10T03:20:11.824Z",
+    "elapsedMs": 337813,
+    "commands": [
+      {
+        "command": "/Users/gqadonis/.cargo/bin/cargo",
+        "args": [
+          "+1.97.1",
+          "build",
+          "--locked",
+          "--no-default-features",
+          "--features",
+          "server-full",
+          "--target",
+          "aarch64-apple-darwin",
+          "--bin",
+          "uar-sidecar",
+          "--release",
+          "--jobs",
+          "1"
+        ],
+        "startedAt": "2026-10-10T03:14:34.012Z",
+        "finishedAt": "2026-10-10T03:20:01.577Z",
+        "exitCode": 0
+      },
+      {
+        "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+        "args": [
+          "scripts/package-boss-sidecar.mjs",
+          "darwin-arm64",
+          "aarch64-apple-darwin"
+        ],
+        "startedAt": "2026-10-10T03:20:01.577Z",
+        "finishedAt": "2026-10-10T03:20:11.824Z",
+        "exitCode": 0
+      }
+    ],
+    "payload": {
+      "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "asset": "uar-sidecar-darwin-arm64.tar.gz",
+      "sha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893",
+      "platform": "darwin-arm64",
+      "features": [
+        "server-full"
+      ]
+    },
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-native-2.2.29-042437a2-191e-48ad-b502-5d2d8c8811ad/build.json",
+      "sha256": "4d16a832d724caf55e3dd72adb2e0e2f64690de46cdf2ca370b8269e549acb31"
+    }
+  },
+  "macBuild": {
+    "status": "passed",
+    "sourceAfter": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+    "startedAt": "2026-10-10T03:20:54.334Z",
+    "finishedAt": "2026-10-10T03:26:45.302Z",
+    "elapsedMs": 350968,
+    "workingDirectory": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "exitCode": 0,
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-build-2.2.29-1ee115b9-4b88-4405-92e3-40121c506f93/build.json",
+      "sha256": "3be7b344f6a889e1ce25283360330f8e34ad7cec77410935b890107ad8bcab6d"
+    },
+    "localNotarization": {
+      "status": "skipped",
+      "evidence": "Actual build log records explicit notarize=false and HAS_NOTARIZATION not true; no public notarization claim."
+    }
+  },
+  "installation": {
+    "status": "passed",
+    "source": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+    "uarSource": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "startedAt": "2026-10-10T03:27:14.372Z",
+    "finishedAt": "2026-10-10T03:27:26.879Z",
+    "method": "copied-from-actual-local-DMG-into-disposable-directory",
+    "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.29-mac-arm64.dmg",
+    "size": 703190642,
+    "sha256": "5f5f951e2d5833ec1b5c2e6b10472e953db3f5162651a52360ee8b77d192ad34",
+    "appAsarSha256": "82ecc095b2b6aa19369f4dcf953e3c6d5d4502c2af948e888610512319517fee",
+    "sidecarSha256": "1bf7d0f0ac5ceeb76fe29cfce3a787b8879eb8c50d8a0f5358f989279d33feaa",
+    "nativeRecordSha256": "ddd69d0b92b1e76caec26ca19a07c05f85f736a1f4bfad045478b784c52255c9",
+    "nativeIntegrity": {
+      "method": "production-signature-aware-payload-validator",
+      "originalPayloadSha256": "ef43279c1dd81c2a0bcf1136b86caad4beeaab9b1ce8d81245cd2ba9659acf58",
+      "installedSignedSha256": "1bf7d0f0ac5ceeb76fe29cfce3a787b8879eb8c50d8a0f5358f989279d33feaa"
+    },
+    "signature": "passed",
+    "gatekeeper": "passed",
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-local-mac-2.2.29-09cba2f0-64ea-41ef-bf3c-f7fd3d5a1177/installation.json",
+      "sha256": "2d7724b9b9ffdc160bd913c6b47edfc65a692732649803c0e80cb17d83e0532c"
+    },
+    "initialAttempt": {
+      "status": "failed",
+      "stage": "readonly DMG attach",
+      "startedAt": "2026-10-10T03:26:35.809Z",
+      "finishedAt": "2026-10-10T03:26:36.367Z",
+      "size": 703190642,
+      "sha256": "5f5f951e2d5833ec1b5c2e6b10472e953db3f5162651a52360ee8b77d192ad34",
+      "sameBytesAsSuccessfulAttempt": true,
+      "receipt": {
+        "path": ".prometheus/cadence/artifacts/customer-local-mac-2.2.29-fdaa777c-9153-4bd5-b8f0-0c8a3d4d0b69/installation.json",
+        "sha256": "2735136e556edbc20d41ef904ff6953bfbe15c2feeccb1f900ef18da51da0979"
+      },
+      "interpretation": "Initial attach failed; later actual mount and disposable installation of the same recorded bytes passed. Cause is not inferred and historical failure remains unchanged."
+    }
+  },
+  "qualification": {
+    "build": "passed",
+    "disposableInstallation": "passed",
+    "featureOperation": "pending at build/installation boundary; root owns actual operation",
+    "operatorAcceptance": {
+      "darwinArm64": "pending final identified candidate",
+      "win32X64": "pending final identified candidate"
+    },
+    "publication": "local installer only; final four-platform public release and website pending"
+  },
+  "cadence": {
+    "newSuccessfulDelivery": false,
+    "qualificationLedgerMutated": false,
+    "historyAndDebt": "unchanged"
+  },
+  "verification": {
+    "newBuildsByEvidenceAgent": [],
+    "testSuitesRun": [],
+    "applicationOperationsByEvidenceAgent": []
+  },
+  "limits": [
+    "No public notarization, Windows package or installed operation is established by these local receipts.",
+    "Build and copy/install do not establish corrected ordinary recovery or represented read/approval success.",
+    "Earlier receipts, mount failure and source identities are preserved; no final acceptance or ledger credit inferred."
+  ]
+}

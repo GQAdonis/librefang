@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "version": "2.2.12",
+  "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+      "revision": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "fingerprint": "144045312c1662103cee24273dd46707f7b1e74df9553366a4f811b27ab29e03",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini",
+          "revision": "e3fed05944e6b365ad74af30926b875e6857190f",
+          "fingerprint": "bd61c46c7270db96a34c2e82e76ea2fcb50c54a7c768accdafe6bb5bfde7c446",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/liter-llm",
+              "name": "tools/liter-llm",
+              "initialized": false,
+              "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+              "name": "tools/prometheus-knowledge",
+              "initialized": false,
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/surreal-memory-server",
+              "name": "tools/surreal-memory-server",
+              "initialized": false,
+              "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "resources/prometheus-skills-mini"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "revision": "2be479bd63a80c7fc3bd2699aac936c759a320be",
+      "fingerprint": "71db06a61288d8da4efb2b592ea18064910c5a9c4378024864b80bc7751f7ca0"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/bossfang-selected-uar-release",
+      "revision": "295ff50201fbb09a6e22390de85d9b374c3d9edd",
+      "fingerprint": "d8108776e232bdb96e92b0694a300f049dac28f93711ac76d27bd9a9b28776e5"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+      "revision": "035678b6290353a5988a5a96668d08a9781b1471",
+      "fingerprint": "73f2b81a755be572080d3195bfade43aeb2fc49bc7d1100d38caa7c57f50bd93",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/crates/prometheus-skill-system",
+          "name": "crates/prometheus-skill-system",
+          "initialized": false,
+          "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/frontend/packages/prometheus-entity-management",
+          "name": "frontend/packages/prometheus-entity-management",
+          "initialized": false,
+          "revision": "959839a88e65704014bab0bdd055df17fb210298",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/models.dev",
+          "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+          "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+          "name": "models.dev"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/liter-llm",
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+          "name": "vendor/git/liter-llm"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/rust-mcp-filesystem",
+          "name": "vendor/git/rust-mcp-filesystem",
+          "initialized": false,
+          "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+          "workingTree": "unobserved"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "schemaVersion": 1,
+      "platform": "darwin-arm64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-arm64.dmg",
+      "path": "/Users/gqadonis/.prometheus/releases/2.2.12/The-Boss-2.2.12-mac-arm64.dmg",
+      "version": "2.2.12",
+      "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "sha256": "cf0d1ed3fc3c5ab980d0c150bbb15841d791a5b8727f4d89d9f8781f2d5d3207",
+      "size": 707579075,
+      "startedAt": "2026-10-06T20:34:44.797Z",
+      "verifiedAt": "2026-10-06T20:36:34.590Z",
+      "method": "complete-download-sha256-against-GitHub-release-digest-and-native-manifest",
+      "manifest": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "version": "2.2.12",
+        "profile": "uar-enabled",
+        "features": {
+          "uar": true
+        },
+        "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+        "artifacts": [
+          {
+            "name": "The-Boss-2.2.12-mac-arm64.dmg",
+            "size": 707579075,
+            "sha256": "cf0d1ed3fc3c5ab980d0c150bbb15841d791a5b8727f4d89d9f8781f2d5d3207",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-arm64.dmg",
+            "signing": "Developer ID (notarized)",
+            "profile": "uar-enabled"
+          }
+        ]
+      },
+      "byteVerificationRef": "/Users/gqadonis/.prometheus/releases/2.2.12/darwin-arm64-download-receipt.json"
+    },
+    {
+      "platform": "win32-x64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-win-x64-setup.exe",
+      "sha256": "99199d108cd9d7286b4f2d8eabd7db774d93d1df8035aa3850c37e57d816c178",
+      "size": 528757374,
+      "verifiedAt": "2026-10-06T20:30:22.880Z"
+    },
+    {
+      "schemaVersion": 1,
+      "platform": "darwin-x64",
+      "path": "/Users/gqadonis/.prometheus/releases/2.2.12/The-Boss-2.2.12-mac-x64.dmg",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-x64.dmg",
+      "version": "2.2.12",
+      "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "sha256": "399b28b63594b0ea8f014765de21c1a5f1ec084f4b51e1438e295e98fbce0854",
+      "size": 733455673,
+      "signing": "Developer ID (notarized)",
+      "startedAt": "2026-10-06T20:41:04.164Z",
+      "verifiedAt": "2026-10-06T20:42:55.687Z",
+      "method": "complete-download-sha256-against-GitHub-release-digest-and-native-manifest",
+      "manifest": {
+        "platform": "darwin",
+        "arch": "x64",
+        "version": "2.2.12",
+        "profile": "uar-enabled",
+        "features": {
+          "uar": true
+        },
+        "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+        "artifacts": [
+          {
+            "name": "The-Boss-2.2.12-mac-x64.dmg",
+            "size": 733455673,
+            "sha256": "399b28b63594b0ea8f014765de21c1a5f1ec084f4b51e1438e295e98fbce0854",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-x64.dmg",
+            "signing": "Developer ID (notarized)",
+            "profile": "uar-enabled"
+          }
+        ]
+      },
+      "byteVerificationRef": "/Users/gqadonis/.prometheus/releases/2.2.12/darwin-x64-download-receipt.json"
+    },
+    {
+      "schemaVersion": 1,
+      "platform": "win32-arm64",
+      "path": "/Users/gqadonis/.prometheus/releases/2.2.12/The-Boss-2.2.12-win-arm64-setup.exe",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-win-arm64-setup.exe",
+      "version": "2.2.12",
+      "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "sha256": "e61fe2848c8660153bd98ae85bf2791fbe084c3bc6e3641e573a826dc1e8d1ae",
+      "size": 492206101,
+      "signing": "unsigned",
+      "startedAt": "2026-10-06T20:42:55.981Z",
+      "verifiedAt": "2026-10-06T20:44:00.902Z",
+      "method": "complete-download-sha256-against-GitHub-release-digest-and-native-manifest",
+      "manifest": {
+        "platform": "win32",
+        "arch": "arm64",
+        "version": "2.2.12",
+        "profile": "uar-enabled",
+        "features": {
+          "uar": true
+        },
+        "source": "b3d55f0633124d557035d8d58cdaf858511c0941",
+        "artifacts": [
+          {
+            "name": "The-Boss-2.2.12-win-arm64-setup.exe",
+            "size": 492206101,
+            "sha256": "e61fe2848c8660153bd98ae85bf2791fbe084c3bc6e3641e573a826dc1e8d1ae",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-win-arm64-setup.exe",
+            "signing": "unsigned",
+            "profile": "uar-enabled"
+          }
+        ]
+      },
+      "byteVerificationRef": "/Users/gqadonis/.prometheus/releases/2.2.12/win32-arm64-download-receipt.json"
+    }
+  ],
+  "website": {
+    "url": "https://the-boss.know-me.tools",
+    "version": "2.2.12",
+    "verifiedAt": "2026-10-06T20:49:36.597Z",
+    "links": [
+      {
+        "platform": "darwin-arm64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-arm64.dmg"
+      },
+      {
+        "platform": "win32-x64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-win-x64-setup.exe"
+      },
+      {
+        "platform": "darwin-x64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-mac-x64.dmg"
+      },
+      {
+        "platform": "win32-arm64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.12/The-Boss-2.2.12-win-arm64-setup.exe"
+      }
+    ],
+    "method": "first-party-published-HTML-and-script-links",
+    "bundles": [
+      {
+        "url": "https://the-boss.know-me.tools/assets/index-kQ60pgkp.js",
+        "sha256": "cac4b278fc32ef1728029660060d27a0e4f8ed3f1443f7b1b67400a9fd678de0",
+        "size": 344718
+      },
+      {
+        "url": "https://the-boss.know-me.tools/~flock.js",
+        "sha256": "a86e084b4f82709814be6c15fd6305daa783fda87ad95402da9a4d3a1dd6d748",
+        "size": 21296
+      }
+    ],
+    "deploymentEvidence": "Lovable native The Boss Landing: Your website was updated after all four platform updates",
+    "landingCommit": "a1f39ac1945437b61192e3e32b1baeda4b450507"
+  },
+  "releaseMetadataCommit": "80ae098c322de13307a038bea5ec709837160753",
+  "installedAcceptance": {
+    "windows": "pending operator acceptance of these exact artifacts",
+    "mac": "local packaged operation passed; release installer acceptance tracked separately"
+  },
+  "canonicalCompletion": {
+    "wholeTasksCredited": 0,
+    "wholeChangesCredited": 0,
+    "wholePhasesCredited": 0
+  },
+  "cadenceReconciliation": {
+    "status": "pending supported consumer reconciliation",
+    "reason": "Actual authorized publication receipts are retained; unsupported automatic consumer capabilities are not relabeled as supported."
+  }
+}

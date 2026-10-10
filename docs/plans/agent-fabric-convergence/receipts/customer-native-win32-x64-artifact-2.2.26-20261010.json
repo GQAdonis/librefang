@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-actions-artifact-full-byte-and-payload-verification",
+  "status": "passed",
+  "startedAt": "2026-10-10T01:06:53.738Z",
+  "finishedAt": "2026-10-10T01:06:57.557Z",
+  "platform": "win32-x64",
+  "source": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "features": [
+    "server-full"
+  ],
+  "runId": 38004042907,
+  "nativeJobId": 114068619913,
+  "nativeJobCompletedAt": "2026-10-10T01:04:23Z",
+  "download": "Owned gh run download; verifier invoked only after successful completion",
+  "tag": "boss-sidecar-win32-x64-v1.0.0-2.2.26-1522f179",
+  "archivePath": ".prometheus/cadence/artifacts/customer-native-2.2.26-win32-x64/downloaded/uar-sidecar-win32-x64.tar.gz",
+  "size": 131840105,
+  "sha256": "208225d7d5bed79e4b0763efe103f9f4bf32d91ec2004d0c2aaa913bc723a125",
+  "recordPath": ".prometheus/cadence/artifacts/customer-native-2.2.26-win32-x64/downloaded/uar-sidecar-win32-x64.json",
+  "recordSha256": "963bf76451779217f154508a1beb2e235c88ce3244d26391618f77a4cef21d28",
+  "recordSize": 871,
+  "payloadManifestSha256": "fa9bf81c6ba3e91cfddade45c477cea9fa633e9b61b44bf612b1917fdd3d2a92",
+  "integrityCheckerSha256": "7eacadb12da8c996316613f67830ba77499bf3f1f089c755b2081ffef6176057",
+  "integrityCheckerSource": "scripts/uar-payload-integrity.cjs (unchanged copy)",
+  "checkedFiles": [
+    {
+      "path": "crc_fast-c45996daf34d96b5.dll",
+      "size": 991744,
+      "sha256": "aff1e6da4578562be48a3df6a7b58ae6cd295430a841c8381b1c352332809c74"
+    },
+    {
+      "path": "LICENSE",
+      "size": 1092,
+      "sha256": "13ab1401206d8603fcc8f2ce9481246765cee2ccf9872bb2582f611d1e4c43a6"
+    },
+    {
+      "path": "policies/default.cedar",
+      "size": 282,
+      "sha256": "9f4dbdfbc1366c087dcbba45916ee52dcedf20353fbec1dcaa883e1050fc1c32"
+    },
+    {
+      "path": "policies/skill-mutation.cedar",
+      "size": 2434,
+      "sha256": "f1938c065dfd980a60c0c2134d936f7009acfbb5ebf0055bc3cd8097dc2b9f6f"
+    },
+    {
+      "path": "policies/tool-approval.cedar",
+      "size": 1239,
+      "sha256": "8a51dd0ae55f48ff6a19c5f3ce6c6e0f94dbc50cbc689fbc80e9d8f769361385"
+    },
+    {
+      "path": "sevenz_rust2-0296aedd6d6c479a.dll",
+      "size": 9216,
+      "sha256": "f5e9c73a9d35db7d8b32310ac35aaa4bee2a844bf4e34df8adec30cc34be5a78"
+    },
+    {
+      "path": "uar-models/bg-small-en-v1.5.onnx",
+      "size": 34014426,
+      "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+    },
+    {
+      "path": "uar-models/config.json",
+      "size": 674,
+      "sha256": "f680f7ca1febf6b3a0fc8b6718a0f9d52bacc76f163e51d60ace892565d84311"
+    },
+    {
+      "path": "uar-models/MODEL-NOTICE.txt",
+      "size": 339,
+      "sha256": "ffeaaf6e090c973a1024e6eaf483db9faa62d8c2f0099351dc4759014c8d6b76"
+    },
+    {
+      "path": "uar-models/special_tokens_map.json",
+      "size": 132,
+      "sha256": "3c3507f36dff57bce437223db3b3081d1e2b52ec3e56ee55438193ecb2c94dd6"
+    },
+    {
+      "path": "uar-models/tokenizer_config.json",
+      "size": 381,
+      "sha256": "ac4db152b467998d8ded6c68803f885b964945df9dda3d58fea1f5d4cb55b882"
+    },
+    {
+      "path": "uar-models/tokenizer.json",
+      "size": 742067,
+      "sha256": "ffb28886478b9b17a8c06f4fe6741b970d5dd3de13330ccc3b9f686df8a0545a"
+    },
+    {
+      "path": "uar-sidecar.exe",
+      "size": 334932992,
+      "sha256": "5f21fc18a60cf41931010fda76f946e965677318d3052544da711b5fa810a6d8"
+    }
+  ],
+  "executableMachine": "x64 (PE 0x8664)",
+  "publicRelease": "pending; root owns publication",
+  "publicDownloadVerification": "pending",
+  "applicationInstaller": false,
+  "nativeExecution": "pending",
+  "signing": "not-assessed",
+  "sourcePinsEdited": false,
+  "workflowDispatched": false,
+  "qualificationCompleted": false
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "committedAt": "2026-10-05T23:57:26.845Z",
+  "commit": "ad0762690672d1be8a6b10fbb4ea71436dd20d6a",
+  "branch": "codex/agent-fabric-convergence-c08",
+  "scope": "Reviewed recovery installation only",
+  "publication": "Not application publication; product pending",
+  "pushed": true,
+  "pushAttempts": [
+    {
+      "transport": "SSH",
+      "exitCode": 128,
+      "error": "Permission denied publickey; no remote update"
+    },
+    {
+      "transport": "HTTPS",
+      "exitCode": 1,
+      "error": "GitHub Internal Server Error; repeated once; remote reference unchanged before REST fallback"
+    }
+  ],
+  "accountingCorrection": "Task3 transition was emitted before asynchronous push completion; Execute remains active until actual push is confirmed. Failed push explicitly retained; no publication credit.",
+  "pushedAt": "2026-10-06T00:01:00.193Z",
+  "transport": "gh Git Database API: exact trees/commits; non-force fast-forward",
+  "remoteCommit": "ad0762690672d1be8a6b10fbb4ea71436dd20d6a",
+  "uploadedObjects": [
+    {
+      "localCommit": "a7870ec5765e067177f19d08c38c363d5494fd2d",
+      "uploadedCommit": "a7870ec5765e067177f19d08c38c363d5494fd2d",
+      "tree": "7e5d33cbd82a056f755404b18d92ef12179219fe",
+      "files": 19,
+      "exact": true
+    },
+    {
+      "localCommit": "ad0762690672d1be8a6b10fbb4ea71436dd20d6a",
+      "uploadedCommit": "ad0762690672d1be8a6b10fbb4ea71436dd20d6a",
+      "tree": "ed5042327f47ce6de4352572cafb1b7eb469b0d5",
+      "files": 28,
+      "exact": true
+    }
+  ]
+}

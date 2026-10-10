@@ -2,40 +2,42 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 513,
-  "derivedRevision": 513,
+  "sourceRevision": 673,
+  "derivedRevision": 673,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 274
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 434
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "integrated-runtime-release-reconciliation"
   ],
   "phaseIds": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "agent-fabric-convergence::integrated-runtime-release-reconciliation"
   ],
-  "activePhaseId": "agent-fabric-convergence",
-  "activePhase": "agent-fabric-convergence",
+  "activePhaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+  "activePhase": "integrated-runtime-release-reconciliation",
   "phase": "agent-fabric-convergence",
-  "parentPhase": null,
-  "childPointer": null,
-  "change": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "currentTask": "C14.1",
+  "parentPhase": "agent-fabric-convergence",
+  "childPointer": "integrated-runtime-release-reconciliation",
+  "change": "afc-integrated-customer-qualification",
+  "currentTask": "1",
   "status": "running",
   "lifecycle": "running",
-  "stageId": null,
-  "stageStatus": null,
+  "stageId": "execute",
+  "stageStatus": "IN_PROGRESS",
   "completionMetric": "implementation",
-  "implementationCompleted": 16,
-  "implementationTotal": 25,
-  "planRevision": 9,
-  "revision": 513,
-  "exactNextCommand": "Implement C14.4 selected-instance connection/authentication and C14.3 Apps/settings in current delivery; preserve C14.1/C14.2 Teams operation before final build-and-operate gate.",
-  "nextChange": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "nextTask": "C14.1",
-  "updatedAt": "2026-10-05T16:59:00.537665Z"
+  "implementationCompleted": 29,
+  "implementationTotal": 30,
+  "planRevision": 12,
+  "revision": 673,
+  "exactNextCommand": "afc-runtime-admission-v2-release task 3: publish and import the ready Mac ARM64 and Windows x64 native payloads, then immediately build the local Mac ARM64 application",
+  "nextChange": "afc-integrated-customer-qualification",
+  "nextTask": "1",
+  "updatedAt": "2026-10-10T20:15:02.160615Z"
 }

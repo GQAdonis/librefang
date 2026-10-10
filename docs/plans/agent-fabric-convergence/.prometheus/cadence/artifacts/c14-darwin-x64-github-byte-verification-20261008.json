@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "kind": "published-installer-byte-verification",
+  "status": "passed",
+  "version": "2.2.15",
+  "platform": "darwin",
+  "architecture": "x64",
+  "source": "997247b431593e4339d73398ac1409fdf4332e50",
+  "startedAt": "2026-10-08T11:12:29.428Z",
+  "finishedAt": "2026-10-08T11:12:50.202Z",
+  "manifestAsset": "release-platform-v2.2.15-uar-enabled-darwin-x64-997247b431593e4339d73398ac1409fdf4332e50.json",
+  "artifact": {
+    "name": "The-Boss-2.2.15-mac-x64.dmg",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-mac-x64.dmg",
+    "size": 744329955,
+    "sha256": "4241326f5e33ecc05f6e81c0056fa69aaed9823e7951787a5ef0ae706d6c7dc4",
+    "signing": "Developer ID (notarized)"
+  },
+  "nativeInstalledAcceptance": "pending"
+}

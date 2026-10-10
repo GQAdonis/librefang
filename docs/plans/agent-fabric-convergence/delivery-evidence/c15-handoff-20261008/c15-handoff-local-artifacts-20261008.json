@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "version": "2.2.17",
+  "sourceCommit": "96492a21bc1c7e8526bbd526134e2289cfd05e0e",
+  "miniRevision": "7d8e098d8f0056a9c172bf85fc12b0bee865043e",
+  "checkedAt": "2026-10-08T13:03:12.876Z",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/The-Boss-2.2.17-mac-arm64.dmg",
+      "size": 699777313,
+      "sha256": "50e1c0e8b74d4055e1c66778ab8bee37ab92bfe95aa5d6013563b44fbca153a4"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "size": 346897551,
+      "sha256": "e58834454528b6ea68d1caec753799eb92b651006e4a1c177c5312d7bbcebff9"
+    }
+  ],
+  "signing": {
+    "declared": "Developer ID Application: Travis James (48VVJ9AXAR)",
+    "notarization": "not performed in local build",
+    "source": "actual packaging log"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T01:25:27.257Z",
+  "kind": "C15 failed-only reviewed skill packaged operation preparation",
+  "candidate": {
+    "version": "2.2.27",
+    "boss": "efc36dba3e482c30d4ce97874fed2f9573a38f1b",
+    "uar": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+    "mini": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+    "full": "bb8950b254825079ab382119a8c425d645a081ae"
+  },
+  "priorEvidence": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/reviewed-skills-proxy-repaired-2-2-26-e1d068fc-4df0-41b7-8b76-a6417883c434/evidence.json",
+  "remainingCriterion": "Correctly create fresh delegated tasks and operate required reviewed mini/full skills through exact read-only approvals and marker artifacts.",
+  "necessarySetup": "New normal disposable profile, fresh disposable keychain/configured gateway, author and deploy corrected immutable prompt package; old deployed definition cannot consume changed generated guidance.",
+  "retention": "Reuse prior disposable signed full HOME/fixture after exact source pins, source-change bounds, matching current mini inventory and verifier bytes, and read-only generation verification; link prior passing signature/closure/host-scope scenarios, without repeated negative mutations.",
+  "privatePreflight": {
+    "status": "not-exercised",
+    "authority": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/delivery-11-evidence.md",
+    "disposition": "Expressly optional trusted-callback preflight remains unavailable and is not marked passed."
+  },
+  "newFiles": [
+    ".prometheus/cadence/inputs/corrected-reviewed-skill-remaining-scenario-2.2.27-20261010.mjs",
+    ".prometheus/cadence/inputs/c15-remaining-required-skill-operation-2.2.27-20261010.mjs"
+  ],
+  "frozenProductionChanged": false,
+  "operationExecuted": false,
+  "buildOrTestRun": false,
+  "newCadenceDelivery": false,
+  "rootOwnsUI": true
+}

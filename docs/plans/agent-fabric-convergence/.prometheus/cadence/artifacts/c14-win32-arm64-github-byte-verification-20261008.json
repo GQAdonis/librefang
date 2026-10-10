@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "version": "2.2.15",
+  "platform": "win32-arm64",
+  "source": "997247b431593e4339d73398ac1409fdf4332e50",
+  "manifestUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/release-platform-v2.2.15-uar-enabled-win32-arm64-997247b431593e4339d73398ac1409fdf4332e50.json",
+  "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-win-arm64-setup.exe",
+  "sha256": "eac526716840025e78af71bb25c4b03d811d15587fc09c64f6ad2dc9d89cbc4d",
+  "size": 494385170,
+  "expectedSha256": "eac526716840025e78af71bb25c4b03d811d15587fc09c64f6ad2dc9d89cbc4d",
+  "expectedSize": 494385170,
+  "signingStatus": "unsigned",
+  "signingDeclaration": "unsigned",
+  "signingEvidence": "immutable platform manifest declaration; no independent installer-signature check performed",
+  "manifestHttpStatus": 200,
+  "installerHttpStatus": 200,
+  "startedAt": "2026-10-08T10:33:13.002Z",
+  "finishedAt": "2026-10-08T10:33:32.598Z",
+  "status": "passed",
+  "installedAcceptance": "pending"
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "delivery-cadence-observed-packaging-learning",
+  "recordedAt": "2026-10-08T05:34:04.217Z",
+  "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+  "source": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/37725190973",
+  "observed": {
+    "cacheKey": "v0-rust-boss-sidecar-darwin-arm64-aarch64-apple-darwin-server-full-Darwin-arm64-d52bed7a-02fbf8a5",
+    "restore": "No cache found at2026-10-08T03:58:51.771Z",
+    "existingCache": {
+      "id": 8654619723,
+      "createdAt": "2026-10-08T01:24:56.240645Z",
+      "ref": "refs/heads/refs/tags/boss-sidecar-darwin-arm64-v1.0.0-c14-host-context-0870539-native",
+      "bytes": 1530776147
+    },
+    "savedCache": {
+      "id": 8660119649,
+      "createdAt": "2026-10-08T04:50:12.374460Z",
+      "bytes": 1530735496,
+      "ref": "refs/heads/refs/tags/boss-sidecar-darwin-arm64-v1.0.0-c14-root-identity-d519915-native"
+    },
+    "compileSeconds": 3022
+  },
+  "inference": "Identical cache key is inaccessible across distinct release dispatch refs; not evidence of disk or memory pressure",
+  "primaryDocumentation": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching",
+  "recommendation": {
+    "scope": "Native release packaging",
+    "change": "Use one trusted stable workflow dispatch ref with explicit immutable source checkout; keep release tag, source provenance and publication identity separate",
+    "expectedEffect": "Reuse native dependency cache across source repairs without relabeling binaries",
+    "status": "recorded for follow-up; current runtime correction builds continue unchanged"
+  },
+  "current49ffaCacheOutcome": "unobserved",
+  "taskCompletionCredit": 0,
+  "cacheInventoryInspectedAt": "2026-10-08T05:34:35.809Z"
+}

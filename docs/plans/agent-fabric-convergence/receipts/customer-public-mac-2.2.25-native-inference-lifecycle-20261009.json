@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-public-native-inference-lifecycle-safe-projection",
+  "status": "passed",
+  "functionalAcceptance": "passed",
+  "operatorAcceptance": "pending",
+  "platform": "darwin-arm64",
+  "originalProvenance": {
+    "operation": "../.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-lifecycle-efb77247-d451-4f34-b289-8eb96582ed7d/operation.json",
+    "operationSha256": "6b1746a967b8cae11a6c0087a3296511a86e48cabd6c9331b1d16094ec8e6f72",
+    "evidence": "../.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-lifecycle-efb77247-d451-4f34-b289-8eb96582ed7d/evidence.json",
+    "evidenceSha256": "1a8dcd54c586c738920836ceb40c924b6e054e736bbd0d2b889ad6084a778f7e",
+    "sourceRefs": {
+      "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+      "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+      "installedVersion": "2.2.25",
+      "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+      "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+      "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+      "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+      "scenarioSha256": "18d30d06c18ea3bbbd6afa4bb2d9104ca047b4c85454a370bac88b72a50df3d3",
+      "operationDriverSha256": "e128250190720ffb546282d06fa127fa8a49597eaf1ae316554759c500d5a6d6",
+      "operationDriverRevision": "938843a6fcaf3cc5a50e11539adc9683337a1c84"
+    }
+  },
+  "timing": {
+    "operationStartedAt": "2026-10-09T23:36:00.136Z",
+    "operationFinishedAt": "2026-10-09T23:37:24.167Z",
+    "operationElapsedMs": 84031,
+    "featureStartedAt": "2026-10-09T23:36:06.497Z",
+    "featureFinishedAt": "2026-10-09T23:37:20.910Z"
+  },
+  "checks": [
+    "codex-retained-history-semantic-stream-cancel-and-followup",
+    "claude-retained-history-semantic-stream-cancel-and-followup"
+  ],
+  "routes": [
+    {
+      "route": "codex",
+      "status": "passed",
+      "selectedModelId": "openai-codex::gpt-6.1-sol",
+      "baselineEvidenceSha256": "7b98b7d98ca88a46e940307894170f90f88ee69da970034158ed15797687bc82",
+      "turns": [
+        {
+          "kind": "retained-history-followup",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:36:06.776Z",
+          "finishedAt": "2026-10-09T23:36:14.558Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 10,
+            "textChunks": 6,
+            "done": true,
+            "error": false,
+            "terminalStatus": "success"
+          },
+          "persisted": {
+            "status": "success",
+            "expectedReply": true,
+            "model": {
+              "id": "gpt-6.1-sol",
+              "provider": "openai-codex"
+            }
+          }
+        },
+        {
+          "kind": "semantic-stream-cancellation",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:36:14.559Z",
+          "finishedAt": "2026-10-09T23:36:25.559Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 6,
+            "textChunks": 2,
+            "done": true,
+            "error": false,
+            "terminalStatus": "paused"
+          },
+          "persisted": {
+            "status": "paused",
+            "expectedReply": null,
+            "model": {
+              "id": "gpt-6.1-sol",
+              "provider": "openai-codex"
+            }
+          },
+          "beforeCancel": {
+            "textChunks": 1,
+            "done": false,
+            "error": false
+          },
+          "cancelRequestedAt": "2026-10-09T23:36:25.517Z",
+          "cancelCommandAccepted": true,
+          "attachStatus": "paused"
+        },
+        {
+          "kind": "post-cancellation-followup",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:36:25.560Z",
+          "finishedAt": "2026-10-09T23:36:29.261Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 5,
+            "textChunks": 1,
+            "done": true,
+            "error": false,
+            "terminalStatus": "success"
+          },
+          "persisted": {
+            "status": "success",
+            "expectedReply": true,
+            "model": {
+              "id": "gpt-6.1-sol",
+              "provider": "openai-codex"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "route": "claude",
+      "status": "passed",
+      "selectedModelId": "claude-code::claude-fable-5",
+      "baselineEvidenceSha256": "4825c932154fe403c8652e80f9d0a98b64946cb755c62fda8fda32b6944ccf94",
+      "turns": [
+        {
+          "kind": "retained-history-followup",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:36:29.766Z",
+          "finishedAt": "2026-10-09T23:36:48.923Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 8,
+            "textChunks": 2,
+            "done": true,
+            "error": false,
+            "terminalStatus": "success"
+          },
+          "persisted": {
+            "status": "success",
+            "expectedReply": true,
+            "model": {
+              "id": "claude-fable-5",
+              "provider": "claude-code"
+            }
+          }
+        },
+        {
+          "kind": "semantic-stream-cancellation",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:36:48.924Z",
+          "finishedAt": "2026-10-09T23:37:09.315Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 10,
+            "textChunks": 2,
+            "done": true,
+            "error": false,
+            "terminalStatus": "paused"
+          },
+          "persisted": {
+            "status": "paused",
+            "expectedReply": null,
+            "model": {
+              "id": "claude-fable-5",
+              "provider": "claude-code"
+            }
+          },
+          "beforeCancel": {
+            "textChunks": 2,
+            "done": false,
+            "error": false
+          },
+          "cancelRequestedAt": "2026-10-09T23:37:07.123Z",
+          "cancelCommandAccepted": true,
+          "attachStatus": "paused"
+        },
+        {
+          "kind": "post-cancellation-followup",
+          "status": "passed",
+          "startedAt": "2026-10-09T23:37:09.315Z",
+          "finishedAt": "2026-10-09T23:37:20.909Z",
+          "admitted": true,
+          "stream": {
+            "chunks": 10,
+            "textChunks": 2,
+            "done": true,
+            "error": false,
+            "terminalStatus": "success"
+          },
+          "persisted": {
+            "status": "success",
+            "expectedReply": true,
+            "model": {
+              "id": "claude-fable-5",
+              "provider": "claude-code"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "operationBoundary": {
+    "exercisedThrough": "ordinary-work-typed-stream-commands",
+    "stopButtonClicked": false,
+    "retainedInitialInferenceRepeated": false,
+    "uarRouteRepeated": false,
+    "newCadenceDelivery": false,
+    "qualificationLedgerMutated": false,
+    "credentialTransferRepeated": false,
+    "credentialValueRecorded": false,
+    "finalCorrectiveCandidateApplicability": "not-assessed",
+    "teamMemberExecutorSupportClaimed": false,
+    "nativeWindowsExecutionClaimed": false
+  },
+  "shutdown": {
+    "groupStopped": true,
+    "childSignalCode": "SIGKILL",
+    "gracefulShutdownClaimed": false
+  }
+}

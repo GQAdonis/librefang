@@ -2,27 +2,29 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 513,
-  "derivedRevision": 513,
+  "sourceRevision": 673,
+  "derivedRevision": 673,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 274
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 434
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-05T16:59:00.537665Z",
+  "updatedAt": "2026-10-10T20:15:02.160615Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c14-studio-administration-and-isolated-service-consoles",
-    "C14.1"
+    "integrated-runtime-release-reconciliation",
+    "execute",
+    "afc-integrated-customer-qualification",
+    "1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 16,
-      "total": 25
+      "done": 29,
+      "total": 30
     },
     "children": [
       {
@@ -31,7 +33,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 11,
+          "done": 20,
           "total": 20
         },
         "children": [
@@ -59,6 +61,55 @@
           },
           {
             "type": "phase",
+            "id": "integrated-runtime-release-reconciliation",
+            "canonicalId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 3,
+              "total": 4
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-runtime-source-reconciliation",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 1,
+                  "total": 1
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-cadence-historical-publication",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 2,
+                  "total": 2
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-runtime-admission-v2-release",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 3,
+                  "total": 3
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-integrated-customer-qualification",
+                "status": "IN_PROGRESS",
+                "progress": {
+                  "done": 0,
+                  "total": 3
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
             "id": "release-cadence-optimization",
             "canonicalId": "agent-fabric-convergence::release-cadence-optimization",
             "status": "COMPLETE",
@@ -74,6 +125,28 @@
                 "progress": {
                   "done": 4,
                   "total": 4
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "six-hour-convergence-recovery",
+            "canonicalId": "agent-fabric-convergence::six-hour-convergence-recovery",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-six-hour-delivery-recovery",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 3,
+                  "total": 3
                 }
               }
             ],
@@ -247,7 +320,7 @@
           {
             "type": "change",
             "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
-            "status": "BLOCKED",
+            "status": "COMPLETE",
             "progress": {
               "done": 1,
               "total": 3
@@ -256,7 +329,7 @@
           {
             "type": "change",
             "id": "afc-c11-authoritative-business-data-and-offline-commands",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
               "done": 0,
               "total": 3
@@ -265,7 +338,7 @@
           {
             "type": "change",
             "id": "afc-c12-personal-peer-sovereignty-and-consent",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
               "done": 0,
               "total": 3
@@ -274,7 +347,7 @@
           {
             "type": "change",
             "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
               "done": 0,
               "total": 3
@@ -283,34 +356,34 @@
           {
             "type": "change",
             "id": "afc-c14-studio-administration-and-isolated-service-consoles",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 4,
               "total": 4
             }
           },
           {
             "type": "change",
             "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 2,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c16-specialist-marketing-product-and-design-teams",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c17-executive-assistants-and-consented-human-representation",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
               "done": 0,
               "total": 3
@@ -319,7 +392,7 @@
           {
             "type": "change",
             "id": "afc-c18-federated-compatibility-and-release-evidence",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
               "done": 0,
               "total": 3

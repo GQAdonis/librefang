@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "corrected-customer-coding-partial-operation",
+  "version": "2.2.26",
+  "status": "failed",
+  "sourceRefs": {
+    "boss": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "appAsarSha256": "2f83a209d73feebd9f4fd99200804c17bff1fc4e402102234a9145ce66a8ffc4",
+    "sidecarSha256": "e8282f646b850f644a3046396f9234766c6e69c8fdff9301072fc45c42279466",
+    "installerSha256": "3be06ee7815d6760d27fcb5aaf1d65a8a29fc174e2ea98bf7544c21066ce4053",
+    "installedVersion": "2.2.26",
+    "operationDriverRevision": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "selectedScenarioSha256": "9ef4696b6b3fca829a989bffb81ded4057d3c822f8428aee05900221576bd602",
+    "installationReceiptSha256": "b98269f6525738183ff03c89fc7c195eb99c65fd82c6adf8f530607df7cc0c43"
+  },
+  "startedAt": "2026-10-09T23:58:16.929Z",
+  "finishedAt": "2026-10-10T00:05:57.093Z",
+  "originalOperation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-team-2-2-26-1101e382-e553-4627-bb32-99ab09dd96e9/operation.json",
+    "sha256": "f55fb41b623b113e45b15e6ba1724651e9aefeeb09809ece3a3e62678a59d1b4"
+  },
+  "originalEvidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-team-2-2-26-1101e382-e553-4627-bb32-99ab09dd96e9/coding-evidence.json",
+    "sha256": "dfab189c7237f2a55085bf5f1aec7f057f3c9286559a9e7a4b4a38246b3776ad"
+  },
+  "checks": [
+    "ordinary-packaged-profile-qualified",
+    "work-selected-model-and-ordinary-coding-preset-deployment"
+  ],
+  "failureStage": "real-worker-and-reviewer-execution",
+  "failureCode": "C14_REAL_CODING_ATTEMPT_DID_NOT_SUCCEED",
+  "visibleCodeTokens": [
+    "TEAM_PROVIDER_REQUEST_REJECTED"
+  ],
+  "approvedToolKinds": [
+    "team_delegate",
+    "filesystem__read",
+    "filesystem__edit",
+    "filesystem__read",
+    "team_delegate"
+  ],
+  "boundedReadmeEditObserved": true,
+  "readmeSha256": "fe61ee9af55f719da272c7daea1f8dd6af970c79d47917a333a961f9d2b23261",
+  "failedAttempts": [
+    {
+      "id": "ab89e703-a1b2-439e-8d06-96cb53f4035e",
+      "memberId": "c6831470-a775-4ec2-80b0-61cb5f500517",
+      "status": "failed",
+      "stateReason": null
+    }
+  ],
+  "retainedCriteriaPending": [
+    "successful-reviewer-handoff",
+    "artifact-and-model-provenance",
+    "cancellation",
+    "renderer-reopen",
+    "two-workspace-exclusion"
+  ],
+  "qualificationAdvanced": false,
+  "newCadenceDelivery": false,
+  "interpretation": "Worker edit and exact approvals occurred; reviewer failed. Provider error code does not establish which deadline or upstream cause failed."
+}

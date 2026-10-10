@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-delivery",
+  "task": "C16.3",
+  "change": "afc-c16-specialist-marketing-product-and-design-teams",
+  "changeImplementation": "complete",
+  "canonicalRevision": 590,
+  "mainPhaseCounts": {
+    "total": 61,
+    "completed": 41,
+    "cancelled": 1,
+    "changesComplete": 13,
+    "changesTotal": 20
+  },
+  "candidateId": "df5f42b9-cc4c-45bb-8beb-03b4c59e8d25",
+  "iterationId": "7540ea83-dfed-444b-a556-a511f36be594",
+  "version": "2.2.21",
+  "applicationBuildSource": "1d6d0487b059a6dcf78eaad914a0783f07031b20",
+  "operationDriverSource": "e5ea96b6fd675080370a858cd86874237b14f45e",
+  "uarSource": "e262e758cdbbe59604257d47db268e39c13a7ffd",
+  "miniSource": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+  "miniMainIncluded": "7012649894d76f9fc9f3d2a30c2a11076fefe100",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.21-mac-arm64.dmg",
+      "size": 702075049,
+      "sha256": "5e2e6109471ff53d663f4ddfd7a31c22feca21c4b30a9b2861a6b39387d9dc40"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "size": 347046787,
+      "sha256": "c4f7e3c53b1dae9fffa8e5063765e33bde62f2ad934e884553d348a5e42fb0d3"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/uar-sidecar",
+      "size": 302240736,
+      "sha256": "cb583a15c67f395b64831966299c3a967742f0c86f76c14bee0e2924655f0261"
+    }
+  ],
+  "checks": [
+    "five-step-workflow-and-all-eight-preset-guides",
+    "actual-packaged-creator-proposals-visible-with-explicit-role-mapping",
+    "unknown-model-prices-remain-unknown-and-source-provenance-retained",
+    "saved-and-deployed-immutable-guidance-reopens-with-resource-selections",
+    "visible-single-agent-alternative-opens-ordinary-work"
+  ],
+  "completedOperation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c16-guidance-complete-frozen-operation-20261008.json",
+    "sha256": "3c4d1ee7c0ec18cc229f8faf9daedb17c3c077d4f474c36b8a170a59dae381d2",
+    "startedAt": "2026-10-08T22:52:33.426Z",
+    "finishedAt": "2026-10-08T22:53:53.208Z"
+  },
+  "limits": {
+    "newInference": "Not repeated; C16.2 records real workflows",
+    "measuredCostComparison": "Not claimed; unknown catalog prices retained",
+    "regulatedCertification": "Not claimed",
+    "nativeWindowsInstalledAcceptance": "Pending",
+    "localMacNotarization": "Disabled; Developer ID signing and mounted DMG validation passed",
+    "publication": "Separate release in flight"
+  }
+}

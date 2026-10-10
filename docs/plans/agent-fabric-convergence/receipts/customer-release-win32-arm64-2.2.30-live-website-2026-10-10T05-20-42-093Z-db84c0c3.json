@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-customer-release-website",
+  "operationId": "db84c0c3-5679-460e-9694-b3ec3b36f427",
+  "scope": "win32-arm64",
+  "startedAt": "2026-10-10T05:20:42.093Z",
+  "status": "passed",
+  "website": "https://the-boss.know-me.tools/",
+  "latestVersion": "2.2.30",
+  "landingRepository": "Know-Me-Tools/boss-landing-spot",
+  "installers": [
+    {
+      "platform": "darwin-arm64",
+      "label": "macOS (Apple Silicon)",
+      "version": "2.2.30",
+      "name": "The-Boss-2.2.30-mac-arm64.dmg",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-arm64.dmg",
+      "size": 711998188,
+      "sha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+      "signing": "Developer ID (notarized)",
+      "installerSource": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-mac-installation-2.2.30-20261010.json",
+        "sha256": "009669c0815bb06f55097286b60a9995b1a3dbd82a1ba2d2f36d78d2e7a3e11a"
+      },
+      "byteVerificationBasis": "Existing complete public-download and installed-package provenance receipt; final operator acceptance remains pending",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance",
+      "bundleContainsExactUrl": true,
+      "bundleContainsExactChecksum": true,
+      "bundleContainsExactVersion": true,
+      "publicHead": {
+        "startedAt": "2026-10-10T05:20:43.184Z",
+        "httpStatus": 200,
+        "contentLength": 711998188,
+        "completedAt": "2026-10-10T05:20:43.578Z"
+      }
+    },
+    {
+      "platform": "darwin-x64",
+      "label": "macOS (Intel)",
+      "version": "2.2.26",
+      "name": "The-Boss-2.2.26-mac-x64.dmg",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-mac-x64.dmg",
+      "size": 747748218,
+      "sha256": "23191188b8d4f206c6c5195da33f6c5240443035a3267259d2ae0ec574cdf127",
+      "signing": "Developer ID (notarized)",
+      "installerSource": "b4bdf91a0fd624dba99dc9535c703d184d596211",
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-intel-2.2.26-20261010.json",
+        "sha256": "63bc6ee2b0db9a311dcdec1e55e981949da25f8569656187633f0b16e984d7fb"
+      },
+      "byteVerificationBasis": "Previously retained complete public-byte receipt",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance",
+      "bundleContainsExactUrl": true,
+      "bundleContainsExactChecksum": true,
+      "bundleContainsExactVersion": true,
+      "publicHead": {
+        "startedAt": "2026-10-10T05:20:43.578Z",
+        "httpStatus": 200,
+        "contentLength": 747748218,
+        "completedAt": "2026-10-10T05:20:43.969Z"
+      }
+    },
+    {
+      "platform": "win32-x64",
+      "label": "Windows (x64)",
+      "version": "2.2.30",
+      "name": "The-Boss-2.2.30-win-x64-setup.exe",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-x64-setup.exe",
+      "size": 531673845,
+      "sha256": "c3b4bec60df77b4a13e89562e380282b50aff21ab6176471bba288bad90cec6f",
+      "signing": "unsigned",
+      "installerSource": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-win32-x64-2.2.30-20261010.json",
+        "sha256": "b8981c78c67ab01f61cc3c4eef3757501fa8ffbeb456d2bef678ebdabafcf775"
+      },
+      "byteVerificationBasis": "Existing complete streamed public-byte verification; signing limitations preserved in referenced receipt",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance",
+      "bundleContainsExactUrl": true,
+      "bundleContainsExactChecksum": true,
+      "bundleContainsExactVersion": true,
+      "publicHead": {
+        "startedAt": "2026-10-10T05:20:43.969Z",
+        "httpStatus": 200,
+        "contentLength": 531673845,
+        "completedAt": "2026-10-10T05:20:44.315Z"
+      }
+    },
+    {
+      "platform": "win32-arm64",
+      "label": "Windows (ARM64)",
+      "version": "2.2.30",
+      "name": "The-Boss-2.2.30-win-arm64-setup.exe",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-arm64-setup.exe",
+      "size": 494915696,
+      "sha256": "62ad26e49dadc5f3979802d68ab4eb82234855d284bd8fb906a2ac3a159405fc",
+      "signing": "unsigned",
+      "installerSource": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-win32-arm64-2.2.30-20261010.json",
+        "sha256": "4106643d80a58d091e351607556fcf2c70afd572f7dc62633aba691f3e9a5fb0"
+      },
+      "byteVerificationBasis": "Existing complete streamed public-byte verification; signing limitations preserved in referenced receipt",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance",
+      "bundleContainsExactUrl": true,
+      "bundleContainsExactChecksum": true,
+      "bundleContainsExactVersion": true,
+      "publicHead": {
+        "startedAt": "2026-10-10T05:20:44.315Z",
+        "httpStatus": 200,
+        "contentLength": 494915696,
+        "completedAt": "2026-10-10T05:20:44.649Z"
+      }
+    }
+  ],
+  "publication": {
+    "method": "Separate prior root publication through the existing Lovable project",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "evidence": "Live served HTML/index JavaScript content and public installer HEAD responses only; this driver does not publish"
+  },
+  "installedAcceptance": "pending-final-candidate-operator-acceptance",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false,
+  "cadenceCountersMutated": false,
+  "verifier": {
+    "runtime": "Node.js",
+    "version": "v24.21.0",
+    "script": ".prometheus/cadence/inputs/verify-customer-live-release-2.2.30-20261010.mjs",
+    "sha256": "95d535a706eb6e483a2d409066a77d2204412ad98bb2658e7d23cd14e1238b24"
+  },
+  "landingSource": "9aa06e3b3ad117022a46e38a46b41e14eb3e5323",
+  "generatedRelease": {
+    "path": "src/lib/release.json",
+    "commit": "9aa06e3b3ad117022a46e38a46b41e14eb3e5323",
+    "blob": "b57f5de2e7ccbb0f9137ac7b93f38d2630eda98e",
+    "sha256": "c2fff3a447371a1b2b07c6a464f048a48ac6eb310cc0d98477bd0a48561a3033",
+    "bytes": 1624
+  },
+  "liveHtml": {
+    "url": "https://the-boss.know-me.tools/",
+    "startedAt": "2026-10-10T05:20:42.916Z",
+    "httpStatus": 200,
+    "completedAt": "2026-10-10T05:20:43.077Z",
+    "bytes": 3012,
+    "sha256": "1064dd3944cdffa3774aadf02af1c62a4fa73080334ea0121ce0e75eaabff8be"
+  },
+  "deployedBundle": {
+    "url": "https://the-boss.know-me.tools/assets/index-BOM9uKKw.js",
+    "startedAt": "2026-10-10T05:20:43.078Z",
+    "httpStatus": 200,
+    "completedAt": "2026-10-10T05:20:43.184Z",
+    "bytes": 344718,
+    "sha256": "6db63cda5988ea93fffa0cc6f0bbe367a58aebc09c0212614ca7805a433c91aa"
+  },
+  "finishedAt": "2026-10-10T05:20:44.649Z",
+  "verification": "All four exact installer URLs, checksums and versions from pinned landing-main data occur in the actual served index bundle; public HEAD status/size agree with retained complete-byte receipts",
+  "limitations": "Static deployed release data and download availability only; no visual browser interaction, repeated full-installer download, native execution or installed acceptance. Other platforms may retain 2.2.26 unless scope is all-four."
+}

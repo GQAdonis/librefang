@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-06T00:18:27.598Z",
+  "transitions": [
+    {
+      "precommit": true,
+      "guard": {
+        "outcome": "pass",
+        "authoritativeRevision": 548,
+        "sourceRevision": 548,
+        "position": "agent-fabric-convergence › six-hour-convergence-recovery",
+        "findings": [],
+        "outstandingObligations": {
+          "change:afc-c02-governed-action-and-approval-boundary": {
+            "key": "change:afc-c02-governed-action-and-approval-boundary",
+            "receiptId": "08b7b63fab8cbb3b68398671e70d0048bb72451fa5b6af3d68135afdc53c6994",
+            "boundary": "change",
+            "subject": "afc-c02-governed-action-and-approval-boundary",
+            "sourceRevision": 204,
+            "exactSignal": "Starting change 2 out of 18: C02 — Governed action and approval boundary"
+          },
+          "change:afc-c03-lossless-definitions-and-collaboration-document-profile": {
+            "key": "change:afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "receiptId": "35cfaaaff3c6fe47939756cb116e233a0660890604ce466ea02f557216a7fc96",
+            "boundary": "change",
+            "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "sourceRevision": 222,
+            "exactSignal": "Starting change 3 out of 18: C03 — Lossless definitions and collaboration document profile"
+          },
+          "change:afc-c09-team-task-admission-context-and-membership": {
+            "key": "change:afc-c09-team-task-admission-context-and-membership",
+            "receiptId": "f11f696c5db99a0a07c8be99c4a1d55fdb053354d0eb5c615a8546598e2e46ae",
+            "boundary": "change",
+            "subject": "afc-c09-team-task-admission-context-and-membership",
+            "sourceRevision": 338,
+            "exactSignal": "Starting change 1 out of 20: afc-c09-team-task-admission-context-and-membership"
+          },
+          "change:afc-c10-feedback-workflow-and-governed-connector-effects": {
+            "key": "change:afc-c10-feedback-workflow-and-governed-connector-effects",
+            "receiptId": "395e015f31c3e698afc40850200023152441a427298e9cbb62c3522670665758",
+            "boundary": "change",
+            "subject": "afc-c10-feedback-workflow-and-governed-connector-effects",
+            "sourceRevision": 494,
+            "exactSignal": "Starting change 12 out of 20: C10 — Feedback workflow and governed connector effects"
+          },
+          "change:afc-c14-studio-administration-and-isolated-service-consoles": {
+            "key": "change:afc-c14-studio-administration-and-isolated-service-consoles",
+            "receiptId": "1afe96a8c6c203ea9e21d9ce3f5b31050f3f0517f13a42e0fb285e7434ba5cd4",
+            "boundary": "change",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles",
+            "sourceRevision": 505,
+            "exactSignal": "Starting change 16 out of 20: C14 — Studio administration and isolated service consoles"
+          },
+          "change:afc-d01-local-mac-durable-agent-delivery": {
+            "key": "change:afc-d01-local-mac-durable-agent-delivery",
+            "receiptId": "c926b3408b169c3c73a368e802c3b40ccf529de002dc0bdd26d2f11db24b550e",
+            "boundary": "change",
+            "subject": "afc-d01-local-mac-durable-agent-delivery",
+            "sourceRevision": 312,
+            "exactSignal": "Starting change 1 out of 19: Local Mac durable-agent delivery"
+          },
+          "phase:agent-fabric-convergence::six-hour-convergence-recovery": {
+            "key": "phase:agent-fabric-convergence::six-hour-convergence-recovery",
+            "receiptId": "edb5a6f58ca7e78009ab0c0a565368f4e2c0a1718c9c6807b27bdda1687daf85",
+            "boundary": "phase",
+            "subject": "agent-fabric-convergence::six-hour-convergence-recovery",
+            "sourceRevision": 516,
+            "exactSignal": "Starting phase 6 out of 6: six-hour-convergence-recovery"
+          },
+          "task:afc-c02-governed-action-and-approval-boundary/c02.1": {
+            "key": "task:afc-c02-governed-action-and-approval-boundary/c02.1",
+            "receiptId": "1a56be3471e7536c63ffa01fa77882926e7707660b4364bc29754eed3a6e5ba4",
+            "boundary": "task",
+            "subject": "afc-c02-governed-action-and-approval-boundary/C02.1",
+            "sourceRevision": 205,
+            "exactSignal": "Starting task 1 out of 3: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture."
+          },
+          "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2": {
+            "key": "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2",
+            "receiptId": "1836b9b60f0b3fa4be0e03735394e79b0eb81d25be57c98ec86f38b28e121464",
+            "boundary": "task",
+            "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile/C03.2",
+            "sourceRevision": 223,
+            "exactSignal": "Starting task 2 out of 3: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks."
+          },
+          "task:afc-c09-team-task-admission-context-and-membership/c09.3": {
+            "key": "task:afc-c09-team-task-admission-context-and-membership/c09.3",
+            "receiptId": "a764fd6e179cf180b0b44285f96f34926b3f884113b4c9c37020c88b5fd4bd50",
+            "boundary": "task",
+            "subject": "afc-c09-team-task-admission-context-and-membership/C09.3",
+            "sourceRevision": 339,
+            "exactSignal": "Starting task 1 out of 1: Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage"
+          },
+          "task:afc-c10-feedback-workflow-and-governed-connector-effects/c10.2": {
+            "key": "task:afc-c10-feedback-workflow-and-governed-connector-effects/c10.2",
+            "receiptId": "e03ab7584d35622d3aae48cb76d481bb839a1f0d333e38e8894d067013331802",
+            "boundary": "task",
+            "subject": "afc-c10-feedback-workflow-and-governed-connector-effects/C10.2",
+            "sourceRevision": 499,
+            "exactSignal": "Starting task 2 out of 3: Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.1": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.1",
+            "receiptId": "e14e737033401fe76b2498ca5de43e03e4832b5a386edac3ee9578807bdf1978",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.1",
+            "sourceRevision": 506,
+            "exactSignal": "Starting task 1 out of 4: Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.3": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.3",
+            "receiptId": "6abb9d3a2371cfc6fdb469ab57469975df1413f1cd9ebf205fa48c2d381e9065",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.3",
+            "sourceRevision": 512,
+            "exactSignal": "Starting task 3 out of 4: Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.4": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.4",
+            "receiptId": "1ff00e1ba68d4dc939ccb0d1e6dce9402b2975cb8ec7c2e36e197fb992ba03bd",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.4",
+            "sourceRevision": 510,
+            "exactSignal": "Starting task 4 out of 4: Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback."
+          },
+          "task:afc-d01-local-mac-durable-agent-delivery/d01.4": {
+            "key": "task:afc-d01-local-mac-durable-agent-delivery/d01.4",
+            "receiptId": "a22b21e408ff34b47bf47ce4e690970bfa3e1e812ca75c3401cc901dbe602ff3",
+            "boundary": "task",
+            "subject": "afc-d01-local-mac-durable-agent-delivery/D01.4",
+            "sourceRevision": 327,
+            "exactSignal": "Starting task 4 out of 4: Resolve publication choice including live website installer pointers"
+          }
+        },
+        "exactSignal": "Completed phase 6 out of 6: six-hour-convergence-recovery",
+        "repairedProjections": [],
+        "receiptId": null,
+        "precommit": true
+      }
+    },
+    {
+      "command": [
+        "phase",
+        "transition",
+        "--command-id",
+        "reflect-phase-complete-six-hour-recovery-20261005",
+        "--id",
+        "agent-fabric-convergence::six-hour-convergence-recovery",
+        "--status",
+        "complete"
+      ],
+      "exitCode": 0,
+      "revision": 549,
+      "activePath": {
+        "phasePath": [
+          "agent-fabric-convergence",
+          "agent-fabric-convergence::six-hour-convergence-recovery"
+        ],
+        "phaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
+        "stageId": "reflect",
+        "changeId": null,
+        "taskId": null,
+        "commit": "32e19a6c696e0078c5efcc8dc2f2dfba5c285668"
+      }
+    },
+    {
+      "precommit": false,
+      "guard": {
+        "outcome": "pass",
+        "authoritativeRevision": 550,
+        "sourceRevision": 549,
+        "position": "agent-fabric-convergence › six-hour-convergence-recovery",
+        "findings": [],
+        "outstandingObligations": {
+          "change:afc-c02-governed-action-and-approval-boundary": {
+            "key": "change:afc-c02-governed-action-and-approval-boundary",
+            "receiptId": "08b7b63fab8cbb3b68398671e70d0048bb72451fa5b6af3d68135afdc53c6994",
+            "boundary": "change",
+            "subject": "afc-c02-governed-action-and-approval-boundary",
+            "sourceRevision": 204,
+            "exactSignal": "Starting change 2 out of 18: C02 — Governed action and approval boundary"
+          },
+          "change:afc-c03-lossless-definitions-and-collaboration-document-profile": {
+            "key": "change:afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "receiptId": "35cfaaaff3c6fe47939756cb116e233a0660890604ce466ea02f557216a7fc96",
+            "boundary": "change",
+            "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "sourceRevision": 222,
+            "exactSignal": "Starting change 3 out of 18: C03 — Lossless definitions and collaboration document profile"
+          },
+          "change:afc-c09-team-task-admission-context-and-membership": {
+            "key": "change:afc-c09-team-task-admission-context-and-membership",
+            "receiptId": "f11f696c5db99a0a07c8be99c4a1d55fdb053354d0eb5c615a8546598e2e46ae",
+            "boundary": "change",
+            "subject": "afc-c09-team-task-admission-context-and-membership",
+            "sourceRevision": 338,
+            "exactSignal": "Starting change 1 out of 20: afc-c09-team-task-admission-context-and-membership"
+          },
+          "change:afc-c10-feedback-workflow-and-governed-connector-effects": {
+            "key": "change:afc-c10-feedback-workflow-and-governed-connector-effects",
+            "receiptId": "395e015f31c3e698afc40850200023152441a427298e9cbb62c3522670665758",
+            "boundary": "change",
+            "subject": "afc-c10-feedback-workflow-and-governed-connector-effects",
+            "sourceRevision": 494,
+            "exactSignal": "Starting change 12 out of 20: C10 — Feedback workflow and governed connector effects"
+          },
+          "change:afc-c14-studio-administration-and-isolated-service-consoles": {
+            "key": "change:afc-c14-studio-administration-and-isolated-service-consoles",
+            "receiptId": "1afe96a8c6c203ea9e21d9ce3f5b31050f3f0517f13a42e0fb285e7434ba5cd4",
+            "boundary": "change",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles",
+            "sourceRevision": 505,
+            "exactSignal": "Starting change 16 out of 20: C14 — Studio administration and isolated service consoles"
+          },
+          "change:afc-d01-local-mac-durable-agent-delivery": {
+            "key": "change:afc-d01-local-mac-durable-agent-delivery",
+            "receiptId": "c926b3408b169c3c73a368e802c3b40ccf529de002dc0bdd26d2f11db24b550e",
+            "boundary": "change",
+            "subject": "afc-d01-local-mac-durable-agent-delivery",
+            "sourceRevision": 312,
+            "exactSignal": "Starting change 1 out of 19: Local Mac durable-agent delivery"
+          },
+          "task:afc-c02-governed-action-and-approval-boundary/c02.1": {
+            "key": "task:afc-c02-governed-action-and-approval-boundary/c02.1",
+            "receiptId": "1a56be3471e7536c63ffa01fa77882926e7707660b4364bc29754eed3a6e5ba4",
+            "boundary": "task",
+            "subject": "afc-c02-governed-action-and-approval-boundary/C02.1",
+            "sourceRevision": 205,
+            "exactSignal": "Starting task 1 out of 3: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture."
+          },
+          "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2": {
+            "key": "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2",
+            "receiptId": "1836b9b60f0b3fa4be0e03735394e79b0eb81d25be57c98ec86f38b28e121464",
+            "boundary": "task",
+            "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile/C03.2",
+            "sourceRevision": 223,
+            "exactSignal": "Starting task 2 out of 3: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks."
+          },
+          "task:afc-c09-team-task-admission-context-and-membership/c09.3": {
+            "key": "task:afc-c09-team-task-admission-context-and-membership/c09.3",
+            "receiptId": "a764fd6e179cf180b0b44285f96f34926b3f884113b4c9c37020c88b5fd4bd50",
+            "boundary": "task",
+            "subject": "afc-c09-team-task-admission-context-and-membership/C09.3",
+            "sourceRevision": 339,
+            "exactSignal": "Starting task 1 out of 1: Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage"
+          },
+          "task:afc-c10-feedback-workflow-and-governed-connector-effects/c10.2": {
+            "key": "task:afc-c10-feedback-workflow-and-governed-connector-effects/c10.2",
+            "receiptId": "e03ab7584d35622d3aae48cb76d481bb839a1f0d333e38e8894d067013331802",
+            "boundary": "task",
+            "subject": "afc-c10-feedback-workflow-and-governed-connector-effects/C10.2",
+            "sourceRevision": 499,
+            "exactSignal": "Starting task 2 out of 3: Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.1": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.1",
+            "receiptId": "e14e737033401fe76b2498ca5de43e03e4832b5a386edac3ee9578807bdf1978",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.1",
+            "sourceRevision": 506,
+            "exactSignal": "Starting task 1 out of 4: Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.3": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.3",
+            "receiptId": "6abb9d3a2371cfc6fdb469ab57469975df1413f1cd9ebf205fa48c2d381e9065",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.3",
+            "sourceRevision": 512,
+            "exactSignal": "Starting task 3 out of 4: Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback."
+          },
+          "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.4": {
+            "key": "task:afc-c14-studio-administration-and-isolated-service-consoles/c14.4",
+            "receiptId": "1ff00e1ba68d4dc939ccb0d1e6dce9402b2975cb8ec7c2e36e197fb992ba03bd",
+            "boundary": "task",
+            "subject": "afc-c14-studio-administration-and-isolated-service-consoles/C14.4",
+            "sourceRevision": 510,
+            "exactSignal": "Starting task 4 out of 4: Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback."
+          },
+          "task:afc-d01-local-mac-durable-agent-delivery/d01.4": {
+            "key": "task:afc-d01-local-mac-durable-agent-delivery/d01.4",
+            "receiptId": "a22b21e408ff34b47bf47ce4e690970bfa3e1e812ca75c3401cc901dbe602ff3",
+            "boundary": "task",
+            "subject": "afc-d01-local-mac-durable-agent-delivery/D01.4",
+            "sourceRevision": 327,
+            "exactSignal": "Starting task 4 out of 4: Resolve publication choice including live website installer pointers"
+          }
+        },
+        "exactSignal": "Completed phase 6 out of 6: six-hour-convergence-recovery",
+        "repairedProjections": [],
+        "receiptId": "a1228c572a7123f4f51daf05f252ea09d13b0b5445dd9d6a4eb5a1bd38845759",
+        "precommit": false
+      }
+    },
+    {
+      "command": [
+        "phase",
+        "activate",
+        "--command-id",
+        "reflect-return-parent-six-hour-recovery-20261005",
+        "--id",
+        "agent-fabric-convergence",
+        "--exact-next-work",
+        "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence"
+      ],
+      "exitCode": 0,
+      "revision": 551,
+      "activePath": {
+        "phasePath": [
+          "agent-fabric-convergence"
+        ],
+        "phaseId": "agent-fabric-convergence",
+        "stageId": null,
+        "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+        "taskId": "C14.1",
+        "commit": "3c9f1b242ea655b1eb69892d36964233d9134bed"
+      }
+    }
+  ]
+}

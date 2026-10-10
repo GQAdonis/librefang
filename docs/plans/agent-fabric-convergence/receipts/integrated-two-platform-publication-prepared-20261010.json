@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "kind": "two-platform-release-publication-preparation",
+  "executed": false,
+  "version": "2.2.31",
+  "profile": "uar-enabled",
+  "operatorScope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64"
+    ],
+    "linux": "excluded"
+  },
+  "candidate": {
+    "source": "b4d9f93101ebe7ed254ee365dcd6b1c63629487e",
+    "ref": "codex/integrated-runtime-release-reconciliation",
+    "sourceMustBeRecheckedBeforeDispatch": true,
+    "notes": "If payload pins or production code change after this source, freeze the resulting full commit and update immutable manifest names before dispatch."
+  },
+  "provenance": {
+    "preparedDispatch": "receipts/integrated-installer-dispatch-prepared-20261010.json",
+    "bossMainObserved": "2f6238fd02b6200dc1b878e5385d807cdbd1a24f",
+    "bossMainPackageVersionObserved": "2.2.30",
+    "landingMainObserved": "326e1f19da9af19d484f5a419fe1ca1f0c4bb1d8",
+    "readOnlyInspection": true,
+    "sourceFiles": [
+      ".github/workflows/the-boss-release.yml",
+      "scripts/release-platforms.cjs",
+      "scripts/release-preflight.cjs",
+      "scripts/import-uar-sidecar-payloads.cjs",
+      "scripts/prepare-github-release.cjs",
+      "scripts/queue-release-publication.cjs",
+      "scripts/coordinate-release-publication.cjs",
+      "scripts/update-release-entry.cjs",
+      "scripts/verify-github-release.cjs"
+    ],
+    "landingBlobs": {
+      "scripts/parse-releases.mjs": "693e04bd32cad4bdfa936faa784e056051b37246",
+      "scripts/sync-release-platform.mjs": "53ff2af26ab47e5c26ff502864fff67a29705648",
+      ".github/workflows/publish-release-platform.yml": "2d01488bc35a17bb586e28e2bd4b680018d2e353"
+    }
+  },
+  "prerequisites": [
+    "Both selected immutable UAR payload URLs/checksums/source are committed",
+    "Completed local packaged feature operation succeeds",
+    "Final frozen source is pushed and branch still resolves to that exact commit",
+    "Boss main must declare package version 2.2.31 before first automatic metadata publication; current 2.2.30 main rejects it"
+  ],
+  "installerDispatch": {
+    "command": "gh",
+    "args": [
+      "workflow",
+      "run",
+      "the-boss-release.yml",
+      "--repo",
+      "Prometheus-AGS/the-boss",
+      "--ref",
+      "codex/integrated-runtime-release-reconciliation",
+      "-f",
+      "release_version=2.2.31",
+      "-f",
+      "release_profile=uar-enabled",
+      "-f",
+      "platforms=darwin-arm64,win32-x64",
+      "-f",
+      "replace_published_platforms=false",
+      "-f",
+      "uar_darwin_arm64_record_url=https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-darwin-arm64.json",
+      "-f",
+      "uar_win32_x64_record_url=https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-x64.json"
+    ],
+    "action": "Dispatch only once after prerequisites; record intent and actual returned run URL before another effect; unknown acknowledgement requires reconciliation, never automatic redispatch."
+  },
+  "bossPublicationRecoveryCommands": [
+    {
+      "platform": "darwin-arm64",
+      "command": "gh",
+      "args": ["api", "repos/Prometheus-AGS/the-boss/dispatches", "--input", "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-two-platform-requeue-darwin-arm64-20261010.json"],
+      "onlyIf": "Actual installer and immutable manifest exist; main now declares 2.2.31; previous matching metadata publication demonstrably failed or was absent. Never requeue installer builds or duplicate an active publication."
+    },
+    {
+      "platform": "win32-x64",
+      "command": "gh",
+      "args": ["api", "repos/Prometheus-AGS/the-boss/dispatches", "--input", "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-two-platform-requeue-win32-x64-20261010.json"],
+      "onlyIf": "Actual installer and immutable manifest exist; main now declares 2.2.31; previous matching metadata publication demonstrably failed or was absent. Never requeue installer builds or duplicate an active publication."
+    }
+  ],
+  "releaseNotesCommand": {
+    "command": "gh",
+    "args": ["release", "edit", "v2.2.31", "--repo", "Prometheus-AGS/the-boss", "--notes-file", "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-two-platform-release-notes-2.2.31-20261010.md"],
+    "onlyIf": "The actual GitHub release has been created; preserve existing draft/public state. Notes accurately defer Intel and Windows ARM64."
+  },
+  "automaticPublication": [
+    "Each native installer job uploads its installer and immutable platform manifest",
+    "queue-release-publication.cjs sends boss_release_platform_published to Boss",
+    "Serialized Boss publish-platform job merges exact selected artifact metadata into main, publishes the GitHub release, hashes selected public bytes and sends the landing event",
+    "Landing publish-release-platform.yml verifies actual selected installer bytes and updates only its installer entry in release.json, preserving other platform versions"
+  ],
+  "metadataExpected": {
+    "version": "2.2.31",
+    "artifacts": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "pendingPlatforms": [
+      "win32-arm64",
+      "darwin-x64"
+    ],
+    "deferredVersionOnWebsite": "2.2.30",
+    "note": "Profile supportedPlatforms stays the existing four-platform contract; pendingPlatform entries are not certification failures for this operator-selected two-platform delivery."
+  },
+  "siteRecoveryCommands": [
+    {
+      "platform": "darwin-arm64",
+      "command": "gh",
+      "args": [
+        "workflow",
+        "run",
+        "publish-release-platform.yml",
+        "--repo",
+        "Know-Me-Tools/boss-landing-spot",
+        "--ref",
+        "main",
+        "-f",
+        "repository=Prometheus-AGS/the-boss",
+        "-f",
+        "tag=v2.2.31",
+        "-f",
+        "version=2.2.31",
+        "-f",
+        "profile=uar-enabled",
+        "-f",
+        "platform=darwin",
+        "-f",
+        "arch=arm64",
+        "-f",
+        "manifestAsset=release-platform-v2.2.31-uar-enabled-darwin-arm64-b4d9f93101ebe7ed254ee365dcd6b1c63629487e.json"
+      ],
+      "onlyIf": "Exact current-source immutable manifest and installer public, and automatic matching landing publication missing/failed. Record returned run; do not duplicate an existing active/successful event."
+    },
+    {
+      "platform": "win32-x64",
+      "command": "gh",
+      "args": [
+        "workflow",
+        "run",
+        "publish-release-platform.yml",
+        "--repo",
+        "Know-Me-Tools/boss-landing-spot",
+        "--ref",
+        "main",
+        "-f",
+        "repository=Prometheus-AGS/the-boss",
+        "-f",
+        "tag=v2.2.31",
+        "-f",
+        "version=2.2.31",
+        "-f",
+        "profile=uar-enabled",
+        "-f",
+        "platform=win32",
+        "-f",
+        "arch=x64",
+        "-f",
+        "manifestAsset=release-platform-v2.2.31-uar-enabled-win32-x64-b4d9f93101ebe7ed254ee365dcd6b1c63629487e.json"
+      ],
+      "onlyIf": "Exact current-source immutable manifest and installer public, and automatic matching landing publication missing/failed. Record returned run; do not duplicate an existing active/successful event."
+    }
+  ],
+  "websiteDeployment": {
+    "method": "Publish existing connected Lovable project after landing main receives both selected entries",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "website": "https://the-boss.know-me.tools",
+    "notClaimed": "GitHub landing commit alone does not certify deployed website",
+    "expected": [
+      {
+        "platform": "darwin-arm64",
+        "version": "2.2.31"
+      },
+      {
+        "platform": "win32-x64",
+        "version": "2.2.31"
+      },
+      {
+        "platform": "darwin-x64",
+        "version": "2.2.30"
+      },
+      {
+        "platform": "win32-arm64",
+        "version": "2.2.30"
+      }
+    ]
+  },
+  "blockers": [
+    {
+      "source": "scripts/coordinate-release-publication.cjs",
+      "condition": "Boss main package.json currently 2.2.30",
+      "resolution": "Merge integrated 2.2.31 product source to main before metadata job, or after demonstrated failure requeue only the existing immutable per-platform publication event; do not rebuild installer."
+    },
+    {
+      "source": "landing scripts/parse-releases.mjs:selectInstallers + sync-release.yml",
+      "condition": "Generic newest-release parser demands all four installer rows at 2.2.31",
+      "resolution": "Do not invoke generic sync-release; use existing per-platform publication route, which explicitly preserves prior optional-platform entries."
+    },
+    {
+      "source": "scripts/prepare-github-release.cjs",
+      "condition": "Draft notes hardcode complete UAR payloads for all four targets",
+      "resolution": "Root replace release body with truthful two-platform notes preserving the exact Feature profile: uar-enabled. prefix; no product edit required."
+    }
+  ],
+  "signing": {
+    "mac": "Use actual recorded signing result; customer expectation Developer ID (notarized)",
+    "windows": "Use actual recorded signing result; no signing success inferred"
+  },
+  "acceptance": "Local packaged operation and native customer installed acceptance remain distinct; no operation performed by preparation",
+  "cadenceCountersMutated": false,
+  "qualificationLedgerMutated": false
+}

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-production-defect-and-source-repair",
+  "recordedAt": "2026-10-08T07:04:26.857Z",
+  "scope": "C14.4 ordinary BossFang delegation",
+  "reproducer": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-workflow-pending-diagnostic-f57ac61f-b9a0-42e4-a4d8-856930330bed/active-wire-event-replay.json",
+    "sha256": "677ae6acdc1426198c218649665cfa810a993a81f080a48c142634cd84f7cab6",
+    "startedAt": "2026-10-08T07:01:42.994Z",
+    "finishedAt": "2026-10-08T07:01:46.802Z",
+    "sources": {
+      "boss": "7d52678926839ee6a9adaf698d017c9e86f7cbc7",
+      "bossfang": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "uar": "49ffa8e008b6c46b67729416654c2778cf2b6216"
+    },
+    "original": {
+      "observedAt": "2026-10-08T07:00:04.030Z",
+      "bossTaskId": "workflow:788d6790-026a-41ce-9879-8180a83b72de:ordinary-bound-step",
+      "workflow": {
+        "workflowId": "87118362-86fd-4d23-a5c7-4b4144f79d42",
+        "workflowRunId": "788d6790-026a-41ce-9879-8180a83b72de",
+        "stepName": "ordinary-bound-step"
+      },
+      "uarTaskId": "fh-e2a93c36a80d47c4a82084df42af0d58-d018219f3b1949e19fdfc605bbc74cef",
+      "uarRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+      "uarRootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+      "cursor": 13,
+      "revision": 7,
+      "executionState": "working",
+      "pendingApprovalPresent": false,
+      "outputPresent": false,
+      "outputSha256": null,
+      "diagnostics": []
+    },
+    "events": [
+      {
+        "cursor": 9,
+        "eventType": "agui.artifact",
+        "rootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+        "code": null,
+        "toolName": null,
+        "approvalIdPresent": false,
+        "messageSha256": null
+      },
+      {
+        "cursor": 10,
+        "eventType": "agui.tool_call.delta",
+        "rootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+        "code": null,
+        "toolName": null,
+        "approvalIdPresent": false,
+        "messageSha256": null
+      },
+      {
+        "cursor": 11,
+        "eventType": "agui.tool_call.complete",
+        "rootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+        "code": null,
+        "toolName": "filesystem__write",
+        "approvalIdPresent": false,
+        "messageSha256": null
+      },
+      {
+        "cursor": 12,
+        "eventType": "agui.state.patch",
+        "rootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+        "code": null,
+        "toolName": null,
+        "approvalIdPresent": false,
+        "messageSha256": null
+      },
+      {
+        "cursor": 13,
+        "eventType": "agui.tool_call.approval_required",
+        "rootRunId": "b3adaa8c-7089-4471-9eaa-efe8b369b3e6",
+        "code": null,
+        "toolName": "filesystem__write",
+        "approvalIdPresent": true,
+        "messageSha256": null
+      }
+    ],
+    "requestStatuses": [
+      {
+        "after": 8,
+        "httpStatus": 200
+      },
+      {
+        "after": 9,
+        "httpStatus": 200
+      },
+      {
+        "after": 10,
+        "httpStatus": 200
+      },
+      {
+        "after": 11,
+        "httpStatus": 200
+      },
+      {
+        "after": 12,
+        "httpStatus": 200
+      }
+    ]
+  },
+  "gateway": {
+    "ownedService": "gui/501/ai.prometheus.liter-llm-api",
+    "before": {
+      "pid": 95606,
+      "health": "timeout",
+      "authenticatedModels": "timeout"
+    },
+    "action": "launchctl kickstart -k on confirmed owned listener",
+    "after": {
+      "pid": 79470,
+      "healthHttpStatus": 200,
+      "authenticatedModelsHttpStatus": 200,
+      "modelCount": 7
+    },
+    "diagnosticInference": "actual packaged workflow emitted filesystem approval after restart"
+  },
+  "repair": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "source": "3daa3ef89aaebe0da379ca42b1582172d21f127a",
+    "parent": "49ffa8e008b6c46b67729416654c2778cf2b6216",
+    "files": [
+      "src/uar/api/full_harness.rs",
+      "src/uar/api/full_harness/handlers.rs",
+      "src/uar/api/full_harness/stream.rs"
+    ],
+    "behavior": "Project live owner-scoped root broker pending state into existing task receipt before challenge delivery and authenticated reads; terminal precedence unchanged",
+    "testsRun": false,
+    "packagedOperation": "pending"
+  },
+  "cadence": {
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "startedAt": "2026-10-07T23:24:33.943Z",
+    "clockReset": false,
+    "successfulDeliveries": 6,
+    "newCompletionCredit": 0,
+    "publicationObligation": "99a9d56d-7212-46da-98dd-de2854ff6420",
+    "publication": "pending",
+    "priorReceipts": "retained"
+  },
+  "release": {
+    "version": "2.2.15",
+    "customerSiteVersion": "2.2.14",
+    "nativePayloads": "dispatched; not inferred successful"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:32:14.766Z",
+  "authority": "Operator implementation completion separated from intervening qualification gates",
+  "implementation": "complete",
+  "label": "C13",
+  "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+  "sources": {
+    "system": "acebf05b7077cfd69b675673aa9720ef65229aec",
+    "systemCore": "43f5276",
+    "app": "3700864",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889"
+  },
+  "capabilities": [
+    "Actual LlamaCpp inference replaces empty-success stubs",
+    "One UAR kernel and existing durable shared Surreal3.3 host connection",
+    "Explicit placement/input consent and frozen run binding",
+    "Raw frames and cursor persisted before UI; observation detach, GET reconnect, explicit cancellation",
+    "Core Tauri controls and application Execution settings/normal chat"
+  ],
+  "qualification": "Native device/profile and storage-upgrade operation pending; cold-runtime restart never claims execution resume when unavailable",
+  "testsRun": [],
+  "buildsRun": [],
+  "certification": "pending"
+}

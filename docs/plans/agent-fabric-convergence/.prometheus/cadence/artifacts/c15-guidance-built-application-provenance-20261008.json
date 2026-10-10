@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-08T10:45:50.863Z",
+  "version": "2.2.16",
+  "applicationBuildSource": "4160744ffcb07fd4780e1c0347f8d4577846148f",
+  "iterationId": "8e0b5434-3245-4948-9c06-6ea6e5d75e26",
+  "build": "passed",
+  "launch": "passed",
+  "featureOperation": "in-progress",
+  "changedOperationOnly": true,
+  "changedPaths": [
+    "scripts/reusable-team-operation/role-guidance-scenario.mjs"
+  ],
+  "applicationPackagingExcludes": "electron-builder.yml files: !scripts",
+  "artifacts": {
+    "dist/The-Boss-2.2.16-mac-arm64.dmg": {
+      "sha256": "2955dc5df658af4ff14aeac481c59e83188bbd4aa8450c3720b94c0900ae5014",
+      "size": 699653830
+    },
+    "dist/mac-arm64/The Boss.app/Contents/Resources/app.asar": {
+      "sha256": "1068ccb0e8c5a7728cb5681d4113f8cb67bca5a64c78f4370c4d930c7f641606",
+      "size": 346886619
+    },
+    "scripts/reusable-team-operation/role-guidance-scenario.mjs": {
+      "sha256": "18bfe71f31ae3374ec8ed297660a4c725cd140fa9bb4388798399d61271f6fa1",
+      "size": 17267
+    }
+  },
+  "signingStatus": "Developer ID signed; not notarized",
+  "canonicalDeliveryReconciled": false,
+  "reason": "Unpackaged operation correction does not change built app; retain original build provenance and separately hash operation driver. Do not rewrite Cadence source receipts or count parent task complete."
+}

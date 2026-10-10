@@ -1,0 +1,150 @@
+{
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "codeComplete": true,
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902",
+      "revision": "25c542c77f41abcec605dd8ae372b04f68a1801e"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "revision": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2"
+    }
+  ],
+  "outputRoots": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json"
+  ],
+  "satisfiedPrerequisiteIds": [
+    "integrated-native-payload-records",
+    "declared-gateway-reference"
+  ],
+  "featureOperation": {
+    "id": "integrated-2.2.31-ordinary-workflow",
+    "outcome": "Operate the integrated 2.2.31 packaged ordinary BossFang workflow through the same UAR process, with authoritative MCP write approval/denial, pending cancellation, visible native output and durable Work selection.",
+    "promisedCapability": "Operate the integrated 2.2.31 packaged ordinary BossFang workflow through the same UAR process, with authoritative MCP write approval/denial, pending cancellation, visible native output and durable Work selection.",
+    "procedure": "Launch the actual integrated packaged app using the maintained launcher, exercise its ordinary bound workflow and exact owned MCP effects in a disposable workspace; retain actual identities, approval/effect results, native output, Work selection and cancellation evidence. Historical receipts are applicability context only.",
+    "checkpointId": "github-feedback-operation",
+    "entrypoint": {
+      "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/operate-integrated-admission-v2.mjs",
+        "--boss",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+        "--launcher",
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--output",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010",
+        "--config",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json",
+        "--mode",
+        "bossfang"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "sourcePaths": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operate-bossfang-workflow-delegation.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/dashboard.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/effects.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/io.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/provenance.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/scenario.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/setup.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/signed-provenance.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/bossfang-workflow-delegation-operation/workflow.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/approval-lifecycle-operation/setup.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/approval-lifecycle-operation/io.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/approval-lifecycle-operation/clients.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/c14-gpt-6.1-sol-context-declaration-20261008.json",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/operate-integrated-admission-v2.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-common.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-bossfang.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-native.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-older-instance.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/before-pack.js",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/convergence/report.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-sources.json"
+      ],
+      "buildProducedPaths": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/uar-sidecar",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/bossfang",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/convergence-supported-profile.json"
+      ]
+    },
+    "target": {
+      "kind": "real",
+      "description": "Actual integrated Mac ARM64 The Boss package with source-matched UAR and embedded ordinary BossFang workflow; disposable operation workspace only."
+    },
+    "evidenceLevel": "real-packaged-embedded-ordinary-bossfang-workflow-delegation",
+    "expectedResult": "The actual driver returns success only after same-UAR ownership and workflow/effect/cancellation observations; its original composite history remains immutable. No new GitHub issue is created.",
+    "prerequisites": [
+      {
+        "id": "integrated-native-payload-records",
+        "description": "Actual UAR/BossFang source-matched native payload URLs, byte sizes, hashes and source revisions are recorded for Mac ARM64 and Windows x64 before freezing this customer candidate; other targets are explicitly deferred by the operator."
+      },
+      {
+        "id": "declared-gateway-reference",
+        "description": "Existing authenticated liter gateway catalog exposes gpt-6.1-sol; the operation configuration references LITER_LLM_MASTER_KEY by variable name and gateway root http://localhost:4000."
+      }
+    ],
+    "isolatedResources": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010"
+    ],
+    "externalEffects": [],
+    "authorityRefs": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md"
+    ],
+    "limitations": [
+      "This ordinary workflow does not certify native runtime file_read, native stream interruption/reconnect, old tool_admission_v2 capability refusal or all remaining customer criteria. Those require separately retained real operation evidence before corresponding canonical task/closeout credit.",
+      "Issue #63 is read-only; the inherited github-feedback-operation ID is deliberately replaced and performs no issue POST.",
+      "Native Windows operation and final identified Mac/Windows operator acceptance remain separately pending.",
+      "No earlier completed source/admission implementation tasks or historical publication repair are credited again."
+    ]
+  },
+  "checkpoints": [
+    {
+      "id": "github-feedback-operation",
+      "kind": "run",
+      "purpose": "feature",
+      "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/operate-integrated-admission-v2.mjs",
+        "--boss",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+        "--launcher",
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--output",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010",
+        "--config",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json",
+        "--mode",
+        "bossfang"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "required": true,
+      "timeoutMs": 1200000,
+      "secretEnv": [
+        "BOSS_C142_GATEWAY_CREDENTIAL_ENV",
+        "BOSS_C142_GATEWAY_ENDPOINT",
+        "BOSS_C142_GATEWAY_ALIAS",
+        "BOSS_C142_GATEWAY_PROVIDER_ID",
+        "BOSS_C142_GATEWAY_MODEL_ID",
+        "BOSS_C142_GATEWAY_PROVIDER_BASE_URL",
+        "LITER_LLM_MASTER_KEY"
+      ],
+      "resourcePaths": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010"
+      ]
+    }
+  ],
+  "scopeAuthority": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md",
+  "scopeReason": "Bind the approved completed ordinary-workflow operation to its implemented candidate-specific adapter before source freeze. Capability and external effects are unchanged; no GitHub POST."
+}

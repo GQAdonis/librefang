@@ -1,0 +1,3 @@
+Subscription-backed Responses streams can return complete function arguments only in final events. The proxy dropped those arguments, so UAR received empty JSON and rejected reviewer tool calls before filesystem access. Preserve final argument suffixes without duplicate bytes and emit tool-call completion once the response completes.
+
+Two bounded real read-only observations established the cause: the gateway emitted empty arguments, while the primary subscription stream returned final arguments with no deltas. No tool effects occurred. Actual release binary build is running; post-repair packaged operation remains pending. No unit or intermediate suites ran.

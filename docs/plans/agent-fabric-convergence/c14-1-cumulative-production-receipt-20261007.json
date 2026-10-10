@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "kind": "cumulative-criterion-evidence-receipt",
+  "draftedOn": "2026-10-07",
+  "creationTaskRef": "C14.1",
+  "status": "completed-original-c14-1-local-production-boundary",
+  "complete": true,
+  "completion": {
+    "tasks": [
+      "C14.1"
+    ],
+    "changes": [],
+    "phases": []
+  },
+  "purpose": "Map original C14.1 source and retained real-operation evidence without relabeling earlier sources or granting task completion.",
+  "roots": {
+    "initiative": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "detail": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-detail",
+    "admin": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-uar-admin"
+  },
+  "referenceConvention": "All relative source/receipt paths below resolve against the explicitly named root; evidence keys refer to priorEvidence or pendingDetailOutcome. Criterion labels are accounting labels, not new canonical task IDs.",
+  "authority": {
+    "originalTask": {
+      "root": "initiative",
+      "file": ".kbd-orchestrator/phases/agent-fabric-convergence/plan.md",
+      "line": 310,
+      "text": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures."
+    },
+    "originalDesign": {
+      "root": "initiative",
+      "file": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+      "sections": [
+        "Verification",
+        "D01 early consumer boundary",
+        "Approved customer-priority revision — 2026-10-05"
+      ],
+      "applicableAcceptance": "Unsupported controls and private data stay hidden; preserve P1 product history and lifecycle architecture. D01 alone is a bounded contribution. Usable Teams in Work is an approved additional customer journey."
+    },
+    "retainedSpec": {
+      "root": "initiative",
+      "file": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/specs/studio-administration-and-isolated-service-consoles/spec.md",
+      "sections": [
+        "Common studio administration",
+        "Usable teams in Work precede BossFang integration"
+      ],
+      "interpretation": "Effective binding, ownership, posture, lifecycle, budgets, approval and subscription state retain their owning authorities. Existing Work approval surfaces satisfy their mapped observation/decision journey; a new global approval inventory is not specified. Configured external-instance administration is distinct from new remote execution or federation."
+    },
+    "neighborAcceptance": "Two-client issuer/challenge/decision and distinct cancel/detach/drain/stop belong to C14.2; console account/origin/navigation and privileged bridge acceptance belong to C14.3/C14.4. They do not become new C14.1 prerequisites in this receipt."
+  },
+  "sourceSnapshot": {
+    "root": "detail",
+    "bossRevision": "f47f8232647b6f62d2de721628956e737ea7b67d",
+    "uarRevision": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+    "pinFile": "build/local-uar-source.json",
+    "productionDetailCommit": "bf6c70a870e11d842e065c7ba4d1425bd8b9871f",
+    "schemaCorrectionCommit": "26c2dfdc51d050cd53f3d59b3e1ac76e366ab1f8",
+    "hostEligibilityCorrectionCommit": "b939ddedd7f5f934da4f1e520f2c9b579e60e420",
+    "commonContract": [
+      "src/shared/types/uarLifecycleAdministration.ts",
+      "src/shared/ipc/schemas/prometheus.ts",
+      "src/main/ipc/handlers/prometheus.ts",
+      "src/main/ai/runtime/uar/UarLifecycleAdministrationAdapter.ts"
+    ],
+    "contract": "prometheus.uar.lifecycle.snapshot({serviceInstanceId?,workspaceId}) returns requested/effective identity; non-atomic capture times; per-source state/scope/readAt/reason/data; agents, durable, teams, workflows, ownership, approvals and per-team executions.",
+    "trustBoundary": "Main resolves stored Boss workspace and configured instance, uses existing compatibility admission and authenticated UarSidecarService requestInstance boundary and uarPrincipalForSession; the renderer does not supply principal or runtime credentials. Explicit instance reads do not alter global selection or mutation paths.",
+    "operationIdentityCorrectionCommit": "f47f8232647b6f62d2de721628956e737ea7b67d"
+  },
+  "priorEvidence": {
+    "work": {
+      "root": "initiative",
+      "file": ".prometheus/cadence/artifacts/c14-62230284-b070-410b-aa77-f8f420760ea1/evidence.json",
+      "sha256": "7d123229c37c84da1991f101837a6ce442fd4f454e5cdcda59cadcbf97ca8cb2",
+      "bossRevision": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "uarRevision": "035678b6290353a5988a5a96668d08a9781b1471",
+      "appAsarSha256": "645526497709fb98f45949838110c3e00e6b43ae781d48c73895e22c1aeeffe7",
+      "finishedAt": "2026-10-06T19:12:23.982Z",
+      "completeAtRecordedBoundary": true,
+      "scope": "Ordinary packaged coding team: selected model/workspace, real worker/reviewer attempts, bounded repository edit, attributable artifacts, authoritative approvals, reopening and supported cancellation. Accounting captures retained reservations, committed counters and unknown usage. This is not the later administration DETAIL operation.",
+      "accountingObservation": {
+        "reserved": {
+          "tokens": 28672,
+          "costMicrounits": 3500000,
+          "elapsedSeconds": 1140
+        },
+        "committed": {
+          "tokens": 0,
+          "costMicrounits": 0,
+          "elapsedSeconds": 0
+        },
+        "usageUnknownCount": 5
+      },
+      "scopeAccountingReceipt": "c14-customer-repair-delivery-20261006.json"
+    },
+    "admin": {
+      "root": "initiative",
+      "file": ".prometheus/cadence/artifacts/c141-e821b8c0-af21-4e5d-973c-1d47f988155b/operation.json",
+      "sha256": "191bf989c764fc7047f83cd40acf3b4cead1c61d42f46a81e07bc510a46fb9f3",
+      "evidence": ".prometheus/cadence/artifacts/c141-e821b8c0-af21-4e5d-973c-1d47f988155b/evidence.json",
+      "evidenceSha256": "5818954aaa5b071145d851ead7a1fe202fa84a4a3af3cddb4ff291ae7312c439",
+      "bossRevision": "5bf9f450cad7a1d9f4d6cdaaa83a3638e141874e",
+      "uarRevision": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+      "appAsarSha256": "883e2fcf514927579ca545b053277830f07fc527d9e88ec09e8fb0887f07fc6d",
+      "finishedAt": "2026-10-07T22:05:51.774Z",
+      "statusAtRecordedBoundary": "success",
+      "scope": "Two real packaged managed/external local runtimes and two workspaces; actual task assignment/dependencies and isolation; requested/effective identities and source times; visible refresh/runtime/workspace selectors; retained selector state; external detail actions fenced; Work selection and native states preserved. No later detailed durable history/posture/delivery records were claimed.",
+      "cadenceOperation": ".prometheus/cadence/artifacts/c14-administration-operation-20261007.json"
+    },
+    "failedDetail": {
+      "root": "initiative",
+      "file": ".prometheus/cadence/artifacts/c14-detail-73e211e8-b416-429a-9ee8-e65103becc1b/evidence.json",
+      "sha256": "53d3df6f9064e7aee751240d71f062d9cff9b70c3272abbdcc963099efe9cf37",
+      "bossRevision": "26c2dfdc51d050cd53f3d59b3e1ac76e366ab1f8",
+      "finishedAt": "2026-10-07T22:33:42.102Z",
+      "completeAtRecordedBoundary": false,
+      "passingChecks": [],
+      "failureStage": "real-disposable-records",
+      "failureCode": "C14D_REAL_APPLICATION_CONTRACT_UNAVAILABLE",
+      "disposition": "Retain failed attempt; no DETAIL acceptance credit. Root-owned real creation diagnosis identified unattested remote memory durability; the maintained host correction uses actual filesystem SurrealKV and explicit durability attestation, with a new frozen package/operation boundary."
+    }
+  },
+  "criteria": [
+    {
+      "criterion": "definition / instance / activation / run distinction",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarDurableAdministration.ts",
+        "src/main/ai/runtime/uar/uarDurableProjections.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleDurable.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleActivity.tsx"
+      ],
+      "implemented": "Definition ID/version/digest; binding ID/revision/digest; durable instance/session/profile; lifecycle/recovery/revision/epoch; active command/attempt/run; command status/attempt/rootRun/times and committed-event sequence/epoch/lineage; retention/restart limits and reconciliation reference are preserved where supplied. Missing native optional values are displayed as unknown; links require actually rendered targets.",
+      "retainedProof": "work proves actual admitted team/member runs and reopening; admin proves scoped inventories/identity/source states, not detailed durable activity records.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "pendingDetailOutcome: real durable command/attempt/rootRun/event history and new visible activity projection."
+    },
+    {
+      "criterion": "team distinction and usable Teams in Work",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarTeams.ts",
+        "src/main/ai/runtime/uar/UarTeamsAdministrationAdapter.ts",
+        "src/main/ai/runtime/uar/UarTeamExecutionAdapter.ts",
+        "src/main/ai/runtime/uar/UarTeamWorkAdapter.ts",
+        "src/renderer/pages/teams/TeamWorkLaunch.tsx",
+        "src/renderer/components/uarTeams/UarTeamExecutionPanel.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecyclePanel.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleExecutions.tsx"
+      ],
+      "implemented": "Team definition/package/binding identity, team instance/member/task ownership, per-member attempts/native run identities/output/artifacts, pinned model/accounting and retained Work state consume the existing UAR authority.",
+      "retainedProof": "work: ordinary coding preset, natural-language task, actual worker/reviewer model attempts, repository edit/artifact handoff, authoritative approval state and reopening; admin: managed/external inventories and task isolation.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "No new team runtime contract or repeated Work execution is required by the DETAIL increment; retain the precise older evidence boundaries."
+    },
+    {
+      "criterion": "workflow distinction and existing associations",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarWorkflows.ts",
+        "src/main/ai/runtime/uar/UarWorkflowExecutionAdapter.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleWorkflows.tsx"
+      ],
+      "implemented": "Catalog/run GET projections are independent of launch availability. Definition/package identity and compiled steps remain readable; available/stage/supported/diagnostics are explicit. Retained runs preserve team/binding/definition and step task/member/attempt/artifact associations; launch/control admission is unchanged.",
+      "retainedProof": "admin recorded workflow execution unsupported in the normal payload; it did not certify workflow definition/run detail.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "pendingDetailOutcome: actual registered native definition and steps, actual launch unsupported/stage and zero runs. Normal-profile run/step associations remain implemented but unoperated when no native workflow run is supported; do not invent a run or require new execution support to present that limitation."
+    },
+    {
+      "criterion": "task graph",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarTeams.ts",
+        "src/main/ai/runtime/uar/UarTeamsAdministrationAdapter.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecyclePanel.tsx",
+        "src/renderer/components/uarTeams/UarTeamTaskBoard.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleWorkflows.tsx"
+      ],
+      "implemented": "Team tasks expose dependsOn, role, assigneeMemberId, state and stateReason; scoped task anchors show actual dependencies. Existing workflow step task/attempt associations are consumed without changing their DTO contract.",
+      "retainedProof": "admin: actual tasks, assignment/dependency visibility and runtime/workspace exclusion; work: attributable worker/reviewer task and artifact handoff.",
+      "evidenceDisposition": "Retained Work/ADMIN actual task assignment and dependency evidence; actual workflow definition steps read; native workflow launch/run linkage remains explicitly unsupported.",
+      "additionalDetailRequirement": "Workflow-run links have the supported-profile limitation described above; a new task-graph API is not missing."
+    },
+    {
+      "criterion": "budgets",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarTeams.ts",
+        "src/main/ai/runtime/uar/UarTeamExecutionAdapter.ts",
+        "src/renderer/components/uarTeams/UarTeamExecutionPanel.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleExecutions.tsx"
+      ],
+      "implemented": "Existing UarTeamExecutionSummary carries budget maxTokens/maxCostMicrounits/currency/maxElapsedSeconds, aggregate committed/reserved, uncertain attempts and per-attempt reservation/usage/accounting state. The overview displays these native limits and counters; unknown usage remains unknown.",
+      "retainedProof": "work.accounting captures actual reservations, committed counters and five usage-unknown attempts; existing Work UI displays authoritative counters and per-attempt unknown usage. admin provides the selected-instance execution read scope.",
+      "evidenceDisposition": "Retained Work native reservations/committed/unknown-use evidence and existing source contract; no remaining-budget computation is claimed.",
+      "additionalDetailRequirement": "No new budget DTO is missing. Neither original task nor design requires an invented remaining-budget estimate, forced usage settlement or a new accounting authority."
+    },
+    {
+      "criterion": "effective binding posture / ownership / policy",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarBindingPosture.ts",
+        "src/main/ai/runtime/uar/uarBindingPosture.ts",
+        "src/main/ai/runtime/uar/UarDurableAdministrationAdapter.ts",
+        "src/main/ai/runtime/uar/UarTeamsAdministrationAdapter.ts",
+        "src/main/ai/runtime/uar/UarExecutionOwnershipAdapter.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleBindingPosture.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecyclePanel.tsx"
+      ],
+      "implemented": "Public receipt ID/revision/digest, binding/package references, policyRevision, admitted, runtimeCapabilities, model provider/model/profile/settingsRevision identities, optional service binding and diagnostic disposition/code/message are explicitly whitelisted. Owner fence/epoch/claim and requested/effective managed/external identities stay separate. Credentials, grants, endpoints, raw settings and requested/effective blobs are omitted from posture.",
+      "retainedProof": "work records pinned definition/binding and selected model; admin proves requested/effective runtime/workspace identity, managed/external ownership and action fencing. Neither proves the new public receipt projection.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "pendingDetailOutcome: real effective-binding receipt, resolved-model posture, native diagnostics and private-material exclusion."
+    },
+    {
+      "criterion": "subscription lag / failures",
+      "sourceRoot": "detail",
+      "files": [
+        "src/shared/types/uarDurableAdministration.ts",
+        "src/main/ai/runtime/uar/uarDurableProjections.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleObservers.tsx"
+      ],
+      "implemented": "Subscription/source identities; sourceHigh/cursor/retainedLow; backlog/dead-letter counts; retention gaps and detection/acknowledgement times; recovery actions; bounded 128-row inbox delivery window with status, attempts, lastErrorCode, sequence, command and admitted/updated times; maxRetries and retention metadata. Sequence distance is captured source progress, not elapsed lag or exact filtered deliveries; unavailable high-water is unknown and retention loss is distinct.",
+      "retainedProof": "admin proves correct scoped durable source reads and states only; it does not prove populated delivery retries/failures.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "pendingDetailOutcome: real disabled-observer dead-letter/attempt/error/timestamps and visible bounded delivery/progress projection. Do not infer delivery effect completion from native acknowledgement."
+    },
+    {
+      "criterion": "applicable acceptance: supported controls, private data and preserved authority/history",
+      "sourceRoot": "detail",
+      "files": [
+        "src/main/ai/runtime/uar/UarSidecarService.ts",
+        "src/main/ai/runtime/uar/uarPrincipal.ts",
+        "src/main/ai/runtime/uar/UarLifecycleAdministrationAdapter.ts",
+        "src/main/ai/runtime/uar/uarBindingPosture.ts",
+        "src/renderer/pages/settings/PrometheusSettings/UarAdministrationWorkspace.tsx",
+        "src/renderer/pages/settings/PrometheusSettings/UarLifecycleRecords.tsx"
+      ],
+      "implemented": "Trusted read-only per-instance selection, compatibility and protected host credentials; explicit source failures/unknown/unsupported; independent admin detail mutations fenced against global Work selection; singular native runtime authority; public posture/instance/observer projection strips private fields.",
+      "retainedProof": "admin proves two-runtime/two-workspace isolation, source scope/times, selectors/reopening/refresh and direct external-detail refusal without changing Work selection or native tasks; work proves persisted run/artifact/approval identity on reopen.",
+      "evidenceDisposition": "Retained mapped prior boundary and the exact successful corrected DETAIL operation; supported-profile limitations remain explicit.",
+      "additionalDetailRequirement": "pendingDetailOutcome covers private-material exclusion for new fields. C14.2 owns the subsequent distinct Drain/unsupported durable control-visibility increment; it is not evidence already supplied by this C14.1 template."
+    }
+  ],
+  "pendingDetailOutcome": {
+    "status": "success",
+    "complete": true,
+    "sourceRevision": "f47f8232647b6f62d2de721628956e737ea7b67d",
+    "operationFile": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-detail-e58ce02e-cc20-4228-a44b-5f016af41d14/operation.json",
+    "operationSha256": "d14ecfe85578a2290f98f3d54bd29b6116117bf879b263a8e1ff912e438bdb4d",
+    "evidenceFile": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-detail-e58ce02e-cc20-4228-a44b-5f016af41d14/evidence.json",
+    "evidenceSha256": "8408c2b3f479a614104fe2ad3705f7d77482bf4f27ba9c539127afaeff22b6ad",
+    "buildReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-lifecycle-detail-build-package-binding-repair-20261007.json",
+    "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-lifecycle-detail-launch-package-binding-repair-20261007.json",
+    "appAsarSha256": "25d00e02b255834b9f68c87ca674edbe67d9aac42385d735b66264ba846b56d1",
+    "sidecarSha256": "ce7cab399862ffdbecf1c3ce811b94b524c94965978c2aee81a67fc26af092e9",
+    "startedAt": "2026-10-07T23:11:26.233Z",
+    "finishedAt": "2026-10-07T23:12:15.780Z",
+    "checks": [
+      "real-native-command-attempt-root-run-and-event-history",
+      "public-effective-binding-receipt-and-model-posture",
+      "actual-disabled-observer-dead-letter-attempt-error-and-timestamps",
+      "bounded-observer-delivery-retention-and-sequence-progress",
+      "real-workflow-definition-steps-with-unsupported-launch-and-zero-runs",
+      "main-to-renderer-private-material-disclosure-boundary",
+      "selected-external-runtime-new-fields-operated-visibly",
+      "overview-refresh-and-work-selection-preserved"
+    ],
+    "limitations": [
+      "Native workflow launch is unsupported in this normal packaged payload; only real registered definition metadata is exercised.",
+      "No workflow run/task/attempt relation can be operationally certified without a supported native run.",
+      "Observer sequence distance is captured progress, not elapsed lag or exact filtered deliveries.",
+      "Binding posture is a public receipt projection, not private requested/effective configuration.",
+      "Native Windows installed acceptance is not exercised by this Mac operation."
+    ]
+  },
+  "originalVersusLaterScope": {
+    "original": "The eight mapped entries enumerate the original field inventory and applicable authority/privacy acceptance; Teams in Work is the later approved customer-priority contribution.",
+    "notRequiredNewPrerequisites": [
+      "Atomic cross-source lineage/snapshot",
+      "Remaining-budget calculation",
+      "Global or workspace-wide approval inventory endpoint",
+      "Remote workflow/agent execution or federation",
+      "New scheduler/database/runtime architecture",
+      "A fabricated normal-profile workflow run when native launch is unsupported"
+    ],
+    "sourceMappingConclusion": "Every original administration field has a production source path; retained Work/ADMIN evidence and the corrected real DETAIL operation cover the mapped local criteria. Unsupported native workflow launch and unknown approval inventory remain explicitly disclosed; this does not certify neighboring tasks, release or Windows acceptance."
+  },
+  "remainingBoundaries": {
+    "newDetailRealOperation": "passed at exact recorded source boundary",
+    "nativeWindowsInstalledAcceptance": "pending and separately tracked; no Mac receipt supplies it",
+    "currentCandidatePublication": "pending/separate root release accounting; earlier publication does not establish publication of current DETAIL bytes",
+    "remoteProfileLimit": "ADMIN operates managed and externally owned local loopback instances. Source uses configured authenticated external endpoints; no live remote execution/federation operation is claimed.",
+    "wholeC14TaskChangePhase": "Original C14.1 criterion set evidenced; C14.2/C14.3/C14.4, whole change/phase, publication and native Windows acceptance remain separate and incomplete."
+  },
+  "draftingActivity": {
+    "sourceEdits": false,
+    "testsRun": false,
+    "reviewsRun": false,
+    "buildsRun": false,
+    "operationsRun": false,
+    "canonicalCompletionChanged": false
+  },
+  "recordedAt": "2026-10-07T23:13:45.562Z",
+  "canonicalAccounting": "Completion authority is supported kbd-apply; this receipt supplies evidence, not lifecycle authority.",
+  "failedAttemptReferences": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-detail-73e211e8-b416-429a-9ee8-e65103becc1b/operation.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-detail-9422b749-a129-4f8c-952e-e6e022230ab1/operation.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-lifecycle-detail-build-durable-host-retry-20261007.json"
+  ]
+}

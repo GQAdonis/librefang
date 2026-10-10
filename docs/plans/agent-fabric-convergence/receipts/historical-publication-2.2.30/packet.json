@@ -1,0 +1,138 @@
+{
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "expectedRevision": 1315,
+  "authorityRefs": [
+    "git:GQAdonis/librefang@9866a449438a2564654a33e810764e15073abf8a:docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md",
+    "operator-approved-implementation-request-20261010"
+  ],
+  "reason": "Adopt already published2.2.30 through original historical evidence and separate links for both frozen publication debts. Preserve all original candidates, clocks, partial/failed receipts,15 delivery count, portfolio/acceptance state; no republishing or synthetic current delivery.",
+  "release": {
+    "id": "github:Prometheus-AGS/the-boss:408603047",
+    "version": "2.2.30",
+    "targetId": "github:Prometheus-AGS/the-boss:uar-enabled",
+    "publishedAt": "2026-10-10T05:45:43.659Z",
+    "sourceRefs": [
+      {
+        "repository": "Prometheus-AGS/the-boss",
+        "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+        "role": "desktop"
+      },
+      {
+        "repository": "GQAdonis/compass",
+        "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+        "role": "compass"
+      },
+      {
+        "repository": "GQAdonis/rust-mcp-filesystem",
+        "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+        "role": "filesystem"
+      },
+      {
+        "repository": "Prometheus-AGS/prometheus-skill-system",
+        "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+        "role": "prometheus"
+      },
+      {
+        "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+        "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+        "role": "pk"
+      },
+      {
+        "repository": "Prometheus-AGS/prometheus-skills-mini",
+        "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+        "role": "mini"
+      },
+      {
+        "repository": "Prometheus-AGS/universal-agent-runtime",
+        "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+        "role": "uar"
+      },
+      {
+        "repository": "Prometheus-AGS/surreal-memory-server",
+        "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+        "role": "surreal-memory"
+      },
+      {
+        "repository": "GQAdonis/liter-llm",
+        "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+        "role": "liter-llm"
+      },
+      {
+        "repository": "GQAdonis/librefang",
+        "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+        "role": "bossfang"
+      },
+      {
+        "repository": "Prometheus-AGS/prometheus-skill-system",
+        "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+        "role": "skill-pack"
+      }
+    ],
+    "evidence": {
+      "source": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source.json",
+        "sha256": "153abc1583d01b8f60a8fd9256399d4732bfa70fb6c28bcd718680aa15638080"
+      },
+      "build": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/build.json",
+        "sha256": "96550d0af1d5a32d3ff76d8092af22c32e8600579a995e6671ce0eefaac4de70"
+      },
+      "launch": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/launch.json",
+        "sha256": "8e7840c30086f5bf088eb53601b8fe0b2f732cd8776b7140954fa09d254d4652"
+      },
+      "feature": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/feature.json",
+        "sha256": "909d3d426a02d678a384fae2d17b8affc9886e736bb20a25308eeac6bb5cd364"
+      },
+      "platforms": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/platform-darwin-arm64.json",
+          "sha256": "dbd086164ed9db8fe2239ef3124f750df2120c4ff20d6acf8f7b984cc837e810"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/platform-darwin-x64.json",
+          "sha256": "bab73154d70ee85e52c84b77c1909d901f7f02b464c105c7b12911c2ba057a2a"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/platform-win32-x64.json",
+          "sha256": "d1860784d0e35ac7805fa93b1e3977dcc0670f21c5ff750850fbccb92f0745aa"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/platform-win32-arm64.json",
+          "sha256": "4dccac8cff9939d1c48652a06c0daeee81c63f16455ec739ba8ca1fe319b7854"
+        }
+      ],
+      "metadata": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/metadata.json",
+        "sha256": "b853b7d17a33907ab566699696b03dfc2dd4a6394e8d89ac3da80fbd06c1687f"
+      },
+      "website": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/website.json",
+        "sha256": "6811da3e638550dec61d24ca19fae33cf4da3c5f619143a7ac9205053aeea850"
+      }
+    }
+  },
+  "expectedPredecessor": null,
+  "mappings": [
+    {
+      "obligationId": "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+      "contentManifestDigest": "78199275e55f42513e7b6743d2ce12559b930844e02c9ee0c0c1fbd5227cf5fe",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/coverage-c14.json",
+        "sha256": "5d07a425ff8d0d26cab87214c53b5c65d9059c8ef32a1b445fcad12011f9d1c5"
+      }
+    },
+    {
+      "obligationId": "4077df19-c67c-4059-9665-55988c70e012",
+      "candidateId": "af01868a-0ffa-48a1-80b2-18aefe9928fb",
+      "contentManifestDigest": "5b5cb4827c763da130f3a1d8a5ed679f5d779980d0a204254b5c0bdd970bcef7",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/coverage-c10.json",
+        "sha256": "6f5f630021997eed5d2d8f3e0e36239226fbb8a43358543eacc6e4b6f3c4938f"
+      }
+    }
+  ]
+}

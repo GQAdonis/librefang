@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-release-full-byte-verification",
+  "platform": "darwin-arm64",
+  "source": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "features": [
+    "server-full"
+  ],
+  "runId": 38004043889,
+  "tag": "boss-sidecar-darwin-arm64-v1.0.0-2.2.26-1522f179",
+  "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.26-1522f179/uar-sidecar-darwin-arm64.tar.gz",
+  "size": 127899814,
+  "sha256": "6bc7ffaa77d87677a0244d19b92c8d1add68f0da14e318c1a4f98f6adadb18ce",
+  "recordSha256": "fe00531c116f8c583fdccf2dcb717d42b849e586d9360f22e243b2377f59ea43",
+  "status": "passed",
+  "finishedAt": "2026-10-10T00:26:34.600Z",
+  "applicationInstaller": false
+}

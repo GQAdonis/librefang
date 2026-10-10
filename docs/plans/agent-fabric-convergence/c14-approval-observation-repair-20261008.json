@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-production-defect-and-source-repair",
+  "recordedAt": "2026-10-08T09:32:04.718Z",
+  "scope": "C14.4 post-decision approval history observation",
+  "reproducer": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-workflow-518b6eed-36b7-4751-8871-eba21f9b0cfb/evidence.json",
+    "sha256": "6c93a7e81a481b3976b42685f86b62077cf5d163cc9b4a113f1b800fe372f493",
+    "startedAt": "2026-10-08T08:09:10.347Z",
+    "finishedAt": "2026-10-08T08:09:56.185Z",
+    "checks": [
+      "actual-compiled-authenticated-embedded-dashboard",
+      "visible-canvas-bound-target-authoring-and-native-persistence",
+      "work-global-selection-and-original-uar-pid-start-port-preserved"
+    ],
+    "firstInspectionSucceeded": true,
+    "decisionSubmittedBeforeFailure": true,
+    "failure": {
+      "stage": "ordinary-workflow-real-pending-approved-effect",
+      "code": "C14W_APPLICATION_IPC_REFUSED",
+      "nativeCode": "INTERNAL",
+      "errorType": "Error",
+      "channel": "bossfang.delegated_approval.inspect"
+    }
+  },
+  "diagnosis": {
+    "observed": "Initial exact prepared invocation inspection succeeded; post-decision canonical history polling was refused by application IPC",
+    "sourceCause": "Observation required pending authority even after host decision moved to awaiting-ack or canonical challenge settled between reads",
+    "limitation": "The generic connection wrapper hid the precise inner refusal; identified source windows explain the observed post-decision failure without a native DTO mismatch"
+  },
+  "repair": {
+    "repository": "Prometheus-AGS/the-boss",
+    "source": "997247b431593e4339d73398ac1409fdf4332e50",
+    "files": [
+      "src/main/services/bossFang/DelegatedHostContext.ts",
+      "src/main/ai/runtime/uar/UarHostToolAdmission.ts"
+    ],
+    "behavior": "Keep owner/workspace/root/invocation matching; observe settled history and suppress stale pending effect. No decision, claim, or execution authority changed",
+    "packagingCompilerCorrection": "Observed TS18047 corrected by preserving immutable pending identity in find callback",
+    "testsRun": false,
+    "packagedOperation": "pending"
+  },
+  "cadence": {
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "startedAt": "2026-10-07T23:24:33.943Z",
+    "clockReset": false,
+    "successfulDeliveries": 6,
+    "newCompletionCredit": 0,
+    "publicationObligation": "99a9d56d-7212-46da-98dd-de2854ff6420",
+    "priorReceipts": "retained"
+  }
+}

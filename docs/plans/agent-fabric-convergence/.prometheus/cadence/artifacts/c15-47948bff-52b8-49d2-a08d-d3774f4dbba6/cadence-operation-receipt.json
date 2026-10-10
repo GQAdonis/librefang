@@ -1,0 +1,344 @@
+{
+  "receiptId": "d96e4593-a001-4063-9bdd-fd21f7154047",
+  "producer": "completed-packaged-specialist-operation-with-narrow-reopen-recovery",
+  "candidateId": "55f113ea-09cd-424e-9e27-682b652805d5",
+  "contentManifestDigest": "f65a5631aa1c7beab62933c2dcf30c7001841ef5676878b6928167c3d383597e",
+  "checkpointId": "c16-specialist-authoring-operation",
+  "status": "success",
+  "exitCode": 0,
+  "exitCodeMeaning": "composed operation outcome; original process exit 1 and recovery process exit 0 retained below",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/composed-operation-outcome.json",
+  "logSha256": "69259544476704e996e896d15cff34de0dbc80a83f162d2c70eb8f49a15b4750",
+  "startedAt": "2026-10-08T19:38:50.950Z",
+  "finishedAt": "2026-10-08T19:52:55.857Z",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/evidence.json",
+      "size": 51115,
+      "sha256": "7da2a5124b8fa54e1de90107331396d94c8361eacd5126da7731adb07c3e70b7"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/operation.json",
+      "size": 2607,
+      "sha256": "054aeffa66e021a88cd518a53a46b04c7e702e646f80617c3ff967bb64ad8a7b"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/reopen-recovery-evidence.json",
+      "size": 52561,
+      "sha256": "5fd104d6f5f66c112864a0754d82f0d0fb14e75f0f920f8402fffd6d691d5f59"
+    }
+  ],
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "revision": "b0070b42e7d39d06dca83094cd7868920760cbed",
+      "fingerprint": "93f6b9ee09599d3dabfa9676875f7bea406908f6ff89a81e8d7a2083605c0c3b",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system",
+          "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+          "fingerprint": "46df205b5a99a08b56b49bd2336e0eb497a3c3d0467cc318e3d6d7972df1b953",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/artifact-refiner",
+              "name": "skills/imported/artifact-refiner",
+              "initialized": false,
+              "revision": "18d000f3e46952418f682159b227dbf71ce61dcb",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/prometheus-entity-management",
+              "name": "skills/imported/prometheus-entity-management",
+              "initialized": false,
+              "revision": "d1588d8c93cc267774d1911e8bd53bd3918a7f12",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/sycophancy-correction",
+              "name": "skills/imported/sycophancy-correction",
+              "initialized": false,
+              "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/cowork-skills",
+              "name": "tools/cowork-skills",
+              "initialized": false,
+              "revision": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/disk-space-guardian",
+              "name": "tools/disk-space-guardian",
+              "initialized": false,
+              "revision": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/liter-llm",
+              "name": "tools/liter-llm",
+              "initialized": false,
+              "revision": "c5c6caac617eb931cd5009146a70831422ec236c",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/openai-proxy",
+              "name": "tools/openai-proxy",
+              "initialized": false,
+              "revision": "7833663d3b46f7467f2017f2cce392c09ec1b7ac",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/prometheus-knowledge",
+              "name": "tools/prometheus-knowledge",
+              "initialized": false,
+              "revision": "01a1dbe0d97156b27c82ee0ec4a0a5b746f18df1",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/surreal-memory-server",
+              "name": "tools/surreal-memory-server",
+              "initialized": false,
+              "revision": "4161fc4845d59fc06fc748f310410a0011353ec7",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "crates/prometheus-skill-system"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/frontend/packages/prometheus-entity-management",
+          "name": "frontend/packages/prometheus-entity-management",
+          "initialized": false,
+          "revision": "959839a88e65704014bab0bdd055df17fb210298",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/models.dev",
+          "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+          "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+          "name": "models.dev"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/liter-llm",
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+          "name": "vendor/git/liter-llm"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/rust-mcp-filesystem",
+          "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+          "fingerprint": "688a5731b5cee24dba036d8863de1ad3aac75a9213547e575625e96636a45774",
+          "name": "vendor/git/rust-mcp-filesystem"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring",
+      "revision": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+      "fingerprint": "52bb8b207943c762155616da07f015015ed31318d33a34154490939beeac2f1c",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/resources/prometheus-skills-mini",
+          "revision": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+          "fingerprint": "021f05da782bfe974b09a45f15cefa410d7c5b0effacecf7b8d736bdc2284d4a",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/resources/prometheus-skills-mini/tools/liter-llm",
+              "name": "tools/liter-llm",
+              "initialized": false,
+              "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+              "name": "tools/prometheus-knowledge",
+              "initialized": false,
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/resources/prometheus-skills-mini/tools/surreal-memory-server",
+              "name": "tools/surreal-memory-server",
+              "initialized": false,
+              "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "resources/prometheus-skills-mini"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "revision": "a414e81e4310ed9140ef29f4e5a1ee1eaa54fbbd",
+      "fingerprint": "ddfa09421254a73d01113d017ceb3ba81355742ddb058f990a1690d6a823e372",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner",
+          "revision": "18d000f3e46952418f682159b227dbf71ce61dcb",
+          "fingerprint": "d8c13b81ed53934d4329c884621b561d27174126d4a19f5ecdbe907890019b69",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner/shared/sycophancy-correction",
+              "name": "shared/sycophancy-correction",
+              "initialized": false,
+              "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner/tools/rust-mcp-filesystem",
+              "name": "tools/rust-mcp-filesystem",
+              "initialized": false,
+              "revision": "ef808b7d0ccf7f56c4e8d125091d8d0115725a60",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "skills/imported/artifact-refiner"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/prometheus-entity-management",
+          "name": "skills/imported/prometheus-entity-management",
+          "initialized": false,
+          "revision": "d1588d8c93cc267774d1911e8bd53bd3918a7f12",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/sycophancy-correction",
+          "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+          "fingerprint": "dbd3590f817ab41cdb97d6347ed787897c0afed6dbc35abbc09104c98cc897a6",
+          "name": "skills/imported/sycophancy-correction"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/cowork-skills",
+          "name": "tools/cowork-skills",
+          "initialized": false,
+          "revision": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/disk-space-guardian",
+          "name": "tools/disk-space-guardian",
+          "initialized": false,
+          "revision": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/liter-llm",
+          "name": "tools/liter-llm",
+          "initialized": false,
+          "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/openai-proxy",
+          "name": "tools/openai-proxy",
+          "initialized": false,
+          "revision": "7833663d3b46f7467f2017f2cce392c09ec1b7ac",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/prometheus-knowledge",
+          "name": "tools/prometheus-knowledge",
+          "initialized": false,
+          "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/surreal-memory-server",
+          "name": "tools/surreal-memory-server",
+          "initialized": false,
+          "revision": "4161fc4845d59fc06fc748f310410a0011353ec7",
+          "workingTree": "unobserved"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+      "revision": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+      "fingerprint": "805102cde96646664b44dce17faf1bc5c6fcd5e7d42145bc55aa406d44825f95",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/liter-llm",
+          "name": "tools/liter-llm",
+          "initialized": false,
+          "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/prometheus-knowledge",
+          "name": "tools/prometheus-knowledge",
+          "initialized": false,
+          "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/surreal-memory-server",
+          "name": "tools/surreal-memory-server",
+          "initialized": false,
+          "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+          "workingTree": "unobserved"
+        }
+      ]
+    }
+  ],
+  "command": {
+    "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/scripts/operate-specialist-team-authoring.mjs",
+      "--boss",
+      "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring",
+      "--output",
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts",
+      "--launcher",
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring"
+  },
+  "commandMeaning": "frozen operation recipe identity, whose failed reopening is completed by the explicitly recorded recoveryCommand",
+  "recipeDigest": "bf0b3586d350db18eef1a498c859986bd602a9c5358d1ab217f862096e0fe7b8",
+  "operatedSource": {
+    "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring",
+    "baseRevision": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+    "driverPath": "scripts/reusable-team-operation/scenario.mjs",
+    "dirtyDiffSha256": "731d2d487356123dca60cbfc03be9c880768c83f66248509c2a24b71004940ac",
+    "driverSha256": "2d802a82a54d083c393f9802dd1a7c71da2aed738a43482b620955bd61d4fd62",
+    "capturedAt": "2026-10-08T19:52:51.549Z"
+  },
+  "operationEvidenceSha256": "5fd104d6f5f66c112864a0754d82f0d0fb14e75f0f920f8402fffd6d691d5f59",
+  "featureOperation": {
+    "id": "specialist-team-authoring",
+    "operated": true,
+    "evidenceLevel": "real-service",
+    "targetClassification": "real"
+  },
+  "recovery": {
+    "outcome": "completed-operation-after-failed-procedure-recovery",
+    "originalProcessExitCode": 1,
+    "recoveryProcessExitCode": 0,
+    "originalEvidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/evidence.json",
+      "size": 51115,
+      "sha256": "7da2a5124b8fa54e1de90107331396d94c8361eacd5126da7731adb07c3e70b7"
+    },
+    "originalOperation": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/operation.json",
+      "size": 2607,
+      "sha256": "054aeffa66e021a88cd518a53a46b04c7e702e646f80617c3ff967bb64ad8a7b"
+    },
+    "recoveryEvidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/reopen-recovery-evidence.json",
+      "size": 52561,
+      "sha256": "5fd104d6f5f66c112864a0754d82f0d0fb14e75f0f920f8402fffd6d691d5f59"
+    },
+    "recoveryCommand": {
+      "command": "/Users/gqadonis/Library/Application Support/TheBossBAUAR-Projection-1791330479405/commands/node",
+      "args": [
+        "/tmp/c16-resume-reopen-operation-20261008.mjs"
+      ]
+    },
+    "scope": "Only saved-team reopening; no new team activation or inference",
+    "statement": "The frozen procedure did not exit zero. Six specialists and coordinator succeeded before its saved-team reopening failure. The only failed reopening was repeated successfully with the repaired excluded driver. This receipt adopts the composed completed feature operation, not a successful rerun of the original process."
+  }
+}

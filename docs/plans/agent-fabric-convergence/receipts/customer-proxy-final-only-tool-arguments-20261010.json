@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-proxy-final-only-tool-arguments-diagnosis",
+  "recordedAt": "2026-10-10T00:32:42.326Z",
+  "qualification": false,
+  "postRepairOperation": "not-run",
+  "scope": "Two explicitly authorized bounded real read-only inference requests; synthetic tool schemas, no tool execution or filesystem effects.",
+  "sources": {
+    "proxySource": "ad32f5dc1f676dc1b40b01de8a4f043a6ee6928d",
+    "sourcePath": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/tools/openai-proxy",
+    "installedProxy": {
+      "path": "/Users/gqadonis/.local/bin/openai-proxy",
+      "sha256": "d2c7a2a209a44cfeb3c3b91823c091e91bfc6dbbf4c633aa907eccc7581afe60",
+      "sizeBytes": 6103552,
+      "sourceCommitVerified": false
+    },
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f"
+  },
+  "model": "gpt-6.1-sol",
+  "authentication": "existing-subscription; credentials excluded",
+  "gateway": {
+    "endpoint": "http://localhost:4000/v1/chat/completions",
+    "httpStatus": 200,
+    "contentType": "text/event-stream",
+    "openingElapsedMs": 902,
+    "totalElapsedMs": 1827,
+    "events": [
+      {
+        "n": 1,
+        "elapsedMs": 903,
+        "choice": 0,
+        "finishReason": null
+      },
+      {
+        "n": 2,
+        "elapsedMs": 1668,
+        "choice": 0,
+        "finishReason": null,
+        "toolCalls": [
+          {
+            "index": 0,
+            "idPresent": true,
+            "name": "filesystem__read",
+            "argumentsLength": 0,
+            "argumentsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      },
+      {
+        "n": 3,
+        "elapsedMs": 1668,
+        "choice": 0,
+        "finishReason": "tool_calls"
+      },
+      {
+        "n": 4,
+        "elapsedMs": 1668,
+        "choice": 0,
+        "finishReason": null,
+        "toolCalls": [
+          {
+            "index": 1,
+            "idPresent": true,
+            "name": "filesystem__ls",
+            "argumentsLength": 0,
+            "argumentsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      },
+      {
+        "n": 5,
+        "elapsedMs": 1668,
+        "choice": 0,
+        "finishReason": "tool_calls"
+      },
+      {
+        "n": 6,
+        "done": true,
+        "elapsedMs": 1827
+      }
+    ]
+  },
+  "primary": {
+    "endpoint": "https://chatgpt.com/backend-api/codex/responses",
+    "httpStatus": 200,
+    "openingElapsedMs": 836,
+    "totalElapsedMs": 2332,
+    "events": [
+      {
+        "n": 1,
+        "type": "response.created",
+        "outputIndex": null,
+        "elapsedMs": 837
+      },
+      {
+        "n": 2,
+        "type": "response.in_progress",
+        "outputIndex": null,
+        "elapsedMs": 837
+      },
+      {
+        "n": 3,
+        "type": "response.output_item.added",
+        "outputIndex": 0,
+        "elapsedMs": 2253,
+        "itemType": "function_call",
+        "name": "filesystem__read",
+        "argumentLength": 0,
+        "argumentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "n": 4,
+        "type": "response.function_call_arguments.done",
+        "outputIndex": 0,
+        "elapsedMs": 2253,
+        "argumentLength": 42,
+        "argumentSha256": "94abd17a58decd4b90b1ba9749b65edf303c00cef5b80e3e49e72dbe7c2a423b"
+      },
+      {
+        "n": 5,
+        "type": "response.output_item.done",
+        "outputIndex": 0,
+        "elapsedMs": 2253,
+        "itemType": "function_call",
+        "name": "filesystem__read",
+        "argumentLength": 42,
+        "argumentSha256": "94abd17a58decd4b90b1ba9749b65edf303c00cef5b80e3e49e72dbe7c2a423b"
+      },
+      {
+        "n": 6,
+        "type": "response.output_item.added",
+        "outputIndex": 1,
+        "elapsedMs": 2253,
+        "itemType": "function_call",
+        "name": "filesystem__ls",
+        "argumentLength": 0,
+        "argumentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "n": 7,
+        "type": "response.function_call_arguments.done",
+        "outputIndex": 1,
+        "elapsedMs": 2253,
+        "argumentLength": 42,
+        "argumentSha256": "849b74d11a9594e4a6d6f30ced43e4a2fabf59c16acb19178b68e74618c1b635"
+      },
+      {
+        "n": 8,
+        "type": "response.output_item.done",
+        "outputIndex": 1,
+        "elapsedMs": 2253,
+        "itemType": "function_call",
+        "name": "filesystem__ls",
+        "argumentLength": 42,
+        "argumentSha256": "849b74d11a9594e4a6d6f30ced43e4a2fabf59c16acb19178b68e74618c1b635"
+      },
+      {
+        "n": 9,
+        "type": "response.completed",
+        "outputIndex": null,
+        "elapsedMs": 2257,
+        "status": "completed"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "fact": "Primary emits final tool arguments without argument-delta events; gateway emits empty arguments only.",
+      "source": "actual bounded operation"
+    },
+    {
+      "fact": "Inspected proxy converter discards final-only arguments and emits per-item finish markers.",
+      "source": "src/proxy.rs at source commit"
+    },
+    {
+      "fact": "UAR reads argument deltas through stream EOF and validates arguments before authority/MCP dispatch.",
+      "source": "src/llm/liter_driver.rs, src/llm/orchestrator.rs at UAR source commit"
+    }
+  ],
+  "limitations": [
+    "These are separate gateway and primary requests with the same bounded synthetic operation, not one shared request correlation.",
+    "Installed proxy binary source commit lacks matching build provenance.",
+    "No post-repair operational success is claimed.",
+    "The earlier provider-opening timeout is a separate observation; this receipt does not diagnose its network hop."
+  ],
+  "repair": {
+    "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/customer-proxy-final-tool-arguments",
+    "branch": "codex/customer-proxy-final-tool-arguments",
+    "startingCommit": "ad32f5dc1f676dc1b40b01de8a4f043a6ee6928d",
+    "files": [
+      "src/proxy.rs"
+    ],
+    "build": "not-run",
+    "operation": "not-run",
+    "state": "production-diff-frozen"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-coding-retained-whole-process-reopening",
+  "status": "partially-passed",
+  "sourceRefs": {
+    "boss": "5b317b64c65928492f913fc41946d55ee099b472",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "appAsarSha256": "ed25868e241ff76b33f35934c1a8b13c6e730be4cbe0847426b14d17672182a8",
+    "sidecarSha256": "05027032aa30d8ae3a4435e5be69a8403a6495d8c6e95dc13c44ecb02132cb60",
+    "installerSha256": "ea6930469906890e9396c30ebf81c93fcc57e87b333d02739549a0355f07481f",
+    "installedVersion": "2.2.26",
+    "operationDriverRevision": "5b317b64c65928492f913fc41946d55ee099b472",
+    "selectedScenarioSha256": "9ef4696b6b3fca829a989bffb81ded4057d3c822f8428aee05900221576bd602",
+    "installationReceiptSha256": "0b5e5d36579df2df5df112b70b50d5d7850d5e7f67682730b3fd0b79d3b1c25b",
+    "codingProcedureFiles": {
+      "scripts/c14-operation/scenario.mjs": "46607669b5f4ef8dd98c7e7838c423e37dcb188129dec216000407ce9b64d7c3",
+      "scripts/c14-operation/setup.mjs": "b9ded5f8f8b2e8331cad3f628dbc0205eddadf1db3df1a070c7b4528ff551ecf",
+      "scripts/c14-operation/controls.mjs": "57a6bac6427d0967c82f8da422533d847c57a6dd73a25885f5c39ddfb9264337",
+      "scripts/c14-operation/approvals.mjs": "dc172ce533d379baca72fa86d13954405a9a6994acbf5edb0ff3e747135c5ed9",
+      "scripts/c14-operation/diagnostics.mjs": "79d60c573d9c2fa9d5ebd66b142edf0c49c6dd4a44fd5011471c62e4453a0d17",
+      "scripts/c14-operation/io.mjs": "e91c8f9ad6aab85fc7be09cd030361493fe1f083a3969b3d7eff0a9f4d6c0134"
+    },
+    "ordinaryTeamToolsSha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+  },
+  "originalOperation": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-retained-recovery-355f8c8c-26d0-4f6f-9ca4-979b233bbabf/operation.json",
+  "operationSha256": "497530cee1df580a44ef3aceabb9abcae237f84dbb14ac20b03850ce8d2806a3",
+  "startedAt": "2026-10-10T00:51:28.281Z",
+  "finishedAt": "2026-10-10T00:52:37.665Z",
+  "passedChecks": [
+    "same-disposable-profile-whole-process-reopen-preserves-identity-attempts-artifacts-and-readme"
+  ],
+  "retained": {
+    "workspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+    "teamId": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+    "attemptIds": [
+      "0e8bb22a-085e-4e9a-b309-74272126c30f",
+      "37430fdc-b2c9-4689-83a5-ac8bd2c1bedf",
+      "9f4572ea-04b1-4a31-94f9-8d63d8549115",
+      "ef9bcb8b-f724-4c33-9a2e-9a884f3facd2",
+      "f25ea505-00c6-48b5-b21d-1e17aee82bbf"
+    ],
+    "artifactIds": [
+      "artifact-9f4572ea-04b1-4a31-94f9-8d63d8549115",
+      "artifact-37430fdc-b2c9-4689-83a5-ac8bd2c1bedf"
+    ],
+    "repository": {
+      "paths": [
+        "README.md"
+      ],
+      "sha256": "756514ebb948cee6bd416168e145a87c006f1381305a73cc97f6204877fcd541"
+    },
+    "firstTurnReplayed": false
+  },
+  "reopening": {
+    "beforeRoute": {
+      "readyState": "complete",
+      "sidebar": true,
+      "visibleWorkModes": [],
+      "visibleTeamRoots": [],
+      "visibleWorkspaceControls": 0,
+      "visibleRuns": []
+    },
+    "afterRoute": {
+      "readyState": "complete",
+      "sidebar": true,
+      "visibleWorkModes": [
+        {
+          "pressed": "true"
+        }
+      ],
+      "visibleTeamRoots": [
+        {
+          "workspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3"
+        }
+      ],
+      "visibleWorkspaceControls": 1,
+      "visibleRuns": [
+        "cca579b5-ecfc-4658-b4ca-31dabfd7a398"
+      ]
+    },
+    "navigation": "existing typed /app/agents?mode=teams route, followed by ordinary selectors"
+  },
+  "shutdown": {
+    "pid": 86689,
+    "processGroup": 86689,
+    "startedAt": "2026-10-10T00:52:21.652Z",
+    "gracefulQuitConfirmed": false,
+    "forceUsed": false,
+    "signals": [
+      {
+        "pid": 86689,
+        "signal": "SIGTERM"
+      }
+    ],
+    "ownedProcessesStopped": true,
+    "foreignUidGroupMembers": [],
+    "remainingOwnedGroupMembers": [],
+    "finishedAt": "2026-10-10T00:52:37.665Z"
+  },
+  "failedStage": "read-only-cancellation-through-work",
+  "failureCode": "C14_RETAINED_CANCEL_CONTROL_UNAVAILABLE",
+  "originalModelWorkReplayed": false,
+  "qualificationTaskCompletion": false,
+  "newCadenceDelivery": false,
+  "operatorAcceptance": "pending"
+}

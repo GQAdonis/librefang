@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "corrected-installed-customer-graceful-quit",
+  "version": "2.2.30",
+  "platform": "darwin-arm64",
+  "status": "passed",
+  "sources": {
+    "boss": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "version": "2.2.30",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "mini": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+    "full": "bb8950b254825079ab382119a8c425d645a081ae",
+    "appAsarSha256": "393784aba6f24128618640f64238d6f6ee6da6f77190172e513230ee54cab7ba",
+    "sidecarSha256": "ff7d25c8e615b9e06f63dc25c0f7cf4f48a363adf872cb4a4ca2296448bb09c4",
+    "installerSha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+    "installationReceiptSha256": "a6ff46927827fe26f936371e1654b341e626069d9194d9cbb9b9519b1cf352f5",
+    "driverSha256": "10d6eb2133bb6f7b41420eb0ef3e815f347a22fba35018f3d00d5dbe6ca0f933",
+    "bossFangSha256": "a3d0cfc4e65c70fca3de7c16a3806fd01338ec63128f6156eec21f5675543889"
+  },
+  "startedAt": "2026-10-10T04:15:39.904Z",
+  "finishedAt": "2026-10-10T04:16:24.696Z",
+  "qualificationRoute": "production-electron-app-quit-via-main-process-debugger",
+  "nativeVisualMenuClick": false,
+  "debuggersDisconnectedBeforeQuit": true,
+  "events": [
+    {
+      "event": "app.quit-invoked",
+      "at": "2026-10-10T04:16:23.789Z",
+      "pid": 83270
+    },
+    {
+      "event": "before-quit",
+      "at": "2026-10-10T04:16:23.789Z",
+      "pid": 83270
+    },
+    {
+      "event": "will-quit",
+      "at": "2026-10-10T04:16:23.900Z",
+      "pid": 83270
+    }
+  ],
+  "mainExit": {
+    "exitCode": 0,
+    "signal": null,
+    "observedAt": "2026-10-10T04:16:24.262Z"
+  },
+  "ownedExits": [
+    {
+      "pid": 83680,
+      "kind": "uar",
+      "startedAt": "Fri Oct 9 23:15:53 2026",
+      "absentAfterQuit": true
+    },
+    {
+      "pid": 84798,
+      "kind": "bossfang",
+      "startedAt": "Fri Oct 9 23:16:11 2026",
+      "absentAfterQuit": true
+    }
+  ],
+  "externalAfter": [
+    {
+      "pid": 49979,
+      "kind": "bossfang",
+      "startedAt": "Tue Oct 6 14:34:03 2026",
+      "unchanged": true
+    },
+    {
+      "pid": 60086,
+      "kind": "bossfang",
+      "startedAt": "Tue Oct 6 14:37:49 2026",
+      "unchanged": true
+    }
+  ],
+  "externalPreservation": "baseline-process-identities-preserved",
+  "checks": [
+    "installed-candidate-bytes-and-runtime",
+    "loopback-inspector-owned-by-exact-app",
+    "production-typed-owned-uar-and-bossfang-start",
+    "production-app-quit-before-quit-will-quit-events",
+    "app-and-owned-native-processes-exited-without-driver-signals",
+    "baseline-external-process-identities-unchanged"
+  ],
+  "shutdownEvidence": "actual-before-quit-and-will-quit-events-main-exit-zero-without-signal-and-owned-child-process-disappearance",
+  "failureCleanup": [],
+  "receipt": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/graceful-quit-d2b6ac91-ef1b-4bca-ab12-4bfff72f19b5/operation.json",
+    "sha256": "86138ec6c7e0cf28d6b8cb19ae5c08fb5f98c8bab6904c5c56b66ead98e925fd"
+  },
+  "installedAcceptance": "pending-final-candidate-acceptance",
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "limits": [
+    "Production Electron app.quit was invoked through an owned loopback main-process debugger; no native visual menu click is asserted.",
+    "Main exit code 0 without signal and actual managed-child disappearance are observed; debugger disconnection alone is not exit evidence.",
+    "Existing external native process identities remained unchanged. No inference or external-effect turn was requested."
+  ]
+}

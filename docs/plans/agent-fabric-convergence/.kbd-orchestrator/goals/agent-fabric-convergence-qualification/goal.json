@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "slug": "agent-fabric-convergence-qualification",
+  "status": "active",
+  "createdAt": "2026-10-09T21:46:23Z",
+  "phases": ["creation"],
+  "existingPhase": "agent-fabric-convergence",
+  "scopePlan": "customer-release-qualification-plan.md",
+  "priorGoal": "../agent-fabric-convergence-customer-milestone/goal.json",
+  "stopCondition": "The approved customer qualification requirements pass against the identified final candidate; Mac ARM64 and Windows x64 candidate-specific installed operation and operator acceptance are recorded; all four Mac/Windows installers, metadata and website agree; satisfied qualification work is committed, pushed and closed. Unfulfilled broader portfolio criteria remain explicitly pending without changing their denominator.",
+  "loop_controller": {
+    "owner": "codex-native-goal",
+    "threadId": "01a0cb90-3993-7592-9779-f80c3f53be07",
+    "cadence": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+      "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+      "iterationMinutes": 120,
+      "publicationEverySuccessfulDeliveries": 2,
+      "platforms": ["darwin-arm64", "darwin-x64", "win32-x64", "win32-arm64"]
+    }
+  },
+  "authority": "Operator approved customer qualification plan and 2026-10-09 instruction to continue standard cadence through qualification as a goal; canonical scope decision customer-qualification-scope-20261009 at revision615.",
+  "startingCanonicalRevision": 615,
+  "historyPreserved": true,
+  "installedAcceptanceSeparate": true,
+  "baseline": {
+    "version": "2.2.25",
+    "bossSource": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uarSource": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "codeTasks": "61/61",
+    "codeChanges": "20/20",
+    "portfolioQualification": "43/61 (42 passed, one historical skipped duplicate)",
+    "successfulDeliveries": 15
+  },
+  "publicationDebt": ["99a9d56d-7212-46da-98dd-de2854ff6420", "4077df19-c67c-4059-9665-55988c70e012"],
+  "qualificationOnlyDoesNotCountAsDelivery": true,
+  "productionRepairRequiresNewCandidate": true
+}

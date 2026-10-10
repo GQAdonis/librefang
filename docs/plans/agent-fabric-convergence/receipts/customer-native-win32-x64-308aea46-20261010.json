@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "published-corrective-native-payload",
+  "recordedAt": "2026-10-10T04:41:55.118Z",
+  "platform": "win32-x64",
+  "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+  "version": "1.0.0",
+  "packageRun": 38024273466,
+  "workflowHead": "8119fd7c83248cdf0d0cde4496cb33c569761a71",
+  "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-x64.json",
+  "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-x64.tar.gz",
+  "size": 131935050,
+  "sha256": "5c69177131412bf11dcebae50efb1d7e801e5ceb306d4dd1854fb39eb0284228",
+  "features": [
+    "server-full"
+  ],
+  "binaries": [
+    "crc_fast-c45996daf34d96b5.dll",
+    "LICENSE",
+    "policies/default.cedar",
+    "policies/skill-mutation.cedar",
+    "policies/tool-approval.cedar",
+    "sevenz_rust2-0296aedd6d6c479a.dll",
+    "uar-models/bg-small-en-v1.5.onnx",
+    "uar-models/config.json",
+    "uar-models/MODEL-NOTICE.txt",
+    "uar-models/special_tokens_map.json",
+    "uar-models/tokenizer_config.json",
+    "uar-models/tokenizer.json",
+    "uar-sidecar.exe",
+    "payload-manifest.json"
+  ],
+  "publicAssets": [
+    {
+      "name": "uar-sidecar-win32-x64.tar.gz",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-x64.tar.gz",
+      "size": 131935050,
+      "sha256": "5c69177131412bf11dcebae50efb1d7e801e5ceb306d4dd1854fb39eb0284228",
+      "githubDigest": "sha256:5c69177131412bf11dcebae50efb1d7e801e5ceb306d4dd1854fb39eb0284228",
+      "verifiedAt": "2026-10-10T04:35:45.858Z"
+    },
+    {
+      "name": "uar-sidecar-win32-x64.json",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-x64.json",
+      "size": 806,
+      "sha256": "552e93cfd8f662ffa36bc17ca59b7120158806bea9f71765edf461890933d9bc",
+      "githubDigest": "sha256:552e93cfd8f662ffa36bc17ca59b7120158806bea9f71765edf461890933d9bc",
+      "verifiedAt": "2026-10-10T04:35:47.392Z"
+    }
+  ],
+  "status": "passed",
+  "limits": [
+    "Native payload publication, not application installer or installed acceptance. Compatibility tag label2.2.29 does not change actual source308aea46 or pending application2.2.30 provenance."
+  ]
+}

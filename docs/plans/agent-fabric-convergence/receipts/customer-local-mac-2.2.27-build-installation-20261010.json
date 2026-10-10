@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-local-corrective-build-and-installation",
+  "recordedAt": "2026-10-10T01:56:36.595Z",
+  "version": "2.2.27",
+  "source": "ff98af813c59e7c2733db74306ebfe087fec069a",
+  "uarSource": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+  "build": {
+    "receipt": ".prometheus/cadence/artifacts/customer-build-2.2.27-b991f197-ff21-480c-88b5-0ffa9f183d7d/build.json",
+    "receiptSha256": "5f33dba6817f88d6c3b79bea0c1d7afe730dbe2548715133e394f4ab6951595f",
+    "command": "pnpm build:mac:arm64",
+    "status": "passed",
+    "startedAt": "2026-10-10T01:48:44.632Z",
+    "finishedAt": "2026-10-10T01:54:52.302Z",
+    "elapsedMs": 367670,
+    "exitCode": 0,
+    "nativeArchiveSha256": "e02903a867d2c3764cc6af81c56e13fa0adb6e929d6c359c13eb34d505fbd478"
+  },
+  "installation": {
+    "receipt": ".prometheus/cadence/artifacts/customer-local-mac-2.2.27-fdc5266c-fc68-490c-a5d1-e450583e2f22/installation.json",
+    "receiptSha256": "4f1b11f5672859046711c85eb9624a177c4d2995ebe9989cd1b53468c82af171",
+    "status": "passed",
+    "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.27-mac-arm64.dmg",
+    "size": 702996280,
+    "sha256": "ccf278534a7854064bedc1dc190e1941c81768d462491bbd0099af2a434ff4da",
+    "appAsarSha256": "02bbcd0945fdffb33de0c877b7b28d2464d4689887db1443eb391dd9cbe929ad",
+    "sidecarSha256": "e243b53eeafaa681433fb756ec631eddc1d9a9bbd4f12fd3d5db8ad93c2e64ef",
+    "signature": "passed",
+    "gatekeeper": "passed",
+    "notarization": "local-build-explicitly-skipped"
+  },
+  "operations": "root-owned missing-customer operation in progress; not qualified by build",
+  "operatorAcceptance": "pending",
+  "publicRelease": "not-this-local-artifact",
+  "newCadenceDelivery": false
+}

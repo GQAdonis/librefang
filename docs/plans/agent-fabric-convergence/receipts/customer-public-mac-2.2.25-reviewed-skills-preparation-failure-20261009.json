@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-required-reviewed-skills-preparation-failure",
+  "recordedAt": "2026-10-09T23:02:16.933Z",
+  "status": "preparation-failed",
+  "artifactDirectory": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/reviewed-skills-031cccfe-6ed8-44c3-ace7-40bd107d9279",
+  "operationReceiptPresent": false,
+  "applicationLaunched": false,
+  "productScenarioAttempted": false,
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "installedVersion": "2.2.25",
+    "publicApp": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+  },
+  "failure": {
+    "message": "skill inventory root is unavailable: skills/imported/artifact-refiner/skills",
+    "cause": "Frozen source clone lacked imported gitlink contents.",
+    "observationAuthority": "Lead operator reported the preparation wrapper failure; this documentation pass confirmed the attempt directory exists and no operation.json was written."
+  },
+  "resolution": "Lead initialized exact artifact-refiner and sycophancy-correction imported gitlinks in the isolated frozen clone for the affected retry.",
+  "qualificationCredit": false,
+  "newCadenceDelivery": false,
+  "productionDefectClaimed": false,
+  "sourceRefsExplanation": "Candidate identities only; no preparation driver digest is asserted because the wrapper stopped before recording its operation receipt."
+}

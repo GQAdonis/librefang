@@ -1,8 +1,8 @@
 # C10.1 workflow substrate proposal
 
-Status: architecture proposal with historical source receipt (29 September) and refreshed assessment (3 October 2026). No engine selection, product implementation, execution proof or C10 task completion is recorded here. The refresh below supersedes historical position and source-gap claims where explicitly identified.
+Status: **operator-approved architecture decision**, 3 October 2026. UAR owns workflow progression over its existing durable team runtime. Product implementation, completed-boundary measurement, execution proof and C10 task completion remain pending. The source refresh below supersedes historical position and source-gap claims where explicitly identified.
 
-Recommendation: evaluate a small durable workflow controller in UAR that schedules existing admitted team task attempts through the existing UAR execution owner. Start with pinned sequential draft steps and a persisted operator wait. Compare this bounded design with the existing LibreFang workflow engine before accepting a substrate decision. Do not introduce a second agent loop or reuse a process-local graph as if it were a durable scheduler.
+Decision: implement a small durable workflow controller in UAR that schedules existing admitted team task attempts through the existing UAR execution owner. Start with pinned sequential draft steps and a persisted operator wait. The source comparison selected this owner; measure the completed path at its integration gate. Do not introduce a second agent loop or reuse a process-local graph as if it were a durable scheduler.
 
 ## Authority and evidence boundary
 
@@ -22,7 +22,7 @@ Fresh clean source scopes: UAR `/Users/gqadonis/Projects/prometheus/worktrees/ag
 
 New records are limited to the pinned run/step mapping, interpretation/plan digest, progression disposition and exact artifact-bound operator wait/decision receipt. Existing task attempts, artifacts, budgets, execution ownership, peer waits and continuation receipts retain their owners. The two-step `classify → draft → decision` operation needs no coordinator model turn and must not create a fake `team_wait` continuation to obtain an operator pause. Its decision finalizes the internal draft without another attempt. This is a design proposal, not an implemented transaction guarantee.
 
-**Exact unresolved approval:** accept this UAR-owned progression adapter and the bounded first-delivery contract (required versioned interpretation, closed artifact selectors, internal-draft-only decision, and known-output/held-accounting policy) **after** the mandated comparison supports selection. The present source comparison supports a candidate recommendation only. The current C10 design requires a measured comparison before engine selection, while both documents place runtime measurements at the completed-delivery boundary; this is an unresolved sequencing decision. The operator must either authorize a bounded comparison implementation/measurement stage with a named external reference before production selection, or explicitly amend C10's selection criterion to permit source-backed initial selection and defer performance/conformance measurements to completed delivery. This assessment chooses neither, grants no waiver and does not ask to reauthorize the already-approved parent phase. A benchmark exception to the delivery gate must be explicit; it cannot be inferred by a worker.
+**Approved sequencing:** the operator explicitly approved source-backed selection of UAR's durable team runtime, followed by measurement of the completed workflow at its integration gate. The selected owner reuses UAR admission, dispatch, settlement, waits and recovery; the required versioned interpretation, closed artifact selectors, internal-draft-only decision and known-output/held-accounting policy remain the bounded first-delivery contract. `cand-007` has no concrete implementation to benchmark. Unmeasured capability is reported as unknown, not passed. This decision does not mark C10.1 complete or waive the real operation gate.
 
 No runtime, benchmark, service operation, product code or test was executed for this refresh. C10.1 stays incomplete until the selected contract and required pinned-restart evidence are accepted. Mobile/offline behavior, progression cost, durable timers, workflow DAG joins, retry/compensation and external effects remain unmeasured or unsupported for this slice.
 
@@ -100,7 +100,7 @@ Do not use `memory/workflow_mirror.rs` or KBD progress projections as workflow e
 
 ## Required comparison before acceptance
 
-The recommended UAR controller is a candidate, not a completed engine decision. Compare it with a LibreFang adapter and the reference candidate against the same bounded workload. Record exact versions, storage/backend profile, execution owner and observed outcomes.
+The UAR controller is the selected owner, not yet a proven implementation. At the completed delivery boundary, measure its actual operation against the bounded requirements below; retain the LibreFang source comparison and mark the uninstantiated `cand-007` pattern unmeasured. Record exact versions, storage/backend profile, execution owner and observed outcomes.
 
 | Comparison row | Evidence required at the completed delivery boundary |
 | --- | --- |
@@ -111,7 +111,7 @@ The recommended UAR controller is a candidate, not a completed engine decision. 
 | Embedding/offline/mobile | Measure the supported local profile with the relevant services unavailable; record platform/toolchain/storage constraints. Desktop source inspection does not certify mobile. |
 | Throughput/cost | Measure progression overhead, persisted transitions, recovery latency, memory/storage use and operational service cost separately from model latency/cost. No numbers are available from this document. |
 
-C10.1 remains pending until its selected owner/adapter contract is accepted and the relevant pinning/recovery evidence is recorded. A successful draft slice does not complete C10.2/C10.3 or certify the full feedback connector capability.
+C10.1 remains pending until the selected UAR owner/adapter contract is implemented and the relevant pinning/recovery evidence is recorded. A successful draft slice does not complete C10.2/C10.3 or certify the full feedback connector capability.
 
 ## Dependencies, ownership and exclusions
 

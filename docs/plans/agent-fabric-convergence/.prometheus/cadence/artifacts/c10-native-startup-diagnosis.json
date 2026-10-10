@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "kind": "c10-packaged-native-startup-diagnosis",
+  "recordedAt": "2026-10-09T08:30:09.002Z",
+  "boundary": "Direct startup operations of the actual packaged macOS arm64 native sidecar following the failed completed application operation; no unit tests, Cargo checks, rebuilds, inference or external effects.",
+  "originalApplicationFailure": {
+    "evidencePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-feedback-operation-r10/c10-055f29eb-3c78-49e1-a0f7-b683b948a11e/evidence.json",
+    "evidenceSha256": "sha256:66213fbe282c606755f0081f9af14fcfcb19844eb8473746510351e1fbc69686",
+    "sourceRefs": {
+      "boss": "280dbd631d1f65bc0ee0d7649e9fa85c6101bac8",
+      "uar": "e936b91f53dd3cdcf67c1ec2dba17bb4e208d7a4",
+      "bossDiffSha256": "a0efa6f935a6b37b80a42206d4134eec112277503eb10a421d0f408a94879759",
+      "appAsarSha256": "435856862dbaf00dd57d083db38431a00f5e8a398c841876e2dba01b5abd14af",
+      "sidecarSha256": "7a11ab7b8e2a74c729c708cab878a20f78ea381287797ead27749a9703f8ba8c",
+      "sourcePinSha256": "4374c9fa77b08e9665297cfd2f87f2150d7f87a7d44dda15844c97563cff9fba",
+      "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+      "operationSources": {
+        "operate-github-feedback.mjs": "0507cc99c4d9d4e1d737cf15868b2de257ea6fd53eaf2854a8d52c92279ef0c7",
+        "github-feedback-operation/author.mjs": "3774f5d420d84e013a5e907bf4ae348aea806945f48dcf933db4d98049357401",
+        "github-feedback-operation/client.mjs": "00ff5d29e0b91f2db2fe09c4df4b2c1f936c15dc4095aa2e4ded786567199e27",
+        "github-feedback-operation/prepare.mjs": "b3ee71c85f03940cd86ab3e2c71bff02a65de5eac88f9374a8d85118d4ac6b37",
+        "github-feedback-operation/resume.mjs": "879c60abcd471643098e88da71c8c12e2b8543c71d8ebf74d40240e00844e5ad",
+        "github-feedback-operation/scenario.mjs": "d42519480f4d5f1258b25194bf7e83bf01e4b8a3919f4b9f29bbd05b8f780768",
+        "github-feedback-operation/skill-evidence.mjs": "824d2cd88bff1bdf42d00946e7b103dfaad37e44f04f9818608ae0d242633b14",
+        "github-feedback-operation/ui.mjs": "2ca31ad5bb9844c928cee3959673a451c5f6f74a98cfe0be724d9db78152a0f8",
+        "operate-reusable-team.mjs": "72c68322a91ca00b2bb616249d1de38284a47387320ddd3adac458c5d1df46a0",
+        "reusable-team-operation/io.mjs": "6e74174d4f18b3bd1c6a7e41df0c127f9379cc77b5296504116b241cfbc18b4c",
+        "reusable-team-operation/scenario.mjs": "49745ac727bf8407fc27b7dfc32549963cb6e4d39d28b30b713b7fc4358ff735",
+        "reusable-team-operation/approvals.mjs": "425db6c15d77899f07f3ce747c5dce6cd7e07e08f39006b341ae88f7767eb5f9",
+        "practical-team-presets-operation/contracts.mjs": "309d0d1ec07114ae3c50454eb5cc304b403e3edf8eed4df29616b76061c4d82e"
+      }
+    },
+    "stage": "configure-workspace-and-model",
+    "nativeIpcFailure": {
+      "channel": "prometheus.uar.models.sources",
+      "code": "INTERNAL",
+      "message": "UAR sidecar readiness timed out"
+    }
+  },
+  "observations": [
+    {
+      "kind": "packaged-native-startup-operation",
+      "profile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-EcbNDZ",
+      "executableSha256": "sha256:7a11ab7b8e2a74c729c708cab878a20f78ea381287797ead27749a9703f8ba8c",
+      "authority": "fresh ephemeral launch/admin/encryption keys; original protected keys not read",
+      "configuredReviewedSourceKinds": [
+        "boss-packaged-mini",
+        "signed-full-generation"
+      ],
+      "stages": [
+        {
+          "timestamp": "2026-10-09T08:23:18.640949Z",
+          "stage": "governance_preflight",
+          "step": 1,
+          "msSinceFirstStartupStage": 0
+        },
+        {
+          "timestamp": "2026-10-09T08:23:18.641077Z",
+          "stage": "primary_listener_bound",
+          "step": 2,
+          "msSinceFirstStartupStage": 1
+        },
+        {
+          "timestamp": "2026-10-09T08:23:18.641144Z",
+          "stage": "companion_listener",
+          "step": 3,
+          "msSinceFirstStartupStage": 1
+        },
+        {
+          "timestamp": "2026-10-09T08:23:18.641146Z",
+          "stage": "a2a_grpc_listener",
+          "step": 4,
+          "msSinceFirstStartupStage": 1
+        },
+        {
+          "timestamp": "2026-10-09T08:23:18.815490Z",
+          "stage": "skill_service_init",
+          "step": 6,
+          "msSinceFirstStartupStage": 175
+        },
+        {
+          "timestamp": "2026-10-09T08:23:31.532735Z",
+          "stage": "provider_registry_seed",
+          "step": 7,
+          "msSinceFirstStartupStage": 12892
+        },
+        {
+          "timestamp": "2026-10-09T08:23:32.889774Z",
+          "stage": "governance_engine",
+          "step": 5,
+          "msSinceFirstStartupStage": 14249
+        },
+        {
+          "timestamp": "2026-10-09T08:23:32.932250Z",
+          "stage": "serving_http",
+          "step": 8,
+          "msSinceFirstStartupStage": 14292
+        }
+      ],
+      "readyAtMs": 17100,
+      "supervisorDeadlineMs": 30000,
+      "exit": {
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 17250
+      },
+      "summarySha256": "sha256:4b6f0ca8166a79be6716db0217b1fa53e6f62791d24931a091df4fa6b0a4ffae",
+      "stageTimingBasis": "Relative to first startup stage, not spawn; original summary parser omitted stages. READY elapsed remains measured from spawn."
+    },
+    {
+      "kind": "packaged-native-cold-startup-operation",
+      "profile": "/tmp/c10-cold-native-profile-4PU9w9",
+      "executableSha256": "sha256:7a11ab7b8e2a74c729c708cab878a20f78ea381287797ead27749a9703f8ba8c",
+      "authority": "fresh ephemeral launch/admin/encryption keys; original protected keys not read",
+      "configuredReviewedSourceKinds": [
+        "boss-packaged-mini",
+        "signed-full-generation"
+      ],
+      "stages": [
+        {
+          "stage": "governance_preflight",
+          "step": 1,
+          "elapsedMs": 2861
+        },
+        {
+          "stage": "primary_listener_bound",
+          "step": 2,
+          "elapsedMs": 2862
+        },
+        {
+          "stage": "companion_listener",
+          "step": 3,
+          "elapsedMs": 2862
+        },
+        {
+          "stage": "a2a_grpc_listener",
+          "step": 4,
+          "elapsedMs": 2862
+        },
+        {
+          "stage": "skill_service_init",
+          "step": 6,
+          "elapsedMs": 5503
+        },
+        {
+          "stage": "provider_registry_seed",
+          "step": 7,
+          "elapsedMs": 32283
+        },
+        {
+          "stage": "governance_engine",
+          "step": 5,
+          "elapsedMs": 34598
+        },
+        {
+          "stage": "serving_http",
+          "step": 8,
+          "elapsedMs": 34650
+        }
+      ],
+      "readyAtMs": 34651,
+      "supervisorDeadlineMs": 30000,
+      "exit": {
+        "code": 0,
+        "signal": null,
+        "elapsedMs": 34890
+      },
+      "summarySha256": "sha256:efb4766f1bd7b93373faf5acdf9387a0188ba47503bba34d2fa5d6dd38861f87"
+    }
+  ],
+  "observedColdSkillMilestones": {
+    "initialHydrationMs": 6011,
+    "standardSkillReconciliationMs": 10849,
+    "standardSkillsAdded": 1171,
+    "standardSkillsUpdated": 0,
+    "reviewedBuiltinDiscoveryMs": 4673,
+    "builtinRegistrationIncludingEmbeddingMs": 5246,
+    "builtinSkillCount": 223
+  },
+  "conclusion": "Valid cold startup reached READY at 34651 ms, exceeding the Boss 30000 ms readiness deadline by 4651 ms. The native process completed startup and exited cleanly. The retained database reached READY at 17100 ms. The observed application failure is a readiness deadline shorter than measured valid cold initialization.",
+  "configurationEquivalence": {
+    "originalApplicationClosed": true,
+    "concurrentDatabaseWriter": false,
+    "packagedExecutableAndReviewedSources": "Same as failed r10 application; boss-packaged-mini and signed-full-generation.",
+    "retainedObservation": "Original r10 .uar configuration, working directory and partially initialized database.",
+    "coldObservation": "New isolated temporary database with copied original sidecar configuration and policies; original packaged/imported skill sources."
+  },
+  "authorityLimitation": "Fresh ephemeral launch, settings-admin and credential-encryption keys replaced original protected authority. Original keys were not read or captured. These observations establish startup/readiness timing, not original credential decryption or authenticated model/effect behavior.",
+  "privacy": {
+    "rawStdoutIncluded": false,
+    "rawStderrIncluded": false,
+    "environmentIncluded": false,
+    "credentialValuesIncluded": false,
+    "privateCapturePolicy": "Raw local captures remain outside initiative artifacts and were not copied."
+  },
+  "disposition": {
+    "nativeSourceChanged": false,
+    "additionalNativeExperiments": "Stopped",
+    "productionRepairOwner": "Desktop transport owner",
+    "authorizedRepair": "Bounded 60000 ms readiness allowance; parent owns rebuild and actual complete application operation.",
+    "optimizations": "Substage costs retained as explanatory evidence only; no batch persistence or embedding behavior changes."
+  },
+  "remainingAcceptance": "Root must rebuild the repaired application and repeat the affected real feature operation. Native startup success alone does not prove the customer feedback workflow or publication."
+}

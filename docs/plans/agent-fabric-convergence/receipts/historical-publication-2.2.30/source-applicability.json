@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "kind": "historical-publication-selected-contract-comparison",
+  "observedAt": "2026-10-10T14:45:26.849Z",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "method": "git rev-parse commit:path and git diff exact retained operated commits; no ancestor-only equivalence",
+  "closureComplete": false,
+  "scope": "Relevant delivered customer contracts only; no whole-task, platform execution or operator acceptance inference",
+  "groups": [
+    {
+      "name": "C14-operated-coding-and-controls-desktop",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "baseline": "5b317b64c65928492f913fc41946d55ee099b472",
+      "release": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "objects": [
+        {
+          "path": "src/main/ai/runtime/uar/UarTeamWorkAdapter.ts",
+          "baselineObject": "6130ef33fc94158113edb0f17a3f2633a0ee7538",
+          "releaseObject": "6130ef33fc94158113edb0f17a3f2633a0ee7538",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/UarTeamHostService.ts",
+          "baselineObject": "934f4b8246f4e04b9bbf7f7afd3e2bb717eff925",
+          "releaseObject": "934f4b8246f4e04b9bbf7f7afd3e2bb717eff925",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/UarHostToolAdmission.ts",
+          "baselineObject": "6ef2cc738579a7db6a9caa3ac97c9d8efe746b16",
+          "releaseObject": "6ef2cc738579a7db6a9caa3ac97c9d8efe746b16",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/UarTeamExecutionAdapter.ts",
+          "baselineObject": "102e8c7467e3be756ff6f494d1b667c67554fb04",
+          "releaseObject": "102e8c7467e3be756ff6f494d1b667c67554fb04",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarTeamHostScope.ts",
+          "baselineObject": "c7310115c22caeb4a1792a7dc9ff1b208b6fe0bb",
+          "releaseObject": "c7310115c22caeb4a1792a7dc9ff1b208b6fe0bb",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarTeamAuthoringStore.ts",
+          "baselineObject": "33824a8af319516d7f0b1e7a21b09dc7d4abc11c",
+          "releaseObject": "33824a8af319516d7f0b1e7a21b09dc7d4abc11c",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarCodingTeamPackage.ts",
+          "baselineObject": "e3bae35ac6e9e41e6d18b9ef037534bf2a00e02c",
+          "releaseObject": "e3bae35ac6e9e41e6d18b9ef037534bf2a00e02c",
+          "same": true
+        },
+        {
+          "path": "src/renderer/pages/teams",
+          "baselineObject": "94a6b210af8fe00f2fba683e3be3b318c6357e11",
+          "releaseObject": "94a6b210af8fe00f2fba683e3be3b318c6357e11",
+          "same": true
+        },
+        {
+          "path": "src/renderer/hooks/useUarTeamLiveOutput.ts",
+          "baselineObject": "0d0636c194c60fcaa97ab46cc2b54e41cd498b82",
+          "releaseObject": "0d0636c194c60fcaa97ab46cc2b54e41cd498b82",
+          "same": true
+        },
+        {
+          "path": "src/shared/types/uarTeams.ts",
+          "baselineObject": "3bb89cda2eab665b853be5ffe45bda635c504976",
+          "releaseObject": "4be9cad1dca685c95ef50711415612213959fdfa",
+          "same": false
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "baselineObject": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+          "releaseObject": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+          "same": true
+        }
+      ]
+    },
+    {
+      "name": "C14-canonical-decision-and-stale-refusal-desktop",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "baseline": "3994c6062b024019e13f97e2416819edbf5180f3",
+      "release": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "objects": [
+        {
+          "path": "src/main/ai/runtime/uar/UarTeamWorkAdapter.ts",
+          "baselineObject": "6130ef33fc94158113edb0f17a3f2633a0ee7538",
+          "releaseObject": "6130ef33fc94158113edb0f17a3f2633a0ee7538",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarTeamApprovalHistory.ts",
+          "baselineObject": "a12a30a04f0048b96d730fe8f1ed13d8a7766258",
+          "releaseObject": "a12a30a04f0048b96d730fe8f1ed13d8a7766258",
+          "same": true
+        },
+        {
+          "path": "src/shared/types/uarApprovalRecords.ts",
+          "baselineObject": "11450a37975f006d5c82eed5a5b8118d247de90b",
+          "releaseObject": "11450a37975f006d5c82eed5a5b8118d247de90b",
+          "same": true
+        },
+        {
+          "path": "src/renderer/components/uarTeams/UarTeamApprovalRecord.tsx",
+          "baselineObject": "d7376724ab169c5bfed03c6d0ca5af1edea9f048",
+          "releaseObject": "d7376724ab169c5bfed03c6d0ca5af1edea9f048",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarApprovalLifecycle.ts",
+          "baselineObject": "91bbe5c7de470cd4659e2cbc89c47033e6c36ddb",
+          "releaseObject": "12bce60dd510fccd8d43cb702c548d459ee041e9",
+          "same": false
+        }
+      ]
+    },
+    {
+      "name": "C14-operated-coding-and-controls-native",
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "baseline": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+      "release": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "objects": [
+        {
+          "path": "src/uar/runtime/team_execution",
+          "baselineObject": "977ec3340c0dde2488d29864fe86a098b770414b",
+          "releaseObject": "977ec3340c0dde2488d29864fe86a098b770414b",
+          "same": true
+        },
+        {
+          "path": "src/uar/compiler/collaboration/team_execution",
+          "baselineObject": "6ded0e02a71c522f23c315d3f20f30cb08ad2f42",
+          "releaseObject": "6ded0e02a71c522f23c315d3f20f30cb08ad2f42",
+          "same": true
+        },
+        {
+          "path": "src/uar/compiler/collaboration/team_planning",
+          "baselineObject": "396e4bf25f0b60324c94f1de90d6c7b47d987251",
+          "releaseObject": "396e4bf25f0b60324c94f1de90d6c7b47d987251",
+          "same": true
+        },
+        {
+          "path": "src/uar/runtime/thread/approvals",
+          "baselineObject": "256340178792ee6a0be3103fb8126f6f062a43d1",
+          "releaseObject": "256340178792ee6a0be3103fb8126f6f062a43d1",
+          "same": true
+        },
+        {
+          "path": "src/uar/runtime/thread/approvals.rs",
+          "baselineObject": "a5f56574dce0fe594883a60a0cb5150e78634b50",
+          "releaseObject": "7620572524c80a25bc7347a8c7b8a30762e60d33",
+          "same": false
+        },
+        {
+          "path": "src/uar/runtime/tool_admission/owned.rs",
+          "baselineObject": "12925f0f6347c72055e89e7d9f9694253d10fca8",
+          "releaseObject": "12925f0f6347c72055e89e7d9f9694253d10fca8",
+          "same": true
+        },
+        {
+          "path": "src/uar/runtime/tool_admission/lifecycle.rs",
+          "baselineObject": "62d58c10a369433d26f208a9edeb01d657225b04",
+          "releaseObject": "62d58c10a369433d26f208a9edeb01d657225b04",
+          "same": true
+        },
+        {
+          "path": "src/uar/persistence/approval_decisions.rs",
+          "baselineObject": "ecffe497cea0c3a7734ee72cd2e4e933db2577d1",
+          "releaseObject": "ecffe497cea0c3a7734ee72cd2e4e933db2577d1",
+          "same": true
+        },
+        {
+          "path": "Cargo.lock",
+          "baselineObject": "04dc7ea4f9e6688f4ef1cb74e85c98ce45f006a3",
+          "releaseObject": "04dc7ea4f9e6688f4ef1cb74e85c98ce45f006a3",
+          "same": true
+        }
+      ]
+    },
+    {
+      "name": "C14-operated-dashboard-and-shared-instance-desktop",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "baseline": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+      "release": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "objects": [
+        {
+          "path": "src/main/services/bossFang",
+          "baselineObject": "06c41e50a6424afcc6bd21ff427d05c8c87251ae",
+          "releaseObject": "06c41e50a6424afcc6bd21ff427d05c8c87251ae",
+          "same": true
+        },
+        {
+          "path": "src/main/ipc/handlers/bossFang.ts",
+          "baselineObject": "3e8da526edc6bd5722aedcf9bc642300cf9b93f6",
+          "releaseObject": "3e8da526edc6bd5722aedcf9bc642300cf9b93f6",
+          "same": true
+        },
+        {
+          "path": "src/renderer/hooks/useBossFangDashboard.ts",
+          "baselineObject": "98310689e4497047f59a38565f01540248bd5ffe",
+          "releaseObject": "98310689e4497047f59a38565f01540248bd5ffe",
+          "same": true
+        },
+        {
+          "path": "src/renderer/pages/settings/BossFangSettings",
+          "baselineObject": "e0f335bc39794ee1648bde79e53d0901612f44da",
+          "releaseObject": "e0f335bc39794ee1648bde79e53d0901612f44da",
+          "same": true
+        },
+        {
+          "path": "src/renderer/components/MiniApp",
+          "baselineObject": "79e4b16870312542392fea32ac302a77c31d0e1c",
+          "releaseObject": "79e4b16870312542392fea32ac302a77c31d0e1c",
+          "same": true
+        },
+        {
+          "path": "src/renderer/pages/miniApps/useBuiltinMiniApps.ts",
+          "baselineObject": "6bcdd85fc23f244e8eb5e506fbec03b706b31320",
+          "releaseObject": "6bcdd85fc23f244e8eb5e506fbec03b706b31320",
+          "same": true
+        },
+        {
+          "path": "src/renderer/services/MiniAppWebviewService.ts",
+          "baselineObject": "1425b93e5ffa69c81d3efa56451e33acadca5a0b",
+          "releaseObject": "1425b93e5ffa69c81d3efa56451e33acadca5a0b",
+          "same": true
+        }
+      ]
+    },
+    {
+      "name": "C10-operated-feedback-desktop",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "baseline": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+      "release": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "objects": [
+        {
+          "path": "src/main/ai/runtime/uar/uarFeedbackAdministration.ts",
+          "baselineObject": "3ec285557712e6c872062711759bb88da72b5951",
+          "releaseObject": "3ec285557712e6c872062711759bb88da72b5951",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarFeedbackGithub.ts",
+          "baselineObject": "7b06c86160e6323c312e6e0882f266b140447752",
+          "releaseObject": "7b06c86160e6323c312e6e0882f266b140447752",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarFeedbackBoundary.ts",
+          "baselineObject": "fa79d90921ac7254c4e25a4d325e0eca453e866d",
+          "releaseObject": "fa79d90921ac7254c4e25a4d325e0eca453e866d",
+          "same": true
+        },
+        {
+          "path": "src/main/ai/runtime/uar/uarFeedbackWorkflowPackage.ts",
+          "baselineObject": "06741213b7f0fccdfd95daf612fc95bd7c77cf10",
+          "releaseObject": "06741213b7f0fccdfd95daf612fc95bd7c77cf10",
+          "same": true
+        },
+        {
+          "path": "src/renderer/pages/agents/feedbackComposerLaunch.ts",
+          "baselineObject": "ad7bc7dd8d4252a3ba4ff09a0897548fc35621f3",
+          "releaseObject": "ad7bc7dd8d4252a3ba4ff09a0897548fc35621f3",
+          "same": true
+        }
+      ]
+    },
+    {
+      "name": "C10-operated-connector-and-feedback-native",
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "baseline": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+      "release": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "objects": [
+        {
+          "path": "src/uar/compiler/collaboration/connector_effect",
+          "baselineObject": "7ec6a82448cc3dff3098fe01b4121cd3a55121bc",
+          "releaseObject": "7ec6a82448cc3dff3098fe01b4121cd3a55121bc",
+          "same": true
+        },
+        {
+          "path": "src/uar/compiler/collaboration/feedback_intake",
+          "baselineObject": "5fa1844db6b490478a169bb873a0f25eb98ada54",
+          "releaseObject": "5fa1844db6b490478a169bb873a0f25eb98ada54",
+          "same": true
+        },
+        {
+          "path": "src/uar/api/collaboration/connector_effect.rs",
+          "baselineObject": "049224f1deaa538c9b585a6e451235ff1ad390ea",
+          "releaseObject": "049224f1deaa538c9b585a6e451235ff1ad390ea",
+          "same": true
+        },
+        {
+          "path": "src/uar/api/collaboration/feedback_intake.rs",
+          "baselineObject": "09b99e53602274a654141245f23cdae8e0fec0f1",
+          "releaseObject": "09b99e53602274a654141245f23cdae8e0fec0f1",
+          "same": true
+        },
+        {
+          "path": "src/uar/domain/connector_effect.rs",
+          "baselineObject": "ee055a38bdc2f3206c18e65f35bd81bbc9d72d73",
+          "releaseObject": "ee055a38bdc2f3206c18e65f35bd81bbc9d72d73",
+          "same": true
+        },
+        {
+          "path": "src/uar/domain/feedback_intake.rs",
+          "baselineObject": "8b1f94c03949c53591ceab91e3f202a1961e5aaa",
+          "releaseObject": "8b1f94c03949c53591ceab91e3f202a1961e5aaa",
+          "same": true
+        }
+      ]
+    }
+  ],
+  "changedSharedPaths": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "baseline": "5b317b64c65928492f913fc41946d55ee099b472",
+      "release": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "paths": [
+        "src/main/ai/runtime/uar/UarDurableRunAdapter.ts",
+        "src/main/ai/runtime/uar/uarApprovalLifecycle.ts",
+        "src/shared/types/uarTeams.ts"
+      ],
+      "interpretation": "Durable ordinary-instance history now reads historical owner scope; the paired-host/decision-owner optional field is additive. Team execution/decision/history adapters retain their exact objects. Actual2.2.30 pending-approval operation separately observes the changed ordinary history reader; it does not certify represented read. UarTeamApproval DTO only adds optional decisionOwner; existing issuer/challenge/admission-owner identity remains unchanged.",
+      "diff": "diff --git a/src/main/ai/runtime/uar/UarDurableRunAdapter.ts b/src/main/ai/runtime/uar/UarDurableRunAdapter.ts\nindex 1e72210d13..b3fc877304 100644\n--- a/src/main/ai/runtime/uar/UarDurableRunAdapter.ts\n+++ b/src/main/ai/runtime/uar/UarDurableRunAdapter.ts\n@@ -15,7 +15,8 @@ async function target(input: { workspaceId: string; instanceId: string; runId: s\n     '/api/uar/agent-instances/v1/' + encodeURIComponent(input.instanceId), state.generation), workspaceId)\n   const command = instance.commands.find((entry) => entry.kind === 'turn' && entry.rootRunId === input.runId)\n   if (instance.instanceId !== input.instanceId || !command) throw new Error('TEAM_SCOPE_DENIED')\n-  return { workspaceId, generation: state.generation, command, path: '/api/uar/runs/' + encodeURIComponent(input.runId) }\n+  return { workspaceId, generation: state.generation, command, activeRunId: instance.activeRunId,\n+    path: '/api/uar/runs/' + encodeURIComponent(input.runId) }\n }\n \n export async function readUarDurableRun(input: {\n@@ -23,8 +24,15 @@ export async function readUarDurableRun(input: {\n }): Promise<UarDurableRunSnapshot> {\n   const state = await target(input)\n   const after = input.after ?? 0\n+  const eventsPath = state.path + '/events?after=' + after\n   const [events, pending, history, effects] = await Promise.all([\n-    scopedRequest(state.workspaceId, state.path + '/events?after=' + after, state.generation).then((value) => uarTeamRunEventsSchema.parse(value)),\n+    scopedRequest(state.workspaceId, eventsPath, state.generation).catch((cause) => {\n+      const terminal = ['completed', 'failed', 'cancelled'].includes(state.command.status)\n+      if (!terminal || state.activeRunId === input.runId || !(cause instanceof Error) ||\n+        cause.message !== `UAR request GET ${eventsPath} failed with HTTP 404`) throw cause\n+      return { version: 1, runId: input.runId, after, cursor: after, retention: 'process-local-bounded',\n+        firstAvailableEventId: null, gapReason: 'retention-gap', events: [] }\n+    }).then((value) => uarTeamRunEventsSchema.parse(value)),\n     scopedRequest(state.workspaceId, state.path + '/tool-approval/pending', state.generation).then((value) => rawPendingApproval.parse(value)),\n     scopedRequest(state.workspaceId, state.path + '/tool-approval', state.generation).then((value) => uarApprovalHistorySchema.parse(value)),\n     scopedRequest(state.workspaceId, state.path + '/tool-admission-evidence', state.generation).then((value) => rawAdmissionEvidence.parse(value))\n@@ -50,6 +58,7 @@ export async function readUarDurableRun(input: {\n     approval: approval ? { attemptId, runId: input.runId, approvalId: approval.approvalId,\n       issuerId: approval.issuerId!, challengeId: approval.challengeId!, rootRunId: approval.rootRunId,\n       toolCallId: approval.toolCallId, callIndex: approval.callIndex, admissionOwner: approval.admissionOwner,\n+      decisionOwner: approval.decisionOwner ?? approval.admissionOwner,\n       eventId: approval.eventId, cursor: approval.cursor, toolName: approval.name,\n       argumentsJson: approval.argumentsJson, riskReason: approval.riskReason } : null,\n     effects: effects.records.map((effect) => ({ toolName: effect.tool_name, state: effect.state, admissionId: effect.admission_id ?? null, invocationId: effect.invocation_id })),\n@@ -62,7 +71,7 @@ export async function decideUarDurableApproval(input: UarDurableApprovalDecision\n   const state = await target(input)\n   const pending = rawPendingApproval.parse(await scopedRequest(state.workspaceId, state.path + '/tool-approval/pending', state.generation))\n   const approval = pending.pending\n-  if (pending.runId !== input.runId || !approval || approval.admissionOwner !== 'uar-runtime' ||\n+  if (pending.runId !== input.runId || !approval || (approval.decisionOwner ?? approval.admissionOwner) !== 'uar-runtime' ||\n     approval.rootRunId !== input.runId || approval.approvalId !== input.approvalId ||\n     approval.issuerId !== input.issuerId || approval.challengeId !== input.challengeId ||\n     approval.eventId !== input.eventId || approval.cursor !== input.cursor) throw new Error('UAR_APPROVAL_STALE')\ndiff --git a/src/main/ai/runtime/uar/uarApprovalLifecycle.ts b/src/main/ai/runtime/uar/uarApprovalLifecycle.ts\nindex 91bbe5c7de..12bce60dd5 100644\n--- a/src/main/ai/runtime/uar/uarApprovalLifecycle.ts\n+++ b/src/main/ai/runtime/uar/uarApprovalLifecycle.ts\n@@ -18,6 +18,7 @@ export const rawPendingApproval = z.object({\n       challengeId: z.string().optional(),\n       admissionId: z.string().nullable().optional(),\n       admissionOwner: z.enum(['uar-runtime', 'paired-host']).default('paired-host'),\n+      decisionOwner: z.enum(['uar-runtime', 'paired-host']).optional(),\n       callIndex: z.number(),\n       toolCallId: z.string(),\n       name: z.string(),\ndiff --git a/src/shared/types/uarTeams.ts b/src/shared/types/uarTeams.ts\nindex 3bb89cda2e..4be9cad1dc 100644\n--- a/src/shared/types/uarTeams.ts\n+++ b/src/shared/types/uarTeams.ts\n@@ -326,6 +326,7 @@ export interface UarTeamApproval {\n   issuerId: string\n   challengeId: string\n   admissionOwner: 'uar-runtime' | 'paired-host'\n+  decisionOwner?: 'uar-runtime' | 'paired-host'\n   attemptId: string\n   runId: string\n   approvalId: string"
+    },
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "baseline": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+      "release": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "paths": [
+        "src/uar/runtime/thread/approvals.rs",
+        "src/uar/runtime/tool_admission/standalone.rs",
+        "src/uar/runtime/thread/actor_host.rs",
+        "src/uar/runtime/instance/pump.rs"
+      ],
+      "interpretation": "New explicit decision-owner routing separates ordinary standalone effect admission from decision handling. Existing request wrapper still supplies PairedHost for both owners. Standalone file_read display addition and ordinary instance context/resume fixes are not claimed identical; native team execution, paired-host claim lifecycle, canonical records and connector-effect trees are compared separately.",
+      "diff": "diff --git a/src/uar/runtime/instance/pump.rs b/src/uar/runtime/instance/pump.rs\nindex faec1fc0..59ee2818 100644\n--- a/src/uar/runtime/instance/pump.rs\n+++ b/src/uar/runtime/instance/pump.rs\n@@ -181,6 +181,7 @@ impl AgentInstanceController {\n                     &attempt_id,\n                     &run_id,\n                     TurnSettlement::Cancelled,\n+                    None,\n                 )\n                 .await?;\n                 continue;\n@@ -194,10 +195,12 @@ impl AgentInstanceController {\n                     &attempt_id,\n                     &run_id,\n                     TurnSettlement::BindingUnavailable,\n+                    None,\n                 )\n                 .await?;\n                 continue;\n             }\n+            let mut failure_diagnostic = None;\n             let outcome = match self.actor(owner, &claimed).await {\n                 Ok(actor) => match actor.submit_reserved_prompt(run_id.clone(), prompt) {\n                     Ok(turn) => match turn.completion.await {\n@@ -209,17 +212,42 @@ impl AgentInstanceController {\n                             {\n                                 TurnSettlement::Failed\n                             }\n-                            Some(AgentThreadResult::Failed { .. }) | Some(AgentThreadResult::Yielded { .. }) | None => {\n+                            Some(AgentThreadResult::Failed { code, message }) => {\n+                                failure_diagnostic = Some((\n+                                    \"run_kernel\",\n+                                    kernel_failure_code(&code, &message),\n+                                ));\n+                                TurnSettlement::Uncertain\n+                            }\n+                            Some(AgentThreadResult::Yielded { .. }) | None => {\n                                 TurnSettlement::Uncertain\n                             }\n                         },\n                         Ok(Err(ActorRunError::Stopped)) => TurnSettlement::Cancelled,\n-                        Ok(Err(ActorRunError::Host(_))) | Err(_) => TurnSettlement::Uncertain,\n+                        Ok(Err(ActorRunError::Host(error))) => {\n+                            failure_diagnostic = Some((\"actor_host\", actor_host_failure_code(&error)));\n+                            TurnSettlement::Uncertain\n+                        }\n+                        Err(_) => TurnSettlement::Uncertain,\n                     },\n                     Err(_) => TurnSettlement::Failed,\n                 },\n                 Err(_) => TurnSettlement::Failed,\n             };\n+            if let Some((source_stage, error_code)) = failure_diagnostic\n+                && let (Ok(command), Ok(attempt)) = (\n+                    Uuid::parse_str(&command_id),\n+                    Uuid::parse_str(&attempt_id),\n+                )\n+            {\n+                tracing::warn!(\n+                    source_stage,\n+                    error_code,\n+                    command_id = %command,\n+                    attempt_id = %attempt,\n+                    \"UAR_INSTANCE_TURN_DIAGNOSTIC\"\n+                );\n+            }\n             let outcome = self\n                 .settle_turn(\n                     owner,\n@@ -229,6 +257,7 @@ impl AgentInstanceController {\n                     &attempt_id,\n                     &run_id,\n                     outcome,\n+                    failure_diagnostic,\n                 )\n                 .await?;\n             if outcome == TurnSettlement::Uncertain {\n@@ -246,6 +275,7 @@ impl AgentInstanceController {\n         attempt_id: &str,\n         run_id: &str,\n         outcome: TurnSettlement,\n+        failure_diagnostic: Option<(&'static str, &'static str)>,\n     ) -> Result<TurnSettlement, AgentInstanceError> {\n         let evidence = if outcome == TurnSettlement::Uncertain {\n             None\n@@ -286,6 +316,14 @@ impl AgentInstanceController {\n                 ))?;\n             command.status = status;\n             command.updated_at = Utc::now();\n+            if let Some((stage, code)) = failure_diagnostic {\n+                // Persist only trusted static stages, never the host's raw\n+                // error chain, which may contain paths or credentials.\n+                command.outcome = Some(serde_json::json!({\n+                    \"sourceStage\": stage,\n+                    \"errorCode\": code,\n+                }));\n+            }\n             next.active_attempt = None;\n             if outcome == TurnSettlement::Uncertain {\n                 next.recovery = InstanceRecovery::EffectUncertain;\n@@ -417,3 +455,50 @@ enum TurnSettlement {\n     BindingUnavailable,\n     Uncertain,\n }\n+\n+fn actor_host_failure_code(error: &anyhow::Error) -> &'static str {\n+    const CODES: &[&str] = &[\n+        \"actor_root_request_scope_mismatch\",\n+        \"actor_root_artifact_scope_failed\",\n+        \"actor_root_catalog_binding_failed\",\n+        \"actor_root_instance_epoch_failed\",\n+        \"actor_root_previous_recovery_failed\",\n+        \"actor_root_identity_failed\",\n+        \"actor_root_registration_failed\",\n+        \"actor_root_terminal_epoch_failed\",\n+        \"actor_root_terminal_persistence_failed\",\n+    ];\n+    error\n+        .chain()\n+        .find_map(|cause| {\n+            let message = cause.to_string();\n+            CODES.iter().copied().find(|code| message == *code)\n+        })\n+        .unwrap_or(\"actor_host_failed\")\n+}\n+\n+fn kernel_failure_code(code: &str, message: &str) -> &'static str {\n+    if code == \"representation_admission_denied\" {\n+        return match message {\n+            \"REPRESENTATION_CEDAR_REQUIRED\" => \"representation_cedar_required\",\n+            \"REPRESENTATION_HISTORY_SCOPE_UNSUPPORTED\" => \"representation_history_scope_unsupported\",\n+            \"REPRESENTATION_INSTANCE_SCOPE_DENIED\" => \"representation_instance_scope_denied\",\n+            _ => \"representation_admission_denied\",\n+        };\n+    }\n+    const CODES: &[&str] = &[\n+        \"actor_root_mismatch\", \"run_owner_mismatch\", \"mcp_catalog_unavailable\",\n+        \"mcp_capture_mismatch\", \"child_bindings_unavailable\", \"sandbox_binding_unavailable\",\n+        \"mcp_server_not_run_scoped\", \"mcp_preflight_failed\", \"approval_channel_unavailable\",\n+        \"world_state_load_failed\", \"tool_admission_context_failed\", \"provider_model_unavailable\",\n+        \"thread_attachment_failed\", \"turn_assembly_rejected\", \"root_resource_binding_conflict\",\n+        \"kernel_completion_closed\", \"kernel_panicked\", \"thread_cleanup_unconfirmed\",\n+        \"session_persistence_unconfirmed\",\n+        \"world_state_budget_exceeded\",\n+    ];\n+    CODES\n+        .iter()\n+        .copied()\n+        .find(|known| code == *known)\n+        .unwrap_or(\"actor_kernel_failed\")\n+}\ndiff --git a/src/uar/runtime/thread/actor_host.rs b/src/uar/runtime/thread/actor_host.rs\nindex 232eae02..41f77cf1 100644\n--- a/src/uar/runtime/thread/actor_host.rs\n+++ b/src/uar/runtime/thread/actor_host.rs\n@@ -3,6 +3,7 @@\n \n use std::sync::Arc;\n \n+use anyhow::Context;\n use tokio::sync::watch;\n use tokio_util::sync::CancellationToken;\n \n@@ -263,20 +264,30 @@ impl ActorThreadSession {\n                 && request.user_id.as_deref() == Some(self.owner.user_id())\n                 && request.artifact.id == self.artifact.id\n                 && request.session_id.as_deref() == Some(self.session_id.as_str()),\n-            \"Root request does not match its host session\"\n+            \"actor_root_request_scope_mismatch\"\n         );\n         if let Some(artifacts) = &artifacts {\n-            artifacts.check_binding(&self.owner, &run_id)?;\n+            artifacts\n+                .check_binding(&self.owner, &run_id)\n+                .context(\"actor_root_artifact_scope_failed\")?;\n         }\n         if let Some(binding) = &request.collaboration_binding {\n-            binding.revalidate(&request.artifact).await?;\n+            binding\n+                .revalidate(&request.artifact)\n+                .await\n+                .context(\"actor_root_catalog_binding_failed\")?;\n         }\n         if let Some(binding) = &request.instance_binding {\n-            binding.revalidate().await?;\n+            binding\n+                .revalidate()\n+                .await\n+                .context(\"actor_root_instance_epoch_failed\")?;\n         }\n         let instance_binding = request.instance_binding.clone();\n         let team_binding = request.collaboration_binding.clone();\n-        self.settle_uncertain().await?;\n+        self.settle_uncertain()\n+            .await\n+            .context(\"actor_root_previous_recovery_failed\")?;\n         if self.cancellation.is_cancelled() {\n             anyhow::bail!(\"Actor has been stopped\");\n         }\n@@ -295,12 +306,16 @@ impl ActorThreadSession {\n             self.owner.user_id().to_owned(),\n             self.artifact.id.clone(),\n             run_id.clone(),\n-        )?;\n+        )\n+        .context(\"actor_root_identity_failed\")?;\n         if let Some(attempt)=team_binding.as_ref().and_then(|b|b.team_attempt.as_ref()) {\n             anyhow::ensure!(!attempt.root_id.is_empty()&&attempt.approval_scope_id==attempt.root_id,\"TEAM_SCOPE_DENIED\");\n             next.thread_id=attempt.root_id.clone();next.root_thread_id=attempt.root_id.clone();\n         }\n-        let record = self.persist(next).await?;\n+        let record = self\n+            .persist(next)\n+            .await\n+            .context(\"actor_root_registration_failed\")?;\n         let root = ActorRootBinding {\n             record,\n             artifacts,\n@@ -366,9 +381,14 @@ impl ActorThreadSession {\n             .clone();\n         next.finish_turn(result)?;\n         if let Some(binding) = &instance_binding {\n-            binding.revalidate().await?;\n+            binding\n+                .revalidate()\n+                .await\n+                .context(\"actor_root_terminal_epoch_failed\")?;\n         }\n-        self.persist(next).await\n+        self.persist(next)\n+            .await\n+            .context(\"actor_root_terminal_persistence_failed\")\n     }\n \n     /// After the owning worker has ended, settle its exact receipts and close\ndiff --git a/src/uar/runtime/thread/approvals.rs b/src/uar/runtime/thread/approvals.rs\nindex a5f56574..76205725 100644\n--- a/src/uar/runtime/thread/approvals.rs\n+++ b/src/uar/runtime/thread/approvals.rs\n@@ -44,6 +44,8 @@ pub(crate) struct PendingApprovalSnapshot {\n     pub challenge_id: String,\n     pub admission_id: Option<String>,\n     pub admission_owner: crate::uar::persistence::tool_admission::AdmissionOwner,\n+    /// Decision routing is distinct from the tool's effect admission ownership.\n+    pub decision_owner: crate::uar::persistence::tool_admission::AdmissionOwner,\n     pub call_index: usize,\n     pub tool_call_id: String,\n     pub name: String,\n@@ -175,6 +177,7 @@ impl RootApprovalChannel {\n         self.request_with_admission_owner(\n             admission_id,\n             crate::uar::persistence::tool_admission::AdmissionOwner::PairedHost,\n+            crate::uar::persistence::tool_admission::AdmissionOwner::PairedHost,\n             call_index,\n             tool_call_id,\n             name,\n@@ -189,6 +192,7 @@ impl RootApprovalChannel {\n         &self,\n         admission_id: Option<String>,\n         admission_owner: crate::uar::persistence::tool_admission::AdmissionOwner,\n+        decision_owner: crate::uar::persistence::tool_admission::AdmissionOwner,\n         call_index: usize,\n         tool_call_id: String,\n         name: String,\n@@ -236,6 +240,7 @@ impl RootApprovalChannel {\n                 challenge_id: record.challenge_id.clone(),\n                 admission_id: admission_id.clone(),\n                 admission_owner,\n+                decision_owner,\n                 call_index,\n                 tool_call_id: tool_call_id.clone(),\n                 name: name.clone(),\ndiff --git a/src/uar/runtime/tool_admission/standalone.rs b/src/uar/runtime/tool_admission/standalone.rs\nindex 76e9d402..090829b8 100644\n--- a/src/uar/runtime/tool_admission/standalone.rs\n+++ b/src/uar/runtime/tool_admission/standalone.rs\n@@ -46,6 +46,19 @@ impl HostToolAdmissionPort for StandaloneToolAdmissionPort {\n                 && invocation.host_epoch == self.binding.host_epoch,\n             \"Tool invocation belongs to another host admission binding\"\n         );\n+        let mut action_display = serde_json::json!({\n+            \"operation\": invocation.provider_tool_name,\n+            \"detailsAvailable\": false,\n+        });\n+        if invocation.provider_tool_name == \"file_read\"\n+            && let Some(target) = invocation\n+                .validated_arguments\n+                .get(\"path\")\n+                .and_then(serde_json::Value::as_str)\n+        {\n+            action_display[\"target\"] = serde_json::Value::String(target.to_string());\n+            action_display[\"detailsAvailable\"] = serde_json::Value::Bool(true);\n+        }\n         Ok(HostAdmissionPreparation {\n             version: self.binding.version,\n             admission_id: Uuid::new_v4().to_string(),\n@@ -54,10 +67,7 @@ impl HostToolAdmissionPort for StandaloneToolAdmissionPort {\n             host_epoch: self.binding.host_epoch.clone(),\n             authority_revision: invocation.authority_revision.clone(),\n             host_disposition: HostAdmissionDisposition::Auto,\n-            action_display: serde_json::json!({\n-                \"operation\": invocation.provider_tool_name,\n-                \"detailsAvailable\": false,\n-            }),\n+            action_display,\n             managed_mcp_metadata: false,\n         })\n     }"
+    }
+  ]
+}

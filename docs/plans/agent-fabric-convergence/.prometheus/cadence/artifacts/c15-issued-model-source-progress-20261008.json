@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "c15-model-issuance-delivery-source-progress",
+  "recordedAt": "2026-10-08T11:52:05.439Z",
+  "iterationId": "86cd3838-c1ae-426c-92e5-5a8e9142c62a",
+  "applicationSource": "ab3f42f1b197046e08762a503f17b3b16b1ce51a",
+  "miniSource": "4e956c547b37f4a5d990c82f9c3bdfb40e213240",
+  "nativeUarSource": "3daa3ef89aaebe0da379ca42b1582172d21f127a",
+  "sourceStatus": "complete-committed-pushed",
+  "buildStatus": "running",
+  "featureOperationStatus": "pending",
+  "wholeC15_1Status": "in-progress",
+  "productionScope": [
+    "private main-issued reviewed-model identity and immutable receipt",
+    "exact source/result/selection/target verification before save and reviewed deployment",
+    "manual-choice compatibility",
+    "actionable translated errors across 13 renderer locales",
+    "actual packaged operation procedure",
+    "current mini dependency closure and payload provenance"
+  ],
+  "securityBoundary": "Renderer-supplied reviewed model provenance crosses privileged main-process save/deployment boundary.",
+  "failedBuildAttempts": [
+    {
+      "attemptId": "ecb22637-362b-4973-a70a-bbd101e82082",
+      "reason": "Local environment named a newer UAR source than the binary pin.",
+      "repair": "Use existing clean checkout matching the pin; no native rebuild."
+    },
+    {
+      "attemptId": "b919c169-9df3-4f09-8d01-e032bef07eb7",
+      "reason": "Payload manifest named the previous mini source.",
+      "repair": "Align integration-artifacts source revision to committed mini submodule."
+    },
+    {
+      "attemptId": "25a042bf-b9a2-477d-acd8-00c8d619cf08",
+      "reason": "Packaging regenerated checked-in builtin copies after candidate freeze.",
+      "repair": "Cancelled before DMG creation, inspected/stopped only the owned build tree, reconciled interrupted receipt, committed generated copies and froze the complete input.",
+      "status": "failed; no completion credit"
+    }
+  ],
+  "testsOrIntermediateVerification": "none; actual delivery packaging only",
+  "wholeTaskCompletionCredited": false,
+  "pullRequest": "https://github.com/Prometheus-AGS/the-boss/pull/49",
+  "checkpointLesson": "Materialize and commit the full generated builtin payload before candidate freeze. Build does not justify excluding packaged skill bytes from provenance.",
+  "compassRefresh": {
+    "status": "deferred",
+    "reason": "One local build writer owns packaging; avoid competing expensive graph refresh.",
+    "recordedAt": "2026-10-08T11:52:05.439Z"
+  }
+}

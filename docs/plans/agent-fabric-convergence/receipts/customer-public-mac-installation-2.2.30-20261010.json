@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-mac-customer-installation",
+  "recordedAt": "2026-10-10T04:18:19.156Z",
+  "version": "2.2.30",
+  "platform": "darwin-arm64",
+  "status": "passed",
+  "sources": {
+    "boss": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "appAsarSha256": "393784aba6f24128618640f64238d6f6ee6da6f77190172e513230ee54cab7ba",
+    "sidecarSha256": "ff7d25c8e615b9e06f63dc25c0f7cf4f48a363adf872cb4a4ca2296448bb09c4"
+  },
+  "installer": {
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-arm64.dmg",
+    "size": 711998188,
+    "sha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+    "manifestUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/release-platform-v2.2.30-uar-enabled-darwin-arm64-aef2ec2cda68605efab9dddf33b46e726e752c2d.json",
+    "manifestSha256": "052fc0ea6f63a6162fc56f2e7c0a20565927f72ce82513c9823cb35724b62507"
+  },
+  "checks": {
+    "signature": "passed",
+    "gatekeeper": "passed",
+    "notarization": "passed",
+    "payload": "unchanged-frozen-production-public-payload-validator-with-immutable-release-override-passed"
+  },
+  "validator": {
+    "sha256": "7eacadb12da8c996316613f67830ba77499bf3f1f089c755b2081ffef6176057",
+    "nativeRecordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.30-308aea46-local/uar-sidecar-darwin-arm64.json",
+    "nativeRecordSha256": "ddd69d0b92b1e76caec26ca19a07c05f85f736a1f4bfad045478b784c52255c9"
+  },
+  "originalAttempt": {
+    "path": ".prometheus/cadence/artifacts/customer-public-mac-2.2.30/installation.json",
+    "sha256": "38f53bf26b169821667902f8501cbec982abb790aebd137bdbf696a769dff0c9",
+    "status": "failed",
+    "problem": "Operation driver mistakenly requested the local-build marker for a public package; this reconciliation uses the unchanged frozen production validator and exact immutable release artifact override."
+  },
+  "receipt": {
+    "path": ".prometheus/cadence/artifacts/customer-public-mac-2.2.30/installation-public-reconciled.json",
+    "sha256": "a6ff46927827fe26f936371e1654b341e626069d9194d9cbb9b9519b1cf352f5"
+  },
+  "functionalAcceptance": "not-inferred-from-installation",
+  "installedAcceptance": "pending-operator-final-candidate-acceptance",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false
+}

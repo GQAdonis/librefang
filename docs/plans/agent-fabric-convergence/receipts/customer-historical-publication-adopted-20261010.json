@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T14:48:54.395Z",
+  "commandId": "afc-adopt-historical-2.2.30-20261010",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "startedAt": "2026-10-06T17:07:34.783Z",
+  "successfulDeliveries": 15,
+  "eventsSeq": 1317,
+  "retained": {
+    "runId": true,
+    "startedAt": true,
+    "successfulDeliveries": true,
+    "finalizedAttempts": true,
+    "iterations": true,
+    "candidates": true,
+    "publicationSchedule": true,
+    "nextPublicationDelivery": true,
+    "publications": true,
+    "releaseAttempts": true,
+    "adoptedReceipts": true,
+    "profile": true
+  },
+  "externalReleases": [
+    {
+      "id": "github:Prometheus-AGS/the-boss:408603047",
+      "release": "github:Prometheus-AGS/the-boss:408603047",
+      "version": "2.2.30",
+      "recordedAt": "2026-10-10T14:48:09.901Z"
+    }
+  ],
+  "publicationDue": false,
+  "stateSha256": "91b684ae1face940ebcfdfcd2f0509b60f5020763bf8f6ca1a0a8f6aba650b4a",
+  "acceptance": "unchanged; not granted by adoption",
+  "authorityCorrection": "Corrected proposed packet Git repository authority from Prometheus-AGS/librefang to actual GQAdonis/librefang before live command; payload evidence unchanged.",
+  "publicationLinks": [
+    {
+      "id": "0304d248f33e7ee1f9c52daa34fa916f5ba5050d63a8944a0ff650d2ac424001",
+      "obligationId": "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "effects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ],
+      "publishedAt": "2026-10-10T05:45:43.659Z",
+      "recordedAt": "2026-10-10T14:48:09.647Z"
+    },
+    {
+      "id": "7deeba6039df793284ffb983a5f76232ec3a37717e4ab3934a688d150f4e4e58",
+      "obligationId": "4077df19-c67c-4059-9665-55988c70e012",
+      "effects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ],
+      "publishedAt": "2026-10-10T05:45:43.659Z",
+      "recordedAt": "2026-10-10T14:48:09.647Z"
+    }
+  ]
+}

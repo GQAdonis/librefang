@@ -16,13 +16,13 @@ const visible = token => `[...document.querySelectorAll(${JSON.stringify(selecto
 
 /**
  * Compose after Teams in the SAME launch/context. selection is the actual Teams
- * {workspaceId, selectedModel:{providerId,modelId}} receipt, not a new workspace.
+ * selectedModel preserves the Teams UI source; executionModel is its validated native route.
  * Caller may set configuration.bossfang.evidence and waitForRenewal=false; a
  * skipped renewal remains pending. No credential/environment secret is read here.
  */
-export default async function operateBossFang({evaluate, signal, targets}, configuration, selection) {
+export default async function operateBossFang({evaluate, signal, targets}, configuration, selection, {externalBossFangCredentials, expiredGrantRefusal} = {}) {
   const evidencePath = configuration.bossfang?.evidence ?? path.join(path.dirname(configuration.evidence), 'bossfang-operation.json')
-  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs', 'bossfang-boundaries.mjs'].map(name => {
+  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs', 'bossfang-boundaries.mjs', 'alternate-uar.mjs', 'grant-expiry.mjs', 'external-bossfang.mjs'].map(name => {
     const source = fileURLToPath(new URL(name, import.meta.url))
     return {name, sha256: digest(fs.readFileSync(source))}
   })
@@ -31,11 +31,14 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     startedAt: new Date().toISOString(), completedAt: null, complete: false, status: 'blocked',
     sourceRefs: configuration.sourceRefs, operationModules: modules,
     context: {targetCount: targets.length}, workspaceId: selection?.workspaceId,
+    selectedModel: selection?.selectedModel, executionModel: selection?.executionModel,
     checks: {}, pending: {}, diagnostics: [], failureCode: null
   }
   const passed = (name, observation) => { evidence.checks[name] = {status: 'passed', ...observation} }
   const pending = (name, code) => { evidence.pending[name] = {status: 'pending', code} }
   let releasePort
+  let baselinePortOccupied = false
+  let baselineUar
   let activeCheck = 'packagedContext'
   try {
     requireFact(targets.some(item => item.type === 'page' && item.url.includes('/windows/main/index.html') &&
@@ -44,9 +47,15 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       'C14_BOSSFANG_ACTUAL_TEAMS_SELECTION_REQUIRED')
     passed(activeCheck, {samePackagedLaunch: true})
     const workspaceId = selection.workspaceId
-    const modelId = selection.selectedModel.providerId + '/' + selection.selectedModel.modelId
+    requireFact(['uar-team-effective-model-receipt', 'ordinary-uar-model-catalog-after-coding-setup']
+      .includes(selection.executionModel?.source) &&
+      selection.executionModel.workspaceId === workspaceId && selection.executionModel.providerId &&
+      selection.executionModel.modelId &&
+      (selection.executionModel.receipts?.length || selection.executionModel.pricingIdentity?.providerId),
+      selection.executionModelUnavailable ?? 'C14_BOSSFANG_TEAM_EXECUTION_MODEL_UNAVAILABLE')
+    const modelId = selection.executionModel.providerId + '/' + selection.executionModel.modelId
     const config = {port: 4545, portPolicy: 'automatic', instanceId: 'managed-local', workspaceId}
-    let baselineUar = await uarState(evaluate)
+    baselineUar = await uarState(evaluate)
     requireFact(baselineUar.state === 'running' && baselineUar.processId, 'C14_BOSSFANG_TEAMS_UAR_NOT_RUNNING')
 
     activeCheck = 'appsMascot'
@@ -68,35 +77,42 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     const initial = await status(evaluate)
     requireFact(initial.configured, 'C14_BOSSFANG_PROTECTED_DASHBOARD_CREDENTIAL_SETUP_REQUIRED')
     passed(activeCheck, {route: '/settings/bossfang', protectedCredentialsConfigured: true})
-    if (initial.status === 'running') await action(evaluate, signal, 'stop', value => value.status === 'stopped')
+    if (initial.status === 'running' && initial.ownership === 'managed')
+      await action(evaluate, signal, 'stop', value => value.status === 'stopped')
     const managed = await managedConfig(evaluate, signal, config)
     requireFact(managed.configured, 'C14_BOSSFANG_PROTECTED_MANAGED_CREDENTIAL_SETUP_REQUIRED')
 
     activeCheck = 'fixedPortConflict'
     try { releasePort = await occupy(4545) } catch (error) {
       requireFact(error?.code === 'EADDRINUSE', 'C14_BOSSFANG_REAL_PORT_OCCUPANCY_UNAVAILABLE')
+      baselinePortOccupied = true
     }
+    const occupancy = {baselineListenerPresent: baselinePortOccupied, operationOwnedSocketHeld: Boolean(releasePort)}
     await managedConfig(evaluate, signal, {...config, portPolicy: 'fixed'})
     const conflict = await action(evaluate, signal, 'start', value => value.status === 'error' && value.hasError)
     requireFact(!conflict.effective, 'C14_BOSSFANG_FIXED_PORT_CONFLICT_FALSE_SUCCESS')
     const visibleConflict = await evaluate(`Boolean([...document.querySelectorAll('[role="alert"]')].find(node=>node.getClientRects().length&&node.innerText.includes('4545')))`)
     requireFact(visibleConflict, 'C14_BOSSFANG_FIXED_PORT_FEEDBACK_NOT_VISIBLE')
-    passed(activeCheck, {requestedPort: 4545, status: conflict.status, visibleFeedback: true})
+    passed(activeCheck, {requestedPort: 4545, nativeStatus: conflict.status, visibleFeedback: true, occupancy})
 
     activeCheck = 'automaticPortConflict'
     await managedConfig(evaluate, signal, config)
     const automatic = await action(evaluate, signal, 'start', running)
     requireFact(automatic.effective?.port > 4545 && automatic.requested.port === 4545,
       'C14_BOSSFANG_AUTOMATIC_PORT_FALLBACK_NOT_OBSERVED')
-    passed(activeCheck, {requestedPort: 4545, effectivePort: automatic.effective.port})
+    passed(activeCheck, {requestedPort: automatic.requested.port, effectivePort: automatic.effective.port, occupancy})
     await action(evaluate, signal, 'stop', value => value.status === 'stopped')
     if (releasePort) {await releasePort(); releasePort = undefined}
 
     activeCheck = 'managedDefaultAndOwnership'
     const started = await action(evaluate, signal, 'start', running)
-    requireFact(started.effective?.port === 4545, 'C14_BOSSFANG_DEFAULT_PORT_NOT_AVAILABLE')
+    requireFact(started.requested.port === 4545 && started.effective?.port >= 4545,
+      'C14_BOSSFANG_DEFAULT_PORT_NOT_AVAILABLE')
+    if (!baselinePortOccupied) requireFact(started.effective.port === 4545, 'C14_BOSSFANG_DEFAULT_PORT_NOT_AVAILABLE')
     sameUar(baselineUar, await uarState(evaluate))
-    passed(activeCheck, {port: 4545, uarProcess: baselineUar.processId, uarUnchanged: true})
+    passed(activeCheck, {requestedPort: started.requested.port, effectivePort: started.effective.port,
+      baselineListenerPresent: baselinePortOccupied, operationOwnedSocketReleased: !baselinePortOccupied,
+      uarProcess: baselineUar.processId, uarUnchanged: true})
 
     activeCheck = 'appsDashboardAuthentication'
     await ipc(evaluate, 'navigation.open_route_in_main', {path: '/app/launchpad'})
@@ -119,7 +135,13 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     requireFact(lifetime > 0 && lifetime <= 900000, 'C14_BOSSFANG_GRANT_EXPIRY_CONTRACT_NOT_OBSERVED')
     sameUar(baselineUar, await uarState(evaluate))
     const models = await ipc(evaluate, 'bossfang.models')
-    requireFact(models.some(item => item.id === modelId), 'C14_BOSSFANG_SELECTED_REAL_MODEL_UNAVAILABLE')
+    // Only public registry identities; gateway source IDs differ from native configured provider IDs.
+    evidence.modelSelection = {requestedId: modelId, totalAvailable: models.length,
+      available: models.slice(0,64).map(item => ({id: item.id.slice(0,256),
+        provider: item.provider.slice(0,256), modelId: item.modelId.slice(0,256), name: item.name.slice(0,256)}))}
+    requireFact(models.some(item => item.id === modelId &&
+      item.provider === selection.executionModel.providerId && item.modelId === selection.executionModel.modelId),
+      'C14_BOSSFANG_SELECTED_REAL_MODEL_UNAVAILABLE')
     await choose(evaluate, signal, 'model', modelId)
     await saveDraft(evaluate, signal)
     passed(activeCheck, {instanceId: 'managed-local', workspaceId, modelId,
@@ -177,15 +199,17 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     pending('originalRunGrantRenewal', 'C14_BOSSFANG_LONG_LIVED_ORIGINAL_RUN_FIXTURE_UNAVAILABLE')
 
     activeCheck = 'endpointChangeAndRestart'
-    const nextPort = automatic.effective.port
+    const nextPort = started.effective.port + 1
     const pendingConfig = await managedConfig(evaluate, signal, {...config, port: nextPort})
-    requireFact(pendingConfig.restartRequired && pendingConfig.effective.port === 4545,
+    requireFact(pendingConfig.restartRequired && pendingConfig.effective.port === started.effective.port,
       'C14_BOSSFANG_REQUESTED_EFFECTIVE_SEPARATION_NOT_OBSERVED')
-    const restarted = await action(evaluate, signal, 'restart', value => running(value) && value.effective?.port === nextPort)
+    const restarted = await action(evaluate, signal, 'restart', value => running(value) &&
+      value.requested.port === nextPort && value.effective?.port >= nextPort)
     sameUar(baselineUar, await uarState(evaluate))
     requireFact(restarted.connection === 'disconnected', 'C14_BOSSFANG_RESTART_RETAINED_STALE_CONNECTION')
     await action(evaluate, signal, 'connect', value => value.connection === 'connected')
-    passed(activeCheck, {beforePort: 4545, afterPort: nextPort, uarUnchanged: true, explicitReconnect: true})
+    passed(activeCheck, {beforePort: started.effective.port, requestedPort: nextPort,
+      afterPort: restarted.effective.port, uarUnchanged: true, explicitReconnect: true})
 
     activeCheck = 'uarRestartAndGenerationFollow'
     const followed = await restartAndFollow(evaluate, signal, {workspaceId, modelId}, completed)
@@ -204,8 +228,22 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       passed(activeCheck, {generation: renewed.effective.uarGeneration,
         previousExpiresAt: renewalBefore.effective.grantExpiresAt, renewedExpiresAt: renewed.effective.grantExpiresAt})
     } else pending(activeCheck, 'C14_BOSSFANG_RENEWAL_WAIT_NOT_OPERATED')
-    pending('expiredGrantRefusal', 'C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE')
-    evidence.pending.expiredGrantRefusal.reason = 'Public supported controls never expose the private grant and production renews it before expiry; no expired-token request was made. Renewal or generation replacement is not refusal evidence.'
+    activeCheck = 'expiredGrantRefusal'
+    if (expiredGrantRefusal) {
+      const refusal = await expiredGrantRefusal()
+      requireFact(refusal.initialAuthorizedStatus === 200 && refusal.expiredStatus === 401 &&
+        refusal.expiresInSeconds === 900 && refusal.elapsedMilliseconds >= 900000 &&
+        refusal.sameRuntimeConfirmed === true && refusal.runtimeEpoch &&
+        refusal.initialProcessId === refusal.observedProcessId &&
+        refusal.revoked === false && refusal.renewed === false &&
+        refusal.sourceRevision === '5a8fd22e1543ddbd7a182b2557fe94f631117c13',
+        'C14_BOSSFANG_ACTUAL_GRANT_EXPIRY_REFUSAL_UNCONFIRMED')
+      passed(activeCheck, refusal)
+    }
+    else {
+      pending(activeCheck, 'C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE')
+      evidence.pending.expiredGrantRefusal.reason = 'Public supported controls never expose the private grant and production renews it before expiry; no expired-token request was made. Renewal or generation replacement is not refusal evidence.'
+    }
 
     activeCheck = 'alternateConfiguredUar'
     const alternate = await alternateUar(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
@@ -213,7 +251,7 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     else {evidence.diagnostics.push(alternate.diagnostic);passed(activeCheck, alternate.observation)}
 
     activeCheck = 'externalBossFangPreservation'
-    const external = await externalBossFang(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
+    const external = await externalBossFang(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar, externalBossFangCredentials)
     if(external.pending)pending(activeCheck, external.pending)
     else passed(activeCheck, external.observation)
 
@@ -239,8 +277,40 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     const code = error?.code ?? error?.message
     evidence.failureCode = typeof code === 'string' && /^C14_[A-Z0-9_]+$/.test(code) ? code : 'C14_BOSSFANG_OPERATION_FAILED'
     evidence.checks[activeCheck] = {status: 'failed', code: evidence.failureCode}
+    if(error.dashboardObservation)evidence.checks[activeCheck].dashboardObservation = error.dashboardObservation
   } finally {
     if (releasePort) try {await releasePort()} catch {evidence.pending.portCleanup = {status: 'pending', code: 'C14_BOSSFANG_PORT_CLEANUP_FAILED'}}
+    // This profile's supported API owns its managed process; never signal a listener or borrowed process.
+    let cleanupTimer
+    try {
+      evidence.cleanup = await Promise.race([(async () => {
+        const before = await status(evaluate)
+        let outcome
+        if (before.ownership === 'external') {
+          await ipc(evaluate, 'bossfang.disconnect')
+          const after = await status(evaluate)
+          requireFact(after.ownership === 'external' && after.connection === 'disconnected',
+            'C14_BOSSFANG_EXTERNAL_CLEANUP_UNCONFIRMED')
+          outcome = {status: 'preserved_external', stopped: false, disconnected: true}
+        } else {
+          const stopped = await ipc(evaluate, 'bossfang.stop')
+          requireFact(stopped.success, 'C14_BOSSFANG_MANAGED_CLEANUP_UNCONFIRMED')
+          const after = await waitFor(AbortSignal.timeout(15000), async () => {
+            const value = await status(evaluate)
+            return value.status === 'stopped' && value.connection === 'disconnected' && !value.effective && value
+          }, 'C14_BOSSFANG_MANAGED_CLEANUP_UNCONFIRMED', 15000)
+          outcome = {status: 'stopped_managed', stopped: after.status === 'stopped', disconnected: true}
+        }
+        if (baselineUar) {sameUar(baselineUar, await uarState(evaluate)); outcome.uarUnchanged = true}
+        return outcome
+      })(), new Promise((_,reject) => {cleanupTimer = setTimeout(() => reject(new Error('C14_BOSSFANG_CLEANUP_TIMEOUT')),15000)})])
+    } catch {
+      evidence.cleanup = {status: 'unconfirmed'}
+      evidence.pending.managedCleanup = {status: 'pending', code: 'C14_BOSSFANG_PROFILE_CLEANUP_UNCONFIRMED'}
+      evidence.complete = false
+      evidence.status = 'blocked'
+      evidence.failureCode ??= 'C14_BOSSFANG_PROFILE_CLEANUP_UNCONFIRMED'
+    } finally {clearTimeout(cleanupTimer)}
     evidence.completedAt = new Date().toISOString()
     write(evidencePath, evidence)
   }

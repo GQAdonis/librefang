@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "dispatchedAt": "2026-10-10T14:26:48.226Z",
+  "backend": "hybrid",
+  "phase": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+  "assignedChanges": [
+    {
+      "id": "afc-runtime-source-reconciliation",
+      "tasks": [
+        "Capture and integrate latest connected fork revisions with preserved local work"
+      ],
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    },
+    {
+      "id": "afc-cadence-historical-publication",
+      "tasks": [
+        "Implement and distribute historical publication adoption without delivery credit",
+        "Operate completed Cadence repair and reconcile existing publication obligations"
+      ],
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    },
+    {
+      "id": "afc-runtime-admission-v2-release",
+      "tasks": [
+        "Integrate UAR and BossFang admission-v2 capability and ownership contracts",
+        "Integrate desktop capability admission, localization and dependency pointers",
+        "Produce source-matched native payloads for the two customer targets (Mac ARM64 and Windows x64)"
+      ],
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    },
+    {
+      "id": "afc-integrated-customer-qualification",
+      "tasks": [
+        "Build and operate integrated Mac ARM64 candidate and missing customer scenarios",
+        "Publish Mac ARM64 and Windows x64 installers and exact website metadata",
+        "Record exact candidate acceptance and complete child closeout"
+      ],
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "high"
+    }
+  ],
+  "cadence": {
+    "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+    "durationMinutes": 120,
+    "successfulDeliveries": 15,
+    "activeIteration": null,
+    "publicationEvery": 2
+  },
+  "status": "in-progress"
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "packaged-team-handoff-provenance-operation",
+  "complete": true,
+  "startedAt": "2026-10-08T13:03:39.309Z",
+  "finishedAt": "2026-10-08T13:03:45.917Z",
+  "sourceRefs": {
+    "boss": "96492a21bc1c7e8526bbd526134e2289cfd05e0e",
+    "appAsarSha256": "e58834454528b6ea68d1caec753799eb92b651006e4a1c177c5312d7bbcebff9"
+  },
+  "checks": [
+    "actual-packaged-creator-captures-dirty-files-evidence-karpathy-and-local-scoped-memory",
+    "real-canonical-task-identity-status-read-without-transition",
+    "read-only-inspection-preserves-source-ownership",
+    "changed-and-missing-selected-source-reported-without-rewriting-capture",
+    "explicit-cross-harness-local-ownership-transfer-retains-provenance-and-queued-memory",
+    "stale-original-task-revision-refused-without-state-mutation",
+    "prior-packaged-producer-legacy-packet-readable-without-invented-provenance",
+    "canonical-parent-task-status-unchanged"
+  ],
+  "canonicalBefore": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "identity": {
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "runId": "project-20260924T180329Z",
+      "phaseId": "agent-fabric-convergence",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "taskId": "C15.3"
+    },
+    "observation": "observed",
+    "revision": 571,
+    "eventId": "bfb6d275-12e5-48de-aadf-ebe7b7120157",
+    "taskStatus": "in_progress",
+    "receiptSha256": "24283647289b988c9b919fe289db3309c7b3540e84a366c62aad11afebadeeee"
+  },
+  "canonicalAfter": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "identity": {
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "runId": "project-20260924T180329Z",
+      "phaseId": "agent-fabric-convergence",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "taskId": "C15.3"
+    },
+    "observation": "observed",
+    "revision": 571,
+    "eventId": "bfb6d275-12e5-48de-aadf-ebe7b7120157",
+    "taskStatus": "in_progress",
+    "receiptSha256": "24283647289b988c9b919fe289db3309c7b3540e84a366c62aad11afebadeeee"
+  },
+  "memoryPublication": "not-invoked",
+  "nativeWindowsAcceptance": "pending",
+  "wholeC15_3Completion": "pending"
+}

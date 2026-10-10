@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-customer-release-website",
+  "startedAt": "2026-10-10T01:38:47.319Z",
+  "finishedAt": "2026-10-10T01:38:48.768Z",
+  "status": "passed",
+  "website": "https://the-boss.know-me.tools/",
+  "asset": "/assets/index-BIq5P7qK.js",
+  "assetSha256": "4cfc8ed1c7a7586d868f6ae2f91a4bcb19487b351a06e443787d7760e9486624",
+  "source": "146e5d84eb270697a9fe5ebc49ffe9bc8c9923f1",
+  "publication": {
+    "method": "existing signed-in Lovable project Publish changes via BrowserOS page DOM",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "confirmedBy": "live domain asset contains exact immutable installer URLs; not inferred from Updating dialog"
+  },
+  "checks": [
+    {
+      "platform": "darwin-arm64",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-mac-arm64.dmg",
+      "status": 200,
+      "contentLength": 711782548
+    },
+    {
+      "platform": "darwin-x64",
+      "version": "2.2.25",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-mac-x64.dmg",
+      "status": 200,
+      "contentLength": 747566816
+    },
+    {
+      "platform": "win32-x64",
+      "version": "2.2.25",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-win-x64-setup.exe",
+      "status": 200,
+      "contentLength": 531583670
+    },
+    {
+      "platform": "win32-arm64",
+      "version": "2.2.25",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-win-arm64-setup.exe",
+      "status": 200,
+      "contentLength": 494878622
+    }
+  ],
+  "scope": "Ready Apple Silicon 2.2.26 advertised immediately; pending platforms retain prior complete 2.2.25. HEAD is availability evidence, not installer checksum or installed acceptance.",
+  "newCadenceDelivery": false,
+  "successfulDeliveriesUnchanged": 15
+}

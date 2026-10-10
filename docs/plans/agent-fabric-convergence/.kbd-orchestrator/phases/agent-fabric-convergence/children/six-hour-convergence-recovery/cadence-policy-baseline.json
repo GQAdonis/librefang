@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-05T23:38:16.328Z",
+  "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+  "profileRevision": 7,
+  "eventsSeq": 1486,
+  "activeIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "successfulDeliveries": 6,
+  "publicationSchedule": {
+    "nextCount": 7,
+    "lastInterval": -1,
+    "policyDigest": "565c809a2bf04be8d8ac4a490c36da5ac9dd1c54a7f298a160f5aefd7cbd2ef0"
+  },
+  "legacyObligationIds": [
+    "3aa9f8fd-78d2-462f-9584-4f934cabd914"
+  ],
+  "authority": "Operator plan request 2026-10-05; no live cadence mutation performed",
+  "recoveryPublicationOrdinals": [
+    1,
+    3,
+    5
+  ],
+  "localOnlyOrdinals": [
+    2,
+    4,
+    6
+  ]
+}

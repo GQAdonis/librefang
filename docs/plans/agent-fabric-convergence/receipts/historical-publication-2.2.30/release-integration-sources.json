@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "rust": "1.97.1",
+  "sources": {
+    "compass": {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9"
+    },
+    "filesystem": {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d"
+    },
+    "prometheus": {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f"
+    },
+    "pk": {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+    },
+    "mini": {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f"
+    },
+    "uar": {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569"
+    },
+    "surreal-memory": {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a"
+    },
+    "liter-llm": {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+    },
+    "bossfang": {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69"
+    },
+    "skill-pack": {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae"
+    }
+  },
+  "tools": {
+    "compass": {
+      "source": "compass",
+      "package": "compass-cli",
+      "version": "0.3.28",
+      "features": "surreal-remote"
+    },
+    "rust-mcp-filesystem": {
+      "source": "filesystem",
+      "package": "rust-mcp-filesystem",
+      "version": "0.4.5"
+    },
+    "prometheus": {
+      "source": "prometheus",
+      "package": "prometheus-cli",
+      "directory": "tools/prometheus-cli",
+      "version": "1.11.3"
+    },
+    "pk": {
+      "source": "pk",
+      "package": "pk-cli",
+      "version": "1.11.0"
+    },
+    "uar-sidecar": {
+      "source": "uar",
+      "package": "universal-agent-runtime",
+      "version": "1.0.0",
+      "features": "server-full"
+    },
+    "liter-llm": {
+      "source": "liter-llm",
+      "package": "liter-llm-cli",
+      "version": "2.1.1"
+    },
+    "bossfang": {
+      "source": "bossfang",
+      "package": "librefang-cli",
+      "version": "2026.9.19+0899e4993",
+      "features": "telemetry,surreal-backend,uar-driver"
+    }
+  },
+  "catalogs": {
+    "liter-llm": {
+      "providers": "568d741ee4e4771b7fd4191cde974d743c834fc1db7bbf27fcde45d0521b67b4",
+      "models": "05fb5c701bf1a27c371b83224fb188154e873fd6aad5cb9f8222ac1518656963"
+    }
+  },
+  "parser": {
+    "url": "https://github.com/xberg-io/tree-sitter-language-pack/releases/download/v1.13.1/parser-sources-1.13.1.tar.zst",
+    "sha256": "411bc912ca9b6fa43f75aeff0ad9df419b2b425e99795c66ab253f2970e2afd3"
+  }
+}
