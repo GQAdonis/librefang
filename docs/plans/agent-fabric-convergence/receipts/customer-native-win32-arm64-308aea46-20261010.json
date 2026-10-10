@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "published-corrective-native-payload",
+  "recordedAt": "2026-10-10T04:41:55.118Z",
+  "platform": "win32-arm64",
+  "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+  "version": "1.0.0",
+  "packageRun": 38024346372,
+  "workflowHead": "8119fd7c83248cdf0d0cde4496cb33c569761a71",
+  "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-arm64.json",
+  "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-arm64.tar.gz",
+  "size": 123432790,
+  "sha256": "cf83c9854ed5a4bdd3d10e8a936a3b4f4321c94d1371d48f68fc814e1b170064",
+  "features": [
+    "server-full"
+  ],
+  "binaries": [
+    "crc_fast-ec816f13e81631da.dll",
+    "LICENSE",
+    "policies/default.cedar",
+    "policies/skill-mutation.cedar",
+    "policies/tool-approval.cedar",
+    "sevenz_rust2-74faf33cd846d44a.dll",
+    "uar-models/bg-small-en-v1.5.onnx",
+    "uar-models/config.json",
+    "uar-models/MODEL-NOTICE.txt",
+    "uar-models/special_tokens_map.json",
+    "uar-models/tokenizer_config.json",
+    "uar-models/tokenizer.json",
+    "uar-sidecar.exe",
+    "payload-manifest.json"
+  ],
+  "publicAssets": [
+    {
+      "name": "uar-sidecar-win32-arm64.tar.gz",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-arm64.tar.gz",
+      "size": 123432790,
+      "sha256": "cf83c9854ed5a4bdd3d10e8a936a3b4f4321c94d1371d48f68fc814e1b170064",
+      "githubDigest": "sha256:cf83c9854ed5a4bdd3d10e8a936a3b4f4321c94d1371d48f68fc814e1b170064",
+      "verifiedAt": "2026-10-10T04:40:25.603Z"
+    },
+    {
+      "name": "uar-sidecar-win32-arm64.json",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-arm64.json",
+      "size": 810,
+      "sha256": "9751c609b74b75bd423e2bc2a0de55c5deb62f09df6dcf9f0463f1d75517de7a",
+      "githubDigest": "sha256:9751c609b74b75bd423e2bc2a0de55c5deb62f09df6dcf9f0463f1d75517de7a",
+      "verifiedAt": "2026-10-10T04:40:27.344Z"
+    }
+  ],
+  "status": "passed",
+  "limits": [
+    "Native payload publication, not application installer or installed acceptance. Compatibility tag label2.2.29 does not change actual source308aea46 or pending application2.2.30 provenance."
+  ]
+}
