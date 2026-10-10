@@ -64,7 +64,7 @@ async function ready(signal, child, predicate, failureCode) {
   while (Date.now() < deadline) {
     signal.throwIfAborted()
     requireFact(child.exitCode === null && child.signalCode === null, 'CUSTOMER_OWNED_APP_EXITED')
-    if (await predicate()) return
+    if (await predicate(Math.max(1, deadline - Date.now()))) return
     await delay(250, undefined, { signal })
   }
   requireFact(false, failureCode)
@@ -121,6 +121,25 @@ export async function operate(installationPath, configurationPath) {
         startedAt: new Date().toISOString(), status: 'pending', gracefulPreviousQuitClaimed: false }
       operation.phases.push(phaseRecord); operation.stage = phase + '-startup'; persist()
       await ready(controller.signal, child, () => fs.existsSync(activePort), 'CUSTOMER_PRIVATE_DEBUG_PORT_UNAVAILABLE')
+      operation.stage = phase + '-packaged-main-target'; persist()
+      await ready(controller.signal, child, async remainingMs => {
+        const firstLine = fs.readFileSync(activePort, 'utf8').split(/\r?\n/)[0]
+        const port = /^\d+$/.test(firstLine) ? Number(firstLine) : 0
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return false
+        try {
+          const response = await fetch(`http://127.0.0.1:${port}/json/list`, {
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(remainingMs)])
+          })
+          if (!response.ok) return false
+          const targets = await response.json()
+          return targets.some(target => target.type === 'page' &&
+            target.url.includes('/windows/main/index.html') && !/^https?:/i.test(target.url) &&
+            Boolean(target.webSocketDebuggerUrl))
+        } catch {
+          controller.signal.throwIfAborted()
+          return false
+        }
+      }, 'CUSTOMER_PACKAGED_MAIN_TARGET_UNAVAILABLE')
       connection = await attach({ status: 'success', keptOpen: true, pid: child.pid, isolatedUserData: profile }, controller.signal)
       await ready(controller.signal, child, () => connection.evaluate('Boolean(window.api?.ipcApi && window.api?.dataApi)'),
         'CUSTOMER_RENDERER_NOT_READY')

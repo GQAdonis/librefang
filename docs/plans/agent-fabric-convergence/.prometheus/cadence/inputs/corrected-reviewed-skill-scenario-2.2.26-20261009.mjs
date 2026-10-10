@@ -70,17 +70,18 @@ export async function preparePublicOperation({ directory, installation: candidat
 export async function scenario(context, configuration) {
   requireCandidateConfiguration(configuration)
   const { resources } = correctedPackage(configuration.correctedCandidateInstallation)
-  const resiliencePolicy = await persistedResilience(context.evaluate, configuration)
+  let resiliencePolicy
   requireFact(configuration.appResources === resources && configuration.preparedFullGeneration?.complete === true,
     'C15_PUBLIC_PRELAUNCH_PREPARATION_REQUIRED')
   const outcome = await reviewedScenario({ ...context, trustedRequest: undefined }, { ...configuration,
     sourceRefs: { ...configuration.sourceRefs, fullSkillSourceRevision: fullRevision, miniSkillSourceRevision: miniRevision },
-    appResources: resources })
+    appResources: resources,
+    onRuntimePrepared: async () => { resiliencePolicy = await persistedResilience(context.evaluate, configuration) } })
   const observed = JSON.parse(fs.readFileSync(configuration.evidence, 'utf8'))
   observed.resiliencePolicy = resiliencePolicy
   observed.correctedCandidate = expectedPins
   fs.writeFileSync(configuration.evidence, JSON.stringify(observed, null, 2) + '\n', { mode: 0o600 })
   return { ...outcome, observedBehavior: JSON.stringify({ complete: observed.complete, checks: observed.checks,
     failureCode: observed.failureCode, evidencePath: configuration.evidence, evidenceSha256: sha256(configuration.evidence),
-    resiliencePolicy: { authority: resiliencePolicy.authority, mutated: resiliencePolicy.mutated } }) }
+    resiliencePolicy: { authority: resiliencePolicy?.authority, mutated: resiliencePolicy?.mutated } }) }
 }
