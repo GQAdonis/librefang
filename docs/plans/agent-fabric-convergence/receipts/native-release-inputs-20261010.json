@@ -1076,5 +1076,43 @@
     "copiedRoot": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-v1-instance-20261010-JiyaBu",
     "ingestDenial": "Startup tolerance is source inference only: old watcher task ignores create_dir_all errors and watches only if exists(). No actual sandboxed startup was run during this preparation.",
     "copyReceipt": "docs/plans/agent-fabric-convergence/receipts/retained-v1-payload-copy-20261010.json"
+  },
+  "macBossfangBuildRepair": {
+    "recordedAt": "2026-10-10T18:37:50.217Z",
+    "observedFailure": {
+      "runId": 38061076572,
+      "jobId": 114240190706,
+      "buildCancelledAt": "2026-10-10T18:33:28Z",
+      "partialUploadSucceededAt": "2026-10-10T18:33:39Z",
+      "limitMinutes": 180,
+      "missingTool": "bossfang",
+      "preservedTools": [
+        "compass",
+        "rust-mcp-filesystem",
+        "prometheus"
+      ]
+    },
+    "repair": {
+      "repository": "Prometheus-AGS/the-boss",
+      "commit": "a8cd602f26d3c16c8b56b73dc312d17c92602890",
+      "path": "scripts/build-integration-tools.cjs",
+      "scope": "BossFang macOS compilation only",
+      "environment": {
+        "CARGO_PROFILE_RELEASE_LTO": "thin",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "16"
+      },
+      "featuresChanged": false
+    },
+    "replacement": {
+      "runId": 38076500408,
+      "platform": "darwin-arm64",
+      "tools": [
+        "bossfang"
+      ],
+      "nativeArtifactsOnly": true,
+      "status": "dispatched-not-completed"
+    },
+    "intelRetryRetained": 38065125423,
+    "qualification": "No new completed payload, installer or successful delivery is claimed."
   }
 }
