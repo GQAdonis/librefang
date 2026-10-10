@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "operator-reauthentication-observation",
+  "recordedAt": "2026-10-10T05:50:48.863Z",
+  "operatorReport": "Signed in",
+  "command": {
+    "executable": "claude",
+    "arguments": [
+      "auth",
+      "status"
+    ],
+    "exitCode": 0,
+    "outputParsed": true
+  },
+  "observation": {
+    "loggedIn": true
+  },
+  "scope": "Current local Claude CLI authentication state only",
+  "limitations": "No new inference operation, packaged-runtime authentication check, model availability, entitlement or installed acceptance established",
+  "qualificationCountersMutated": false,
+  "cadenceCountersMutated": false
+}
