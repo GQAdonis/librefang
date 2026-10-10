@@ -105,6 +105,23 @@ export async function launchAndOperate(installationPath, configurationPath) {
     }
     fact(fs.existsSync(activePort), 'CUSTOMER_UAR_PRIVATE_DEBUG_PORT_UNAVAILABLE')
     launch.status = 'success' // Attach/startup contract only; not feature acceptance.
+    // The actual cold launch exposed the debug port before Electron created its main page.
+    const debugPort = Number(fs.readFileSync(activePort, 'utf8').split(/\r?\n/)[0])
+    fact(Number.isInteger(debugPort) && debugPort > 0 && debugPort <= 65535,
+      'CUSTOMER_UAR_PRIVATE_DEBUG_PORT_INVALID')
+    const targetDeadline = Date.now() + 60_000
+    let mainTargetReady = false
+    while (Date.now() < targetDeadline) {
+      const response = await fetch(`http://127.0.0.1:${debugPort}/json/list`, { signal: controller.signal })
+      fact(response.ok, 'CUSTOMER_UAR_PRIVATE_DEBUG_TARGET_UNAVAILABLE')
+      const targets = await response.json()
+      mainTargetReady = targets.some(item => item.type === 'page' &&
+        item.url.includes('/windows/main/index.html') && !/^https?:/i.test(item.url) && item.webSocketDebuggerUrl)
+      if (mainTargetReady) break
+      fact(child.exitCode === null && child.signalCode === null, 'CUSTOMER_UAR_APP_EXITED')
+      await delay(250, undefined, { signal: controller.signal })
+    }
+    fact(mainTargetReady, 'CUSTOMER_UAR_PACKAGED_MAIN_TARGET_NOT_READY')
     connection = await attach(launch, controller.signal)
     const rendererDeadline = Date.now() + 60_000
     let ready = false
