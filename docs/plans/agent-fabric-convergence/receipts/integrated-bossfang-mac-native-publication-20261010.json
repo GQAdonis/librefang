@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-payload-publication",
+  "recordedAt": "2026-10-10T22:58:15.930Z",
+  "repository": "GQAdonis/librefang",
+  "tag": "bossfang-sidecar-92bc005f3",
+  "releaseId": 409255975,
+  "publishedAt": "2026-10-10T22:57:44Z",
+  "source": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "targetCommitish": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "platform": "darwin-arm64",
+  "assets": [
+    {
+      "id": 629199322,
+      "name": "bossfang-darwin-arm64",
+      "size": 176573952,
+      "sha256": "0cac6b62b4b8cf39063d35227c04048752243eea7da01b1a78395cf8bae51a0f",
+      "digest": "sha256:0cac6b62b4b8cf39063d35227c04048752243eea7da01b1a78395cf8bae51a0f",
+      "url": "https://github.com/GQAdonis/librefang/releases/download/bossfang-sidecar-92bc005f3/bossfang-darwin-arm64"
+    },
+    {
+      "id": 629199319,
+      "name": "bossfang-darwin-arm64.json",
+      "size": 50380,
+      "sha256": "775b4cb6823e330eb777d32e0bfcddf531c82db000a83f53ab3e5f1f79a861e1",
+      "digest": "sha256:775b4cb6823e330eb777d32e0bfcddf531c82db000a83f53ab3e5f1f79a861e1",
+      "url": "https://github.com/GQAdonis/librefang/releases/download/bossfang-sidecar-92bc005f3/bossfang-darwin-arm64.json"
+    }
+  ],
+  "stagedReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-92bc005f3-native-inputs-20261010-WmTo8E/darwin-arm64/staged-inputs.json",
+  "applicationBuild": "pending-UAR-payload",
+  "applicationOperation": "pending",
+  "installedAcceptance": "pending",
+  "cadenceDeliveryCredit": false,
+  "verificationScope": "Published asset metadata/digests match exact staged bytes; application packaging will retrieve those immutable assets."
+}
