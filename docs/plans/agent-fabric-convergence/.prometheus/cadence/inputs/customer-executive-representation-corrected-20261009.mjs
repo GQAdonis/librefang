@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import readline from 'node:readline'
 import { openWork, setup } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/scenario.mjs'
 import { candidatePackage, requireCandidateConfiguration } from './corrected-candidate-contract-2.2.27-20261010.mjs'
 
@@ -85,6 +86,34 @@ export default async function run({ evaluate, signal, onObservation }, configura
     result.replayAuthorized = false
     persist()
     throw new Error('C17_NATIVE_TURN_UNCERTAIN_RECONCILIATION_REQUIRED')
+  }
+  async function captureUncertainDiagnostic() {
+    const command = state.uncertainCommand
+    if (!command) return
+    try {
+      const info = await ipc('app.get_info', undefined, true)
+      requireFact(info.isPackaged && info.version === state.sourceRefs.installedVersion &&
+        path.basename(info.appDataPath).startsWith('cadence-boss-'), 'C17_ISOLATED_LOG_SOURCE_REQUIRED')
+      const files = fs.readdirSync(info.logsPath).filter(name => /^app-error\.\d{4}-\d{2}-\d{2}\.log(?:\.\d+)?$/.test(name)).sort().slice(-2)
+      for (const file of files) {
+        const input = fs.createReadStream(path.join(info.logsPath, file), { encoding: 'utf8' })
+        const lines = readline.createInterface({ input, crlfDelay: Infinity })
+        try {
+          for await (const line of lines) {
+            if (!line.includes('UAR_INSTANCE_TURN_DIAGNOSTIC') || !line.includes(command.commandId) || !line.includes(command.attemptId)) continue
+            let entry
+            try { entry = JSON.parse(line) } catch { continue }
+            if (entry.process !== 'main' || entry.module !== 'UarSidecarService' || entry.message !== 'UAR_INSTANCE_TURN_DIAGNOSTIC' ||
+              entry.command_id !== command.commandId || entry.attempt_id !== command.attemptId ||
+              !['actor_host', 'run_kernel'].includes(entry.source_stage) || !outcomeCodes.has(entry.error_code)) continue
+            command.diagnostic = { sourceStage: entry.source_stage, errorCode: entry.error_code }
+            command.diagnosticAvailable = true
+            command.privateLogSource = { route: 'app.get_info', file }
+            return
+          }
+        } finally { lines.close(); input.destroy() }
+      }
+    } catch { command.diagnosticReadCode = 'C17_PRIVATE_DIAGNOSTIC_UNAVAILABLE' }
   }
   function recordHumanReceipt(pending) {
     const human = JSON.parse(fs.readFileSync(approvalReceiptPath, 'utf8'))
@@ -323,6 +352,7 @@ export default async function run({ evaluate, signal, onObservation }, configura
     result.complete = true; result.status = 'passed'
   } catch (cause) {
     result.failureStage = stage; result.failureCode = /^[A-Za-z0-9_.:-]{1,160}$/.test(cause.message) ? cause.message : 'C17_OPERATION_FAILED_INSPECT_LOCAL_LOG'
+    if (state.uncertainCommand) await captureUncertainDiagnostic()
   } finally {
     if (!paused) {
       if (state.instanceId) {

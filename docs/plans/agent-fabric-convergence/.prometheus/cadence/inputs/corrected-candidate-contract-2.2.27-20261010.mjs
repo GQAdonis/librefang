@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 
 export const expectedPins = {
   version: '2.2.27',
-  uar: '2bdc47847a545e74fd8475c823d0119ff19658a2',
+  uar: 'f55e6cf1dd0f2864b4426a614a2e8bc4dea42400',
   mini: '838371d3b597e785b1fe264377b3f55b9ca6333f',
   full: 'bb8950b254825079ab382119a8c425d645a081ae'
 }
