@@ -147,6 +147,39 @@ function failureFrom(reply) {
   }
 }
 
+async function restartRetainedManagedUar(context, configuration, result, save) {
+  const selected = await ipc(context.evaluate, 'prometheus.integration.snapshot', {})
+  fact(selected.config.uar.selectedInstanceId === 'managed-local' &&
+    selected.config.uar.instances.find(instance => instance.id === 'managed-local')?.ownership === 'managed',
+    'CUSTOMER_UAR_RESTART_OWNED_INSTANCE_REQUIRED')
+  const before = await ipc(context.evaluate, 'prometheus.uar.admin.snapshot', {})
+  result.restart = { instanceId: 'managed-local', beforeGeneration: before.generation,
+    startedAt: new Date().toISOString(), status: 'pending', bindingConfigurationMutated: false }
+  save()
+  const operation = await ipc(context.evaluate, 'prometheus.integration.start', { action: 'uar-restart' })
+  result.restart.operationId = operation.id; save()
+  const terminal = await wait(context.signal, async () => {
+    const page = await ipc(context.evaluate, 'prometheus.integration.operation_events', { id: operation.id, limit: 1 })
+    const current = page.operation
+    return ['succeeded', 'failed', 'cancelled', 'interrupted'].includes(current.status) && current
+  }, 'CUSTOMER_UAR_MANAGED_RESTART_NOT_TERMINAL')
+  result.restart.operationStatus = terminal.status
+  result.restart.operationErrorCode = /^[A-Za-z0-9_.:-]{1,160}$/.test(terminal.errorCode ?? '') ? terminal.errorCode : null
+  save()
+  fact(terminal.status === 'succeeded', 'CUSTOMER_UAR_MANAGED_RESTART_FAILED')
+  const after = await wait(context.signal, async () => {
+    const snapshot = await ipc(context.evaluate, 'prometheus.uar.admin.snapshot', {})
+    return snapshot.uarVersion && snapshot.generation > before.generation && snapshot
+  }, 'CUSTOMER_UAR_RESTART_NEW_GENERATION_UNAVAILABLE')
+  const retained = await ipc(context.evaluate, 'prometheus.integration.snapshot', {})
+  fact(retained.config.uar.selectedInstanceId === 'managed-local' &&
+    retained.config.services.liter.ownership === 'external' &&
+    retained.config.services.liter.endpoint === configuration.expectedGatewayEndpoint,
+    'CUSTOMER_UAR_RESTART_BINDING_CONFIGURATION_CHANGED')
+  result.restart.afterGeneration = after.generation
+  result.restart.finishedAt = new Date().toISOString(); result.restart.status = 'passed'; save()
+}
+
 export default async function scenario(context, configuration) {
   const evidence = { schemaVersion: 1, kind: 'ordinary-uar-retained-followup-cancellation',
     startedAt: new Date().toISOString(), sourceRefs: configuration.sourceRefs,
@@ -208,10 +241,14 @@ export default async function scenario(context, configuration) {
       fact(turn.persisted.model?.id === prior.expectedModel.id && turn.persisted.model?.provider === prior.expectedModel.provider,
         'CUSTOMER_UAR_LIFECYCLE_EFFECTIVE_MODEL_CHANGED')
       turn.finishedAt = new Date().toISOString(); save()
+      if (step.cancel) {
+        stage = 'managed-runtime-restart-after-cancellation'
+        await restartRetainedManagedUar(context, configuration, result, save)
+      }
     }
     result.status = 'passed'; evidence.complete = true; evidence.passed = true
-    evidence.checks.push('ordinary-uar-retained-history-semantic-stream-cancel-and-followup')
-    evidence.observedBehavior = 'The retained ordinary UAR Work session completed follow-up, streamed semantic text before explicit cancellation, persisted paused state, and accepted a later turn with the same configured gateway model.'
+    evidence.checks.push('ordinary-uar-retained-history-semantic-stream-cancel-restart-and-followup')
+    evidence.observedBehavior = 'The retained ordinary UAR Work session completed follow-up, streamed semantic text before explicit cancellation, persisted paused state, restarted its owned managed UAR into a new generation, and accepted a later turn with the same configured gateway model.'
   } catch (error) {
     evidence.failureStage = stage; evidence.failureCode = safe(error)
     if (result) {
