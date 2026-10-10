@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T22:13:52.622Z",
+  "kind": "uar-selected-native-release-preparation",
+  "status": "existing-exact-tag-builds-queued",
+  "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+  "version": "1.0.0",
+  "customerVersion": "2.2.31",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "linux": "excluded",
+  "inspectedSources": [
+    {
+      "path": ".github/workflows/deploy.yml",
+      "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+      "sha256": "d62a3699d78d2a057fda09bd0cccbd4e624e5b3000c17c1e7cc542f36b32e251"
+    },
+    {
+      "path": "scripts/package-boss-sidecar.mjs",
+      "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+      "sha256": "9b6800d0cb47147b3ce63cf0c7fba46f8de8f03112f1b61ba1375d83dfc0b135"
+    },
+    {
+      "path": "Cargo.toml",
+      "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+      "sha256": "092c71d9b07c7198607ee810d35f9be2c4ec3e2fc9df90e6ead650a6e21b0d20"
+    }
+  ],
+  "dispatchPerformedByThisAgent": false,
+  "platforms": [
+    {
+      "platform": "darwin-arm64",
+      "runner": "macos-15",
+      "target": "aarch64-apple-darwin",
+      "run": 38090581696,
+      "tag": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623",
+      "workflow": ".github/workflows/deploy.yml",
+      "event": "push",
+      "observedStatus": "queued",
+      "runUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38090581696",
+      "buildJobName": "The Boss sidecar (darwin-arm64)",
+      "publishJobName": "Publish immutable The Boss sidecar payload",
+      "artifactName": "uar-sidecar-darwin-arm64",
+      "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623/uar-sidecar-darwin-arm64.json",
+      "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623/uar-sidecar-darwin-arm64.tar.gz",
+      "cacheSharedKey": "boss-sidecar-darwin-arm64-aarch64-apple-darwin-server-full",
+      "jobLookupArgs": [
+        "api",
+        "repos/Prometheus-AGS/universal-agent-runtime/actions/runs/38090581696/jobs?per_page=100"
+      ],
+      "releaseLookupArgs": [
+        "api",
+        "repos/Prometheus-AGS/universal-agent-runtime/releases/tags/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623"
+      ]
+    },
+    {
+      "platform": "win32-x64",
+      "runner": "windows-2025",
+      "target": "x86_64-pc-windows-msvc",
+      "run": 38090581678,
+      "tag": "boss-sidecar-win32-x64-v1.0.0-2.2.31-74194623",
+      "workflow": ".github/workflows/deploy.yml",
+      "event": "push",
+      "observedStatus": "queued",
+      "runUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38090581678",
+      "buildJobName": "The Boss sidecar (win32-x64)",
+      "publishJobName": "Publish immutable The Boss sidecar payload",
+      "artifactName": "uar-sidecar-win32-x64",
+      "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-74194623/uar-sidecar-win32-x64.json",
+      "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-74194623/uar-sidecar-win32-x64.tar.gz",
+      "cacheSharedKey": "boss-sidecar-win32-x64-x86_64-pc-windows-msvc-server-full",
+      "jobLookupArgs": [
+        "api",
+        "repos/Prometheus-AGS/universal-agent-runtime/actions/runs/38090581678/jobs?per_page=100"
+      ],
+      "releaseLookupArgs": [
+        "api",
+        "repos/Prometheus-AGS/universal-agent-runtime/releases/tags/boss-sidecar-win32-x64-v1.0.0-2.2.31-74194623"
+      ]
+    }
+  ],
+  "nativeBuild": {
+    "command": "cargo build --release --locked --no-default-features --features server-full --bin uar-sidecar --target <matching native target>",
+    "jobs": 2,
+    "incremental": false,
+    "cache": "Swatinem/rust-cache v2.9.2, shared-key per native target/server-full, cache-targets true",
+    "timeoutMinutes": 120,
+    "features": [
+      "server-full"
+    ],
+    "adminUi": "server-full includes admin-ui; no independent BossFang dashboard is copied into UAR payload",
+    "submodules": [
+      "crates/prometheus-skill-system",
+      "vendor/git/liter-llm",
+      "vendor/git/rust-mcp-filesystem"
+    ]
+  },
+  "package": {
+    "script": "scripts/package-boss-sidecar.mjs",
+    "features": [
+      "server-full"
+    ],
+    "requiredClosure": [
+      "uar-sidecar[.exe]",
+      "uar-models/config.json",
+      "policies/default.cedar",
+      "policies/skill-mutation.cedar",
+      "policies/tool-approval.cedar",
+      "LICENSE",
+      "payload-manifest.json"
+    ],
+    "runtimeLibraries": "Copies discovered .dll/.dylib/.so files from release output up to depth3; records size/hash and rejects conflicting same-name libraries",
+    "recordFields": [
+      "name",
+      "version",
+      "platform",
+      "source",
+      "releaseTag",
+      "features",
+      "asset",
+      "sha256",
+      "archive",
+      "binaries"
+    ],
+    "payloadFields": [
+      "schema",
+      "name",
+      "version",
+      "platform",
+      "source",
+      "features",
+      "files"
+    ],
+    "assetFormat": "tar.gz with platform-specific root; JSON record alongside archive",
+    "archiveSha256": null,
+    "installedAcceptance": "not-exercised"
+  },
+  "previous25cEvidence": {
+    "mac": {
+      "run": 38061063459,
+      "successfulNativeJob": 114239254289,
+      "publication": "manual release after cancelling queued publisher; do not reinterpret aggregate cancelled run as failed native job"
+    },
+    "windows": {
+      "run": 38061068831,
+      "successfulNativeJob": 114239270117,
+      "successfulPublishJob": 114252564277
+    }
+  },
+  "nextSteps": [
+    "Do not recreate tags or redispatch these existing runs. Follow their actual selected build and publisher jobs; a queued run is not publication success.",
+    "After actual assets exist, verify record source/version/platform/server-full/archive digest and required embedded closure. Preserve old25c assets.",
+    "Update selected Boss UAR source pin and any selected platformRevisions to exact741 before importing these two new records; retain unrelated tool/image/skill URLs.",
+    "Import only darwin-arm64 and win32-x64 through existing source-bound importer. Freeze actual resulting Boss source before rebuilding the new packaged application."
+  ],
+  "rootImportCommand": "RELEASE_PLATFORMS=darwin-arm64,win32-x64 node scripts/import-uar-sidecar-payloads.cjs https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623/uar-sidecar-darwin-arm64.json https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-74194623/uar-sidecar-win32-x64.json",
+  "observedAlternateRouteConflict": "Boss integration-payload native cache currently uses native-<platform>-<pins hash>, whereas package-uar-existing-native requires native-<platform>-uar-sidecar-<pins hash>. Do not assume those workflows share an exact cache; selected UAR deploy tag route is the existing25c producer.",
+  "limitations": [
+    "No workflow/build/package/publication operated by this agent.",
+    "Actual new artifact checksums, sizes, native job IDs and runtime function remain pending.",
+    "BossFang retains its separately published95719eae embedded dashboard payload; no BossFang rebuild is implied."
+  ]
+}

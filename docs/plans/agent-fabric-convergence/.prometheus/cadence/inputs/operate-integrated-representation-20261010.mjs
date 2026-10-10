@@ -70,7 +70,7 @@ export async function operate(args = process.argv.slice(2)) {
   const wrapper = path.join(directory, 'scenario.mjs')
   fs.writeFileSync(wrapper, `import fs from 'node:fs'\nimport run from ${JSON.stringify(pathToFileURL(scenarioPath).href)}\n` +
     `export default context=>run({...context,onObservation:async observation=>{\n` +
-    `const info=await context.evaluate("window.api.ipcApi.request('app.get_info',{})");\n` +
+    `const info=await context.evaluate("window.api.ipcApi.request('app.get_info')");\n` +
     `fs.writeFileSync(${JSON.stringify(observationPath)},JSON.stringify({...observation,owningProfilePath:info.data?.appDataPath},null,2)+'\\n',{mode:0o600});\n` +
     `process.stdout.write(JSON.stringify({status:'pending-human-approval',observationPath:${JSON.stringify(observationPath)}})+'\\n');\n` +
     `}},${JSON.stringify(configuration)})\n`, { flag: 'wx', mode: 0o600 })

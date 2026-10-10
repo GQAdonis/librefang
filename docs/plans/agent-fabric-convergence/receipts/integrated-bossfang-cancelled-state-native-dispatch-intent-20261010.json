@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T22:24:10.608Z",
+  "kind": "native-payload-dispatch-intent",
+  "producer": "c0a95c3d3b2cc00d8f847882032ede89666cf143",
+  "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "tag": "boss-tools-cancelled-state-20261010-92bc005f3",
+  "program": "gh",
+  "args": [
+    "workflow",
+    "run",
+    "integration-payload.yml",
+    "--repo",
+    "Prometheus-AGS/the-boss",
+    "--ref",
+    "codex/integrated-runtime-release-reconciliation",
+    "-f",
+    "payload_tag=boss-tools-cancelled-state-20261010-92bc005f3",
+    "-f",
+    "native_tools=bossfang",
+    "-f",
+    "native_platforms=darwin-arm64,win32-x64",
+    "-f",
+    "native_artifacts_only=true"
+  ],
+  "approval": "Operator-approved actual observed customer persistence repair and necessary native packaging",
+  "publicationPerformed": false
+}

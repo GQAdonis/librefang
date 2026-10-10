@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "bossfang-cancelled-state-native-preparation",
+  "createdAt": "2026-10-10T22:21:16.625Z",
+  "executed": false,
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "linux": "excluded",
+  "repairSource": "pending native worker commit",
+  "previousProducer": {
+    "run": "38084557578",
+    "head": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+    "workflow": ".github/workflows/integration-payload.yml",
+    "conclusion": "success",
+    "jobs": {
+      "darwin-arm64": "114308270763",
+      "win32-x64": "114308270695"
+    },
+    "bossfang": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b"
+  },
+  "prerequisites": [
+    "Root receives pushed exact BossFang migration commit and explicit dispatch authorization.",
+    "Root commits/pushes The Boss build/integration-sources.json with sources.bossfang.revision exact migration SHA and tools.bossfang.version matching its Cargo package.",
+    "Root reads the remote ref build/integration-sources.json and confirms the source pin before dispatch; head acknowledgement records the actual producer Boss commit.",
+    "Record dispatch intent before external effect. Recover matching observed run if acknowledgement is lost; never blindly redispatch."
+  ],
+  "command": {
+    "program": "gh",
+    "args": [
+      "workflow",
+      "run",
+      "integration-payload.yml",
+      "--repo",
+      "Prometheus-AGS/the-boss",
+      "--ref",
+      "codex/integrated-runtime-release-reconciliation",
+      "-f",
+      "payload_tag=<NEW-IMMUTABLE-boss-tools-cancelled-state-20261010-REPAIRSHORT>",
+      "-f",
+      "native_tools=bossfang",
+      "-f",
+      "native_platforms=darwin-arm64,win32-x64",
+      "-f",
+      "native_artifacts_only=true"
+    ],
+    "performedBy": "root only"
+  },
+  "contract": {
+    "nativeSource": "scripts/integration-source.cjs consumes INTEGRATION_TOOLS=bossfang and exact committed source pins.",
+    "nativeBuild": "scripts/build-integration-tools.cjs receives native target and INTEGRATION_TOOLS=bossfang; produces only selected BossFang binaries/dashboard closure.",
+    "otherTools": "No unrelated native tools rebuilt. Existing package records retain their actual sources.",
+    "imagesAndPublication": "native_artifacts_only=true skips service images and publish; root later reuses the successful artifacts for a small new immutable payload tag.",
+    "cache": "native-<platform>-<hash(build/integration-sources.json)> with native-<platform>- restore prefix; earlier two-platform producer supplies warm cache.",
+    "handles": "gh workflow run returns run URL. Record actual run ID, head_sha and Native tools (<platform>) job IDs, then artifacts native-tools-<platform>. Do not infer build or release success from dispatch."
+  },
+  "limitations": [
+    "No dispatch, builds, native binary operation, publication, code edits or ledger mutation performed.",
+    "Repair commit and new producer head remain pending."
+  ]
+}

@@ -64,11 +64,12 @@ export async function operate(args = process.argv.slice(2)) {
   const options = {}
   for (let index = 0; index < args.length; index++) {
     const name = args[index]
+    if (name === '--startup-only') { fact(!options.startupOnly, 'OWNED_V1_ARGUMENTS'); options.startupOnly = true; continue }
     fact(['--config', '--output', '--launcher'].includes(name) && args[index + 1] &&
       !args[index + 1].startsWith('--') && options[name.slice(2)] === undefined, 'OWNED_V1_ARGUMENTS')
     options[name.slice(2)] = path.resolve(args[++index])
   }
-  fact(Object.keys(options).length === 3, 'OWNED_V1_EXPLICIT_CANDIDATE_AND_LAUNCHER_REQUIRED')
+  fact(['config', 'output', 'launcher'].every(name => options[name]), 'OWNED_V1_EXPLICIT_CANDIDATE_AND_LAUNCHER_REQUIRED')
   fact(process.platform === 'darwin' && process.arch === 'arm64', 'OWNED_V1_MAC_ARM64_REQUIRED')
   fact(fs.existsSync(sandboxExec), 'OWNED_V1_OS_SANDBOX_UNAVAILABLE')
   const preparationPath = path.join(initiative, 'receipts/native-release-inputs-20261010.json')
@@ -118,6 +119,10 @@ export async function operate(args = process.argv.slice(2)) {
     const manifestPath = path.join(payload, 'payload-manifest.json'), manifest = read(manifestPath)
     fact(manifest.source === source && digest(binary) === preparation.binarySha256Actual &&
       digest(binary) === preparation.binarySha256FromPayloadManifest, 'OWNED_V1_EXTRACTED_SOURCE_IDENTITY_MISMATCH')
+    // The retained source loads Cedar policies relative to its working directory.
+    const policyDirectory = path.join(root, 'state', 'policies')
+    fs.cpSync(path.join(payload, 'policies'), policyDirectory, { recursive: true, force: false, errorOnExist: true })
+    receipt.packagedPolicyDirectory = policyDirectory
     const isolated = value => typeof value === 'string' ? value.replaceAll('<disposableRoot>', root)
       : Array.isArray(value) ? value.map(isolated) : value && typeof value === 'object'
         ? Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, isolated(nested)])) : value
@@ -135,6 +140,21 @@ export async function operate(args = process.argv.slice(2)) {
       fileWritesAllowedOnlyUnder: root, sharedIngestReadWriteDenied: [...deniedPaths], outboundNetworkingDenied: true,
       inheritedWritableFileDescriptors: false, actualStartupConfirmed: false }
     const launchToken = randomBytes(32).toString('hex'), adminKey = randomBytes(32).toString('hex')
+    const diagnostics = { stdoutBytes: 0, stderrBytes: 0, errors: [], truncated: false }
+    receipt.startupDiagnostics = diagnostics
+    const captureStartupError = line => {
+      let message = line
+      try {
+        const event = JSON.parse(line)
+        if (event.level !== 'ERROR') return
+        message = [event.fields?.message, event.fields?.error].filter(value => typeof value === 'string').join(': ')
+      } catch { if (!/error|failed|denied|refused/i.test(line)) return }
+      message = message.replaceAll(launchToken, '[redacted]').replaceAll(adminKey, '[redacted]')
+        .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+        .replace(/((?:token|secret|api[_-]?key|password|authorization)\s*[=:]\s*)\S+/gi, '$1[redacted]')
+      if (diagnostics.errors.length >= 8) { diagnostics.truncated = true; return }
+      diagnostics.errors.push(message.slice(0, 2048))
+    }
     const environment = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: path.join(root, 'home'), TMPDIR: path.join(root, 'tmp'),
       DYLD_LIBRARY_PATH: payload, UAR_SERVICE_INSTANCE__OWNERSHIP: 'external', UAR_SECURITY__JWT_REQUIRED: 'false',
       UAR_SECURITY__SETTINGS_ADMIN_KEY: adminKey, UAR_MODELS_DIR: path.join(payload, 'uar-models'),
@@ -156,14 +176,25 @@ export async function operate(args = process.argv.slice(2)) {
       let boundary
       while ((boundary = pending.indexOf('\n')) >= 0) {
         const line = pending.slice(0, boundary).trim(); pending = pending.slice(boundary + 1)
+        captureStartupError(line)
         const ready = /^READY:(\d{1,5})$/.exec(line)
         if (ready) port = Number(ready[1])
       }
     })
     child.stderr.setEncoding('utf8')
+    let stderrPending = ''
     child.stderr.on('data', chunk => {
       stderrBytes += Buffer.byteLength(chunk)
       if (/sandbox.*(?:failed|denied|error)|sandbox_init/i.test(chunk)) sandboxFailureSeen = true
+      stderrPending = (stderrPending + chunk).slice(-65536)
+      let boundary
+      while ((boundary = stderrPending.indexOf('\n')) >= 0) {
+        captureStartupError(stderrPending.slice(0, boundary).trim()); stderrPending = stderrPending.slice(boundary + 1)
+      }
+    })
+    child.on('close', () => {
+      if (stderrPending) captureStartupError(stderrPending)
+      diagnostics.stdoutBytes = stdoutBytes; diagnostics.stderrBytes = stderrBytes
     })
     await new Promise((resolve, reject) => {
       child.once('spawn', resolve)
@@ -206,6 +237,12 @@ export async function operate(args = process.argv.slice(2)) {
       version: capabilities.uar_version, instanceId, ownership: capabilities.ownership, capabilities: capabilities.capabilities,
       endpoints: capabilities.endpoints }
     save(receiptFile, receipt)
+    if (options.startupOnly) {
+      receipt.status = 'startup-confirmed'
+      receipt.complete = false
+      receipt.packagedRefusalPerformed = false
+      return { status: receipt.status, complete: false, receiptFile, startupConfirmed: true }
+    }
     const finalConfigPath = path.join(root, 'older-instance-candidate.json')
     save(finalConfigPath, { ...candidate, oldInstance: { source, binaryPath: binary,
       binarySha256: receipt.launch.binarySha256, payloadManifestPath: manifestPath,
@@ -246,7 +283,7 @@ if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === imp
   try {
     const result = await operate()
     process.stdout.write(JSON.stringify(result) + '\n')
-    process.exitCode = result.complete ? 0 : 1
+    process.exitCode = result.complete || result.startupConfirmed ? 0 : 1
   } catch (error) {
     process.stderr.write(JSON.stringify({ status: 'blocked', failureCode: safeCode(error) }) + '\n')
     process.exitCode = 1
