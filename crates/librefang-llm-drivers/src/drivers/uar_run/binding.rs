@@ -6,6 +6,22 @@ use serde_json::Value;
 
 use super::UarRunClientError;
 
+pub(super) fn require_tool_admission_v2(
+    binding: &UarEffectiveBinding,
+) -> Result<(), UarRunClientError> {
+    if binding
+        .capabilities
+        .iter()
+        .any(|item| item == "tool_admission_v2")
+    {
+        Ok(())
+    } else {
+        Err(UarRunClientError::Binding(
+            "original UAR binding does not advertise tool_admission_v2; update the runtime and reconcile the original run before issuing controls".to_string(),
+        ))
+    }
+}
+
 pub(super) fn require_task_id(
     projection: &UarDelegatedRunProjection,
 ) -> Result<&str, UarRunClientError> {
