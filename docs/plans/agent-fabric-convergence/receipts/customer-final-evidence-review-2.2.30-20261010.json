@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "kind": "bounded-customer-release-evidence-review",
+  "version": "2.2.30",
+  "recordedAt": "2026-10-10T05:55:07.476Z",
+  "findings": {
+    "mode": "artifact",
+    "verdict": "PASS",
+    "judge_model": "Codex:GPT-6 (exact deployment identity not exposed)",
+    "producer_model": "Codex:GPT-6 (exact deployment identity not exposed)",
+    "isolation_mode": "harness-native",
+    "cross_model_check": "unverified-producer-unknown",
+    "findings": [],
+    "checked_classes": [
+      "Unsupported qualification or completion claims — coverage distinguishes historical implementation 61/61 and 20/20 from portfolio 43/61 (42 qualified and one skipped), states passed-core is not coverageComplete, retains historical failures, and leaves represented read and final candidate acceptance pending. Referenced evidence omitted from this packet remains unexamined rather than automatically false.",
+      "Immutable installer/source/version mismatch — final metadata and live-site receipts consistently identify all four installers as 2.2.30 from Boss aef2ec2cda68605efab9dddf33b46e726e752c2d, with matching names, URLs, sizes and checksums; the included Intel complete-byte receipt agrees with its final metadata/site entries and names native source 308aea46ff26e7f61340281bb51f67ebe5351569. Metadata commit 38d9be7524a2719a0aa060943aaf4ce61af3282a and landing commit 326e1f19da9af19d484f5a419fe1ca1f0c4bb1d8 are separately identified rather than substituted for installer source.",
+      "Signing or architecture overstatement — Windows metadata remains unsigned and explicitly says the NSIS bootstrap does not identify application payload architecture. Intel Developer ID/notarized metadata is attributed to the immutable manifest and successful packaging workflow, with no direct local signature examination, mounted-image inspection or native Intel launch claimed. Mac ARM64 cites its retained signature/Gatekeeper/stapler receipt. Absent underlying receipts are unexamined within this review.",
+      "Duplicate external-effect claims — feedback coverage preserves issue #63 and the same effect/dispatch/receipt, states zero new effect intent and no new issue creation or POST is needed. Final site receipt attributes publication to a separate prior root action and says this driver does not publish; metadata reconciliation similarly states downloads and deployment were not repeated.",
+      "False task, qualification or delivery counts — customer coverage is explicitly a requirement view rather than a new denominator. Cadence reconciliation retains 15 deliveries and two candidate-specific publication obligations, rejects multiple repair-build attempts as multiple deliveries, and makes corrective credit conditional on complete operation and supported registration. Final metadata/site and representation receipts set newCadenceDelivery and qualificationLedgerMutated to false; no claim changes the separate KBD 26/26 constraint.",
+      "Ignored pending human approvals — representation receipt records actualAttemptStatus failed, actualEvidenceStatus approval-outcome-unresolved, complete false, operatorDecisionSubmitted false and replaySubmitted false. Its deadline is 2026-10-10T04:23:28.875Z and the documented attempt finished afterward; it explicitly denies represented-read success, demonstrated expiry/refusal behavior and late authorization. Final Mac ARM64/Windows x64 installed acceptance remains pending throughout coverage and final receipts.",
+      "Unjustified older evidence applicability — native-provider applicability compares exact 2.2.25 and 2.2.30 Git objects, enumerates equal driver/session/stream/persistence/authentication/lifecycle objects and lockfile, records original receipt hashes, and excludes changed UAR/skills/team-member paths, Windows execution and final installed acceptance. Older operations keep their original source/version identities; other referenced applicability material is unexamined where omitted from the packet.",
+      "Stale publication coverage promoted into current state — the pre-update coverage says Intel build 38026156993 is active and all-four publication pending, but the packet explicitly directs final receipts to supersede that wording. The included Intel receipt records successful packaging/publication and complete-byte verification, and later final metadata/site receipts identify all four 2.2.30 assets. This is superseded documentation wording, not a current publication failure or whole-customer completion claim.",
+      "Evidence scope expanded into runtime or UI certification — final live-site receipt limits its pass to static deployed release data and download availability, explicitly excluding visual browser interaction, native execution and installed acceptance. Source applicability distinguishes typed IPC from renderer Stop clicks; Quit evidence distinguishes owned main debugger invocation from a visual menu click and active native-provider child shutdown. No packet claim treats these narrower checks as the pending runtime/customer acceptance gates."
+    ],
+    "context_transport": "Fresh agent with no inherited turns; mandate and disk packet only",
+    "gatewayAttempt": {
+      "model": "MiniMax-M3",
+      "attempts": 1,
+      "timeoutMs": 90000,
+      "outcome": "timed-out-no-findings"
+    },
+    "packet": {
+      "path": ".prometheus/cadence/artifacts/customer-final-evidence-review-2.2.30-20261010/packet.json",
+      "sha256": "bdbd088edf792b18eb7e46613ac1696881e029bc2ad7213ac0b426fd3bbf9f2f",
+      "documents": [
+        {
+          "path": "receipts/customer-closeout-coverage-20261010.md",
+          "sha256": "a2aa1390cc500fa6d2d66b133c8547e48bcb282460ee0e1d5c5c26802d881e85"
+        },
+        {
+          "path": "receipts/customer-native-provider-applicability-2.2.30-20261010.md",
+          "sha256": "3505347480d81409d16f91266d00bdfd53f916e8efcdf46c9004e7541afb98cf"
+        },
+        {
+          "path": "receipts/customer-cadence-reconciliation-options-20261010.md",
+          "sha256": "6a5959e96bfd19d765a9424816279f7a582204d71eea8854e61e29c9a720ab6f"
+        },
+        {
+          "path": "receipts/customer-release-metadata-2.2.30-2026-10-10T05-49-33-187Z-05573d3f.json",
+          "sha256": "14635d8f6c390c25172dfdd07f14907867c3d6acbc66e91a862d74e0ce45dcc2"
+        },
+        {
+          "path": "receipts/customer-release-all-four-2.2.30-live-website-2026-10-10T05-49-25-359Z-d8459430.json",
+          "sha256": "26c5136429132f82fc6d89fca30a8bfd0a72401f2ccad4d85fbbdd981e11ceef"
+        },
+        {
+          "path": "receipts/customer-public-darwin-x64-2.2.30-20261010.json",
+          "sha256": "19233394b29e39b0323b292aaa664031d2b4ca52f5ac7b09fd9cc50b21d519a2"
+        },
+        {
+          "path": "receipts/customer-public-representation-pending-2.2.30-20261010.json",
+          "sha256": "9d0509e0cbf10cac8eb6a628eabad4f8d53cafd04af0e7f8e433a7795fb5e269"
+        }
+      ],
+      "truncation": {
+        "capBytes": null,
+        "fields": [
+          {
+            "path": "receipts/customer-closeout-coverage-20261010.md",
+            "bytes": 15472,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-native-provider-applicability-2.2.30-20261010.md",
+            "bytes": 7357,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-cadence-reconciliation-options-20261010.md",
+            "bytes": 6228,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-release-metadata-2.2.30-2026-10-10T05-49-33-187Z-05573d3f.json",
+            "bytes": 7082,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-release-all-four-2.2.30-live-website-2026-10-10T05-49-25-359Z-d8459430.json",
+            "bytes": 7447,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-public-darwin-x64-2.2.30-20261010.json",
+            "bytes": 4832,
+            "truncated": false
+          },
+          {
+            "path": "receipts/customer-public-representation-pending-2.2.30-20261010.json",
+            "bytes": 3313,
+            "truncated": false
+          }
+        ]
+      }
+    },
+    "scope": "Single completed publication/evidence packet review, no native qualification or goal-completion credit",
+    "reviewedAt": "2026-10-10T05:54:27.409Z",
+    "sycophancy_screen": {
+      "reject_cap": 2,
+      "cap_overridden": false,
+      "cap_default": 2
+    }
+  },
+  "sycophancyObservation": {
+    "script": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/scripts/adversarial-review/check-findings-sycophancy.mjs",
+    "exitCode": 0,
+    "reportedScore": 0,
+    "strictness": "strict",
+    "outcome": "PASS"
+  },
+  "limits": "Evidence-claim review only; underlying omitted operations unexamined. Native fallback has no proven exact cross-model independence. Does not satisfy pending C17, installed acceptance, original portfolio criteria or Cadence publication lineage.",
+  "ledgerCountersMutated": false
+}
