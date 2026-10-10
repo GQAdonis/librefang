@@ -26,7 +26,7 @@ The first public team attempt failed during gateway model discovery, before auth
 
 The native subscription lifecycle operation ran from `2026-10-09T23:36:00.136Z` to `23:37:24.167Z` against the exact public 2.2.25 installation, retaining the previously passing Codex and Claude sessions. Both routes passed three additional operations; no initial inference, UAR turn, credential staging, build or Cadence delivery was repeated. These receipts are not claimed applicable to corrective 2.2.26 until its relevant source and operation contracts are reconciled.
 
-The active native qualification goal preserves the existing 120-minute policy and fifteen historical successful deliveries. Two earlier source-bound publication obligations remain unreconciled; current public 2.2.25 artifacts must not be assigned to those older frozen candidates. Mandatory installed acceptance and broader deferred portfolio criteria stay separate.
+The approved qualification work preserves the existing 120-minute policy and fifteen historical successful deliveries. The native goal tool reports paused; the operator's Continue authorizes this session's work but does not change that tool state. Two earlier source-bound publication obligations remain unreconciled; current public 2.2.25 artifacts must not be assigned to those older frozen candidates. Mandatory installed acceptance and broader deferred portfolio criteria stay separate.
 
 ## Corrective candidate — 2.2.26
 
@@ -57,3 +57,19 @@ The Mac ARM64 native payload from UAR `1522f179...` is now published and its ent
 ## BossFang retained settings — passed 2026-10-10
 
 The actual isolated installed 2.2.26 application completed explicit listener changes, requested/effective pending state, actual owned process replacement, stop/restart without changing its borrowed UAR, renderer reopen, and a new-PID whole-application reopen of the retained disposable profile. [Safe operation and immutable source evidence](customer-bossfang-settings-persistence-2.2.26-20261010.json). This uses the original e27 package; the later 5b317 allowlist repair changes no BossFang control. Actual process termination remains distinct from graceful UI quit. Authenticated alternate-instance delegation and final Windows/customer-candidate acceptance remain pending. This advances customer requirement evidence, not a whole portfolio task or delivery count.
+
+## Current completed-boundary operations — 2026-10-10
+
+The replacement local Mac ARM64 build from Boss `5b317b64c65928492f913fc41946d55ee099b472` completed in 479,888 ms. Its new DMG SHA-256 is `ea6930469906890e9396c30ebf81c93fcc57e87b333d02739549a0355f07481f`; the old e27 installer bytes are preserved separately. Image, deep signature and isolated installation checks passed. Local notarization was skipped, explicitly; the public installer workflow retains its signing/notarization requirements. [Actual build](customer-durable-turn-local-mac-2.2.26-build-20261010.json).
+
+The proxy's final-only tool-argument repair built and actually streamed complete read/list arguments, with one final completion. The native full-pack installer now pins that operated source. Both source PRs and Boss PR65 are merged, with exact commits recorded in [merge provenance](customer-corrective-merges-20261010.json). The proxy remains an explicitly configured external native inference dependency; it is not bundled in The Boss.
+
+| Missing customer operation | New observed result | Remaining limitation |
+| --- | --- | --- |
+| Coding worker/reviewer handoff | Passed real selected-model execution, exact bounded README edit, worker artifact handoff, reviewer completion and visible member/attempt/artifact state | Cancellation and two-workspace exclusion remain pending. [Core receipt](customer-coding-core-proxy-repaired-2.2.26-20261010.json). |
+| Coding durable reopening | Passed whole-process reopening of the same isolated profile, exact immutable team/binding/package, all attempt IDs, artifact digests and unchanged README; no original inference replay | The subsequent cancellation operation could not find an eligible enabled UI control. Its failure is preserved separately; reopening remains passed. [Recovery receipt](customer-coding-retained-reopen-2.2.26-20261010.json). |
+| Reviewed required skills | Exact reviewed mini/full closure deployment and tamper/scope refusals remain passed | Real model proposed an existing task ID for a new delegation. The driver correctly refused it. Generated coordinator instructions contradict the native new-task contract; that production instruction repair is now explicitly assigned. No authority check is being relaxed. |
+| Synthetic representation | Exact role/grant installation and owner-scoped durable command submission now pass | The native command settled `uncertain` roughly 130 ms after starting, before the driver’s 90-second observation ended. No read/disclosure pass or no-effect claim is made. Early host failure diagnosis remains necessary. |
+| Public Mac ARM64 installer | Exact-source workflow dispatched; selection and immutable native import passed | Installer, public notarization, website and installed acceptance are still pending. [Dispatch only](customer-mac-installer-dispatch-2.2.26-20261010.json). |
+
+No unit suites, partial verification builds, original successful inference repetitions, new Cadence delivery credit or portfolio qualification advancement were used for these operations. The historical 61/61 and 20/20 implementation records are preserved alongside named corrective defects; original qualification remains 43/61 terminal entries. The newer required-skill instruction repair changes release inputs and will require a new version rather than replacing immutable public 2.2.26 artifacts.
