@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-proxy-runtime-install",
+  "source": "d269910e45811c8450c7d80004405b6ea3cd9665",
+  "installedAt": "2026-10-10T00:37:26.993Z",
+  "originalBinarySha256": "d2c7a2a209a44cfeb3c3b91823c091e91bfc6dbbf4c633aa907eccc7581afe60",
+  "installedBinarySha256": "1a7a708312048d4c84166cf257795647d666c613e8d2d9075567f7faa01238f6",
+  "builtBytes": 6121008,
+  "backupDirectory": "/Users/gqadonis/.prometheus/recovery/customer-proxy-final-tool-arguments-20261010-1791592646959",
+  "originalPlistSha256": "ce9ebdc27e33b6c6696828779fef1de7d8583cad01c1b868cc60a086087b34b2",
+  "currentPlistSha256": "ce9ebdc27e33b6c6696828779fef1de7d8583cad01c1b868cc60a086087b34b2",
+  "launchagent": "dev.prometheusags.openai-proxy",
+  "restart": "requested",
+  "before": {
+    "state": "running",
+    "pid": 97784,
+    "lastExitCode": null
+  },
+  "immediateAfter": {
+    "state": "xpcproxy",
+    "pid": 1171,
+    "lastExitCode": null
+  },
+  "noSharedGatewayRestart": true,
+  "noAppOperation": true
+}
