@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "pending-authentic-positive-frozen-source-cli-invocation",
+  "recordedAt": "2026-10-10T20:55:42.685Z",
+  "readyToInvoke": false,
+  "cli": {
+    "command": "/Users/gqadonis/.nvm/versions/node/v24.21.0/bin/node",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+      "candidate",
+      "reconcile-frozen",
+      "--root",
+      "<disposable copy of the authentic pre-reconciliation state>",
+      "--input",
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/frozen-source-cli-operation-20261010/positive-reconciliation-input.json",
+      "--command-id",
+      "frozen-source-final-actual-reconciliation-20261010-v1"
+    ]
+  },
+  "inputContract": {
+    "candidateId": "<actual repaired application frozen candidate ID>",
+    "applicationRepository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+    "authorityRef": "operator-authorized-completed-boundary-frozen-source-cli-operation-20261010",
+    "reason": "Bind the actual completed feature operation and exact separately corrected, packaging-excluded driver evidence to its frozen application without rewriting history or delivery credit.",
+    "operationEvidencePath": "<actual completed proof JSON, unchanged>",
+    "provenancePath": "<new checksummed producer-bound frozen build provenance JSON>",
+    "operationDriverCommit": "<actual proof commit descending from frozen application revision>",
+    "driverPaths": [
+      "<exact actually changed scripts/ paths; no synthetic driver changes>"
+    ],
+    "buildCheckpointId": "mac-arm64-build",
+    "launchCheckpointId": "mac-functional-launch",
+    "artifacts": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.31-mac-arm64.dmg",
+      "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar"
+    ]
+  },
+  "dependencies": [
+    "The actual frozen candidate is unfinished and active in an authentic copied historical state.",
+    "Build and launch are successful, source-bound, and precede the completed real feature operation.",
+    "Operation complete=true is authentic, with all original sourceRefs retained and exact app.asar hash.",
+    "At least one legitimate post-freeze scripts-only correction is proven by an actual later commit, operationDriverSources and operationDriverDiffSha256. If repaired drivers were already frozen, use normal feature adoption instead; do not invent a change to force reconciliation.",
+    "Exact DMG, ASAR, packaged-mini manifest and declared generated files still exist and retain recorded bytes.",
+    "Original source snapshots remain present and unmodified recursively.",
+    "Any declared generated skill outputs reproduce from frozen mini and actual frozen producer blobs; original adopted provenance is not edited."
+  ],
+  "generatedOutputContract": {
+    "source": {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini",
+      "revision": "<actual frozen nested mini revision>"
+    },
+    "transform": "mini-pack-skill-text-v1",
+    "producerSources": [
+      {
+        "path": "scripts/before-pack.js",
+        "sha256": "<SHA256 frozen application Git blob>"
+      },
+      {
+        "path": "scripts/package-prometheus.js",
+        "sha256": "<SHA256 frozen application Git blob>"
+      }
+    ],
+    "paths": "<exact observed generated paths, SHA256 and sizes; no directory exemption>"
+  },
+  "scope": "Portable publication-policy operation is genuine skill evidence but does not supply Boss artifact/build/launch/driver evidence. Original failed d9bb app operations remain failed.",
+  "completedOperationResult": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/frozen-source-cli-operation-20261010/operation-result.json",
+  "completedOperationResultSha256": "d947d0455ae7b35f6c5beecd12580d6418ff85c3e570eeebabd312d57e204624"
+}

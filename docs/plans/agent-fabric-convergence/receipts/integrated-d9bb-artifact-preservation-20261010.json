@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "prior-actual-build-preservation",
+  "recordedAt": "2026-10-10T20:55:57.144Z",
+  "source": "d9bbf5a044b3c39800a212959836677ca3173eea",
+  "records": [
+    {
+      "originalPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.31-mac-arm64.dmg",
+      "preservedPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-d9bb-2.2.31-preserved-20261010/d9bb-The-Boss-2.2.31-mac-arm64.dmg",
+      "sha256": "f169f8f165a63b87852a3c429c85abf459567338cb3e62847ae69755a8767612",
+      "size": 708596993
+    },
+    {
+      "originalPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "preservedPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-d9bb-2.2.31-preserved-20261010/d9bb-app.asar",
+      "sha256": "5177ed32895ea2cd9342e387b918f9df28cb0219c6e0b98389020ca1b2cda2d8",
+      "size": 347644670
+    }
+  ],
+  "oldReceiptsRewritten": false,
+  "qualification": "Historical build+launch only; actual approval/native-read operation failed. No passing product evidence implied."
+}
