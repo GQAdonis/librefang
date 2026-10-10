@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+const { verifyPackagedUarPayload } = createRequire(import.meta.url)('/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/uar-payload-integrity.cjs')
 
 const [imageArgument, bossSource, nativeRecordArgument] = process.argv.slice(2)
 if (!imageArgument || !/^[a-f0-9]{40}$/.test(bossSource ?? '') || !nativeRecordArgument) {
@@ -45,9 +47,10 @@ try {
   receipt.app = app
   receipt.appAsarSha256 = await digest(path.join(resources, 'app.asar'))
   receipt.sidecarSha256 = await digest(native)
-  if (!expected || receipt.sidecarSha256 !== expected.sha256 || fs.statSync(native).size !== expected.size) {
-    throw new Error('Copied native executable differs from packaged file manifest')
-  }
+  if (!expected) throw new Error('Native executable is absent from payload inventory')
+  verifyPackagedUarPayload(resources, 'darwin-arm64', { localUar: true, allowPlatformSigning: true })
+  receipt.nativeIntegrity = { method: 'production-signature-aware-payload-validator',
+    originalPayloadSha256: expected.sha256, installedSignedSha256: receipt.sidecarSha256 } 
   receipt.uarSource = manifest.source
   for (const [name, executable, args] of [
     ['signature', 'codesign', ['--verify', '--deep', '--strict', app]],

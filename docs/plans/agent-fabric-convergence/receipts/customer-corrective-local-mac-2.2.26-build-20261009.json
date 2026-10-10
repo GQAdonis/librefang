@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "corrective-customer-local-mac-build-and-installation",
+  "version": "2.2.26",
+  "build": {
+    "schemaVersion": 1,
+    "kind": "actual-corrective-mac-installer-build",
+    "startedAt": "2026-10-09T23:41:04.817Z",
+    "source": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "uarSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "nativeArchiveSha256": "604a59843acf5b4d142e53eb644e7809e007ddcf157b41784c23e1f5b4ca2249",
+    "workingDirectory": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+    "executable": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "version": "2.2.26",
+    "reason": "Complete observed grant, native-tool startup and team-policy repairs with desktop controls",
+    "status": "passed",
+    "newCadenceDelivery": false,
+    "finishedAt": "2026-10-09T23:58:21.777Z",
+    "elapsedMs": 1036960,
+    "exitCode": 0,
+    "terminationSignal": null,
+    "sourceAfter": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "launch": "not-performed",
+    "featureOperation": "not-performed"
+  },
+  "installation": {
+    "receipt": ".prometheus/cadence/artifacts/customer-local-mac-2.2.26-503438eb-88fc-4d31-95f4-024270c0d5f5/installation-signed-e7180f19-e799-4101-909c-3bc7f9292686.json",
+    "status": "passed",
+    "source": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "uarSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.26-mac-arm64.dmg",
+    "installerSha256": "3be06ee7815d6760d27fcb5aaf1d65a8a29fc174e2ea98bf7544c21066ce4053",
+    "installerSize": 702950923,
+    "appAsarSha256": "2f83a209d73feebd9f4fd99200804c17bff1fc4e402102234a9145ce66a8ffc4",
+    "sidecarSha256": "e8282f646b850f644a3046396f9234766c6e69c8fdff9301072fc45c42279466",
+    "signature": "passed",
+    "gatekeeper": "passed",
+    "notarization": "not-confirmed-by-this-receipt",
+    "nativeIntegrity": {
+      "method": "production-signature-aware-payload-validator",
+      "originalPayloadSha256": "36f252b4d46f1da46604a756606cedabb3e18d67a91b790a85171a17f11fb3e2",
+      "installedSignedSha256": "e8282f646b850f644a3046396f9234766c6e69c8fdff9301072fc45c42279466"
+    }
+  },
+  "newCadenceDelivery": false,
+  "functionalOperation": "in-progress",
+  "operatorAcceptance": "pending",
+  "publication": "not-public-artifact"
+}
