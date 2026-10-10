@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "buildCompleted": true,
+  "boss": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+  "builtBossSource": "58eb4058b96bebef61ab502ea48fc062c7982371",
+  "operatedBossSource": "58eb4058b96bebef61ab502ea48fc062c7982371",
+  "expectedHashes": {
+    "appAsarSha256": "6593ede57debf5c4bca856d8de49a1025c7a29ee3daff1b634d3362eae308b85",
+    "uarSha256": "8183b3ee440c097544f4402d0e26f3c14a42712e5b6740d422b3ead071d10f79",
+    "bossfangSha256": "68916153175e648eab2ddfd38d857da7dbfef4d86bb079056c5039183547ead8"
+  },
+  "buildReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-approval-repair-mac-build-success-20261010.json",
+  "buildReceiptSha256": "d76e761e3c3f5ef32f8fb6df107bdf0067a2f2d36edcabfdcbf09c246ca42a04",
+  "readyInputPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-approval-repair-ready-input-20261010.json",
+  "bindingReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-approval-repair-operation-config-binding-20261010.json",
+  "allowScriptsOnlyDriverChanges": false,
+  "reconciliationAuthority": null
+}
