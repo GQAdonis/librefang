@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "kind": "native-release-input-preparation",
-  "recordedAt": "2026-10-10T14:39:46.013Z",
-  "status": "uar-native-builds-launched-integration-dispatch-still-planned",
-  "ownership": "Root owns final source pins, manifests, tags, workflow dispatch, builds and publication. This receipt is read-only release preparation.",
+  "recordedAt": "2026-10-10T14:51:06.565Z",
+  "status": "repaired-final-source-four-native-builds-launched",
+  "ownership": "Root owns release coordination, manifests, final integration dispatch and local packaging. Native child was explicitly authorized to repair observed UAR checkout failure, update the final full-CLI gitlink, sign/push source and create four new immutable UAR tags. This receipt records those actions.",
   "releaseCandidate": {
     "version": "2.2.31",
     "availability": "GitHub tag and release queries both returned HTTP404 during this session; recheck before publication."
@@ -343,8 +343,8 @@
     "workflow": "deploy.yml",
     "trigger": "Push one unique boss-sidecar-<platform>-v1.0.0-2.2.31-<source8> tag per platform, each pointing to the same final UAR source SHA.",
     "placeholders": {
-      "FINAL_UAR_SHA": "Final dependency-reconciled source descendant containing tool_admission_v2; not fixed by this receipt.",
-      "SOURCE8": "First eight characters of FINAL_UAR_SHA."
+      "FINAL_UAR_SHA": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+      "SOURCE8": "25c542c7"
     },
     "targets": [
       {
@@ -397,16 +397,93 @@
       "checksummed payload-manifest.json"
     ],
     "importCommand": "node scripts/import-uar-sidecar-payloads.cjs \"$UAR_DARWIN_ARM64_RECORD_URL\" \"$UAR_DARWIN_X64_RECORD_URL\" \"$UAR_WIN32_X64_RECORD_URL\" \"$UAR_WIN32_ARM64_RECORD_URL\"",
-    "limitations": "The four unique tag refs were created only after remote HTTP404 and local ref-absence checks, then pushed individually to trigger native builds. No tag was replaced. Native source is final22848ff4. Package output and actual runtime portability remain unverified until the native jobs and required local packaged-app gate complete.",
-    "finalSource": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+    "limitations": "Four fresh tag refs were created after remote and local ref absence checks and pushed individually. Prior tags remain immutable. The two prior Windows jobs failed before Cargo with Filename too long; prior Mac jobs were cancelled by authorization. Replacement native packages and runtime portability remain unverified until native packaging and the required local packaged-app gate complete.",
+    "finalSource": "25c542c77f41abcec605dd8ae372b04f68a1801e",
     "nativeRuns": [
       {
+        "platform": "darwin-arm64",
+        "databaseId": 38061063459,
+        "headBranch": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7",
+        "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "status": "in_progress",
         "conclusion": "",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061063459"
+      },
+      {
+        "platform": "darwin-x64",
+        "databaseId": 38061065883,
+        "headBranch": "boss-sidecar-darwin-x64-v1.0.0-2.2.31-25c542c7",
+        "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "status": "in_progress",
+        "conclusion": "",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061065883"
+      },
+      {
+        "platform": "win32-x64",
+        "databaseId": 38061068831,
+        "headBranch": "boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7",
+        "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "status": "queued",
+        "conclusion": "",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061068831"
+      },
+      {
+        "platform": "win32-arm64",
+        "databaseId": 38061070759,
+        "headBranch": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7",
+        "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "status": "in_progress",
+        "conclusion": "",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061070759"
+      }
+    ],
+    "tagsCreatedAndPushed": true,
+    "launchedAt": "2026-10-10T14:51:06.565Z",
+    "localPayloadCheckout": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902",
+      "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+      "detached": true,
+      "eligibleStatusClean": true,
+      "statusExclusions": [
+        "dist/boss-sidecar",
+        "tests/bauar_session_owner.rs",
+        "src/uar/mcp_server.rs"
+      ],
+      "submodules": "All five submodules were uninitialized before and after checkout; none required updating for CI-payload import, and no local Rust build was run.",
+      "oldPayloadSource": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
+      "oldPayloadBackup": "dist/boss-sidecar/previous-6b2ad902-20261010",
+      "pending": "Root must place the same-source 25c542c7 darwin-arm64 CI archive and record into dist/boss-sidecar before the G local import gate can pass.",
+      "localBossCommand": "THE_BOSS_LOCAL_UAR_SOURCE_DIR=/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902 pnpm run build:mac:arm64"
+    },
+    "observedFailures": [
+      {
+        "runId": "38060696276",
+        "platform": "win32-x64",
+        "step": "Checkout Rust workspace submodules",
+        "message": "Filename too long while checking out the pinned skill-system .kbd-orchestrator evidence file",
+        "beforeCargo": true,
+        "proposedRepair": "Use git -c core.longpaths=true submodule update for the sidecar checkout step",
+        "repairStatus": "Committed and pushed at 25c542c77f41abcec605dd8ae372b04f68a1801e; actual replacement packaging pending",
+        "repair": "git -c core.longpaths=true submodule update in the sidecar checkout step"
+      },
+      {
+        "runId": "38060697903",
+        "platform": "win32-arm64",
+        "step": "Checkout Rust workspace submodules",
+        "message": "Filename too long while checking out the pinned skill-system .kbd-orchestrator evidence file",
+        "beforeCargo": true,
+        "repair": "git -c core.longpaths=true submodule update in the sidecar checkout step",
+        "repairStatus": "Committed and pushed at 25c542c77f41abcec605dd8ae372b04f68a1801e; actual replacement packaging pending"
+      }
+    ],
+    "previousNativeRuns": [
+      {
+        "conclusion": "failure",
         "createdAt": "2026-10-10T14:42:43Z",
         "databaseId": 38060697903,
         "headBranch": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-22848ff4",
         "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
-        "status": "in_progress",
+        "status": "completed",
         "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060697903"
       },
       {
@@ -419,53 +496,35 @@
         "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060696276"
       },
       {
-        "conclusion": "",
+        "conclusion": "cancelled",
         "createdAt": "2026-10-10T14:42:40Z",
         "databaseId": 38060694176,
         "headBranch": "boss-sidecar-darwin-x64-v1.0.0-2.2.31-22848ff4",
         "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
-        "status": "in_progress",
+        "status": "completed",
         "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060694176"
       },
       {
-        "conclusion": "",
+        "conclusion": "cancelled",
         "createdAt": "2026-10-10T14:42:39Z",
         "databaseId": 38060693113,
         "headBranch": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-22848ff4",
         "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
-        "status": "in_progress",
+        "status": "completed",
         "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060693113"
       }
     ],
-    "tagsCreatedAndPushed": true,
-    "launchedAt": "2026-10-10T14:43:39.561Z",
-    "localPayloadCheckout": {
-      "root": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902",
-      "source": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
-      "detached": true,
-      "eligibleStatusClean": true,
-      "statusExclusions": [
-        "dist/boss-sidecar",
-        "tests/bauar_session_owner.rs",
-        "src/uar/mcp_server.rs"
+    "finalFullCliSource": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2",
+    "repairCommit": {
+      "revision": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+      "signed": true,
+      "fullCliGitlink": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2",
+      "paths": [
+        ".github/workflows/deploy.yml",
+        "crates/prometheus-skill-system"
       ],
-      "submodules": "All five submodules were uninitialized before and after checkout; none required updating for CI-payload import, and no local Rust build was run.",
-      "oldPayloadSource": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
-      "oldPayloadBackup": "dist/boss-sidecar/previous-6b2ad902-20261010",
-      "pending": "Root must replace the top-level darwin-arm64 archive and record with the same-source22848ff4 CI payload before the G local import gate can pass.",
-      "localBossCommand": "THE_BOSS_LOCAL_UAR_SOURCE_DIR=/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902 pnpm run build:mac:arm64"
-    },
-    "observedFailures": [
-      {
-        "runId": "38060696276",
-        "platform": "win32-x64",
-        "step": "Checkout Rust workspace submodules",
-        "message": "Filename too long while checking out the pinned skill-system .kbd-orchestrator evidence file",
-        "beforeCargo": true,
-        "proposedRepair": "Use git -c core.longpaths=true submodule update for the sidecar checkout step",
-        "repairStatus": "Awaiting root source/pin coordination; immutable tags are retained"
-      }
-    ]
+      "reason": "Observed Windows submodule checkout failure; final approved full-CLI pin coordinated by root"
+    }
   },
   "verificationBoundary": {
     "actualActions": [
@@ -476,7 +535,12 @@
       "Created and individually pushed four authorized immutable sidecar tags at final22848ff4",
       "Observed four deployment workflow runs start at final22848ff4",
       "Preserved old6b2ad902 macOS archive and record within excluded dist/boss-sidecar backup",
-      "Checked out the existing eligible-clean detached local source checkout at final22848ff4"
+      "Checked out the existing eligible-clean detached local source checkout at final22848ff4",
+      "Observed both Windows packaging jobs fail before Cargo with Filename too long",
+      "Cancelled both initial Mac packaging jobs by root authorization",
+      "Signed and pushed the minimal longpaths checkout repair and coordinated final full-CLI gitlink at 25c542c7",
+      "Created four additional immutable tags at 25c542c7 and observed four replacement deploy runs",
+      "Advanced the same eligible-clean detached local source stage to 25c542c7"
     ],
     "notRun": [
       "local Rust builds",
@@ -486,6 +550,18 @@
       "installer acceptance",
       "The Boss integration-payload workflow"
     ],
-    "f6": "Cancelled F6 source and test files were not inspected, searched, hashed, diffed or tested."
+    "f6": "Cancelled F6 source and test files were not inspected, searched, hashed, diffed or tested.",
+    "deviations": [
+      {
+        "action": "pnpm github-actions-policy:validate",
+        "result": "Interrupted with exit130 when pnpm auto-install started; policy script did not execute through pnpm",
+        "impact": "No local Rust build or test; preexisting pnpm-lock change remains uncommitted; ignored dependency artifacts may have been created"
+      },
+      {
+        "action": "node scripts/validate-github-actions-policy.mjs before and after workflow edit",
+        "result": "Both passed",
+        "qualification": "Static workflow policy check only; not production qualification. Already performed before root directed no validators; no further validator was run."
+      }
+    ]
   }
 }
