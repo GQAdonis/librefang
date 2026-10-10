@@ -1113,6 +1113,25 @@
       "status": "dispatched-not-completed"
     },
     "intelRetryRetained": 38065125423,
-    "qualification": "No new completed payload, installer or successful delivery is claimed."
+    "qualification": "No new completed payload, installer or successful delivery is claimed.",
+    "intelObservedFailure": {
+      "runId": 38065125423,
+      "jobId": 114252583054,
+      "buildCancelledAt": "2026-10-10T18:57:11Z",
+      "partialUploadSucceededAt": "2026-10-10T18:57:24Z",
+      "limitMinutes": 180,
+      "missingTool": "bossfang",
+      "qualification": "Build cancelled while compiling BossFang; partial output inspection is separately retained."
+    },
+    "intelReplacement": {
+      "runId": 38077919228,
+      "sourceCommit": "04d4ee36357ecbb9be3373a3bfde5d561032b2b7",
+      "platform": "darwin-x64",
+      "tools": [
+        "bossfang"
+      ],
+      "nativeArtifactsOnly": true,
+      "status": "dispatched-not-completed"
+    }
   }
 }
