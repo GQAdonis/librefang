@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-platform-approval-repair-dispatch",
+  "recordedAt": "2026-10-10T20:39:52.767Z",
+  "operatorScope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64",
+      "linux-x64",
+      "linux-arm64"
+    ],
+    "deferredCannotBlock": true
+  },
+  "workflow": {
+    "repository": "Prometheus-AGS/the-boss",
+    "path": "integration-payload.yml",
+    "runId": 38084557578,
+    "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38084557578",
+    "source": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+    "tools": [
+      "bossfang"
+    ],
+    "platforms": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "nativeArtifactsOnly": true
+  },
+  "bossfangSource": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b",
+  "repair": "Dashboard approval producer omitted required expectedRevision; carry the displayed delegation revision with its exact approval ID.",
+  "operation": {
+    "priorCandidate": "d9bbf5a044b3c39800a212959836677ca3173eea",
+    "macBuild": "passed",
+    "macLaunch": "passed",
+    "bossfangApproval": "failed; awaiting repaired binary",
+    "nativeRead": "failed; desktop catalog principal mismatch identified; repair in progress"
+  },
+  "accounting": {
+    "historicalCodeTasks": "61/61",
+    "historicalCodeChanges": "20/20",
+    "portfolioTerminal": "43/61",
+    "successfulDeliveries": 15,
+    "clocksReset": false,
+    "newDeliveryRecorded": false
+  },
+  "publication": "Not yet published; installer source will freeze after the observed repairs and matching native payload are incorporated."
+}
