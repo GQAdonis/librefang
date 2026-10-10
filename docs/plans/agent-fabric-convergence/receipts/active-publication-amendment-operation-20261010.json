@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-skill-boundary-active-publication-cli-operation",
+  "startedAt": "2026-10-10T20:46:43.220Z",
+  "complete": true,
+  "disposableRoot": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-active-publication-operation-uO6l5d",
+  "actualProjectMutated": false,
+  "applicationLaunched": false,
+  "externalPublicationPerformed": false,
+  "checks": [
+    "active-target-deferral-with-original-clock-count-and-iteration",
+    "immutable-historical-obligations-receipts-checkpoints-and-candidates",
+    "explicit-checksummed-operator-authority-and-future-policy",
+    "portable-mini-replay-of-full-command-without-duplicate-event",
+    "missing-authority-unrelated-profile-and-target-expansion-refused"
+  ],
+  "commands": [
+    {
+      "skill": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence",
+      "commandId": "active-two-platform-skill-boundary-operation-v1",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutSha256": "8a7558f46bc60352708f187307eb691aa74909b7519b3a7797935f132f9c9b84",
+      "stderrSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "inputSha256": "da9efe598495396d621a9fc70aa5a0b65df1c5cf841e488e293d98e37d73af4c"
+    },
+    {
+      "skill": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/skills/delivery-cadence",
+      "commandId": "active-two-platform-skill-boundary-operation-v1",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutSha256": "45012fa2393f80a0d509222c4016e2d55d37cfdc81b549176c026a3126dde045",
+      "stderrSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "inputSha256": "da9efe598495396d621a9fc70aa5a0b65df1c5cf841e488e293d98e37d73af4c"
+    },
+    {
+      "skill": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence",
+      "commandId": "active-publication-missing-authority-refusal-v1",
+      "exitCode": 1,
+      "signal": null,
+      "stdoutSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "stderrSha256": "a4b40094274536e428202e5ba2613f2824f7d9cc6ad9b6dd3c3f2d9b73f10834",
+      "inputSha256": "faad50338f65398c352ea2fab84ec36426e3422b6c5f102a79b5fcd5eeb12d7e"
+    },
+    {
+      "skill": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence",
+      "commandId": "active-publication-unrelated-profile-refusal-v1",
+      "exitCode": 1,
+      "signal": null,
+      "stdoutSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "stderrSha256": "88e3cf8307570ce8fa114ef5b15b08ef585d9843acf83ba538333389d418852f",
+      "inputSha256": "9969a399f6e08f36cb2e428a1acfbe57b8d6eda7d5ae8c84dde5e6fbd4149b14"
+    },
+    {
+      "skill": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence",
+      "commandId": "active-publication-target-expansion-refusal-v1",
+      "exitCode": 1,
+      "signal": null,
+      "stdoutSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "stderrSha256": "6b2ceff057c02289770743dfcb897d3578b04e1f2c7eba80ad6a533984618edb",
+      "inputSha256": "0c5d6c49389e2d2dc9a723b5e58095861e44207f39fbacb8bddd7c8fbce228f9"
+    }
+  ],
+  "limitations": [
+    "Mac ARM64 native Node operation only; Windows execution remains pending.",
+    "This operates publication policy metadata, not application functionality or installer publication.",
+    "Frozen-source reconciliation still requires its own complete feature evidence."
+  ],
+  "identity": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "startedAt": "2026-10-06T17:07:34.783Z",
+    "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+    "iterationStartedAt": "2026-10-10T14:57:53.458Z",
+    "successfulDeliveries": 15,
+    "beforeEventsSeq": 1357,
+    "afterEventsSeq": 1365,
+    "priorCandidateId": "02c4dd1a-3344-4b97-9f49-08f7a84bb2ab",
+    "priorManifestSha256": "d72ff9df9678ea019edde3d21b0d1f2aeaf1b42581792afb641816234997498f",
+    "priorPlatforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "selectedPlatforms": [
+      "darwin-arm64",
+      "win32-x64"
+    ]
+  },
+  "finishedAt": "2026-10-10T20:46:55.778Z"
+}

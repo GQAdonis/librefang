@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "kind": "approval-repair-native-publication-preparation",
+  "executed": false,
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "linux": "excluded",
+  "identities": {
+    "repository": "Prometheus-AGS/the-boss",
+    "nativeRun": "38084557578",
+    "nativeProducerSource": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+    "hostApplicationSourceAtPreparation": "bfbeed0e55f7d2dcbc7d2e64a866a93b6d9f197f",
+    "bossfangSource": {
+      "repository": "GQAdonis/librefang",
+      "revision": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b"
+    },
+    "bossfangVersion": "2026.9.19+95719eaef",
+    "existingImmutableTag": "boss-tools-integrated-20261010-0682e1b7",
+    "newImmutableTag": "boss-tools-approval-repair-20261010-95719eae",
+    "publisherStage": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9"
+  },
+  "observed": {
+    "nativeRunStatus": "in_progress",
+    "nativeRunConclusion": null,
+    "artifactMetadata": [],
+    "newTag": "gh release view returned release not found",
+    "stageSourcePin": "4971458c70543b592cc534986737a9d045164547",
+    "noPublicationClaim": true,
+    "retainedRuns": [
+      "37231316550",
+      "37233059176",
+      "38061076572",
+      "38065125423",
+      "38076500408"
+    ],
+    "imagesAlreadyStagedWithActualProvenance": true,
+    "oldTagUnchanged": true
+  },
+  "sourceContracts": {
+    "reuse": "scripts/reuse-integration-tools.cjs downloads completed-run native-tools-* artifacts, copies binaries and emits base-tools-<run>-*.json; actual record.source retained or populated from that run's exact pinned source with sourceEvidence.",
+    "publisher": "scripts/publish-integration-payload.cjs sorts base-tools records, selects PAYLOAD_PLATFORMS, checks bytes/SHA/size/source for the final selected records, requires retained non-UAR closure, reuses images/Compass skills and creates one new immutable GitHub Release.",
+    "precedence": "Current stage has no fresh tools-*.json records. New base-tools-38084557578 sorts after previous reused records, and replaces matching BossFang bytes/metadata for the two selected platforms. Existing other-tool source records remain unchanged.",
+    "import": "Only repair the two BossFang package entries and version in G. Do not copy the new two-platform manifest wholesale; release-platforms.cjs requires retained four-platform manifest coverage. Preserve previous sources/images/catalogs/Compass skill URL/UAR and optional packages."
+  },
+  "prerequisites": [
+    "Observe run 38084557578 completed and both selected native tool build/upload jobs successful; no artifact exists yet at preparation time",
+    "Confirm produced BossFang source/version match 95719eae/2026.9.19+95719eaef in both native records",
+    "Do not create a new build or wait for Intel/Windows ARM64",
+    "Root is sole publisher; record effect intent and run/release outcomes before any retries",
+    "New tag must remain absent; if present, reconcile exact existing assets rather than overwrite or recreate"
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "action": "Read completed native run",
+      "program": "gh",
+      "args": [
+        "run",
+        "view",
+        "38084557578",
+        "--repo",
+        "Prometheus-AGS/the-boss",
+        "--json",
+        "status,conclusion,headSha,jobs"
+      ],
+      "writes": false
+    },
+    {
+      "order": 2,
+      "action": "Preserve small old stage metadata and refresh publisher source pins from exact native producer",
+      "program": "node",
+      "args": [
+        "-e",
+        "const fs=require('node:fs');const path=require('node:path');const{execFileSync}=require('node:child_process');const root=process.cwd();const save=path.join(root,'build','publish-attempts','boss-tools-approval-repair-20261010-95719eae');fs.mkdirSync(save,{recursive:true,mode:0o700});for(const file of ['build/integration-sources.json','build/integration-output/integration-artifacts.json']){const target=path.join(save,path.basename(file));if(!fs.existsSync(target))fs.copyFileSync(path.join(root,file),target,fs.constants.COPYFILE_EXCL);}const data=execFileSync('git',['-C','/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance','show','0fa0b73a849b96494e1b891eeb7f461ec06476ee:build/integration-sources.json'],{encoding:'utf8'});const pins=JSON.parse(data);if(pins.sources.bossfang.revision!=='95719eaefc491e6d19c84ed7bf0b7d62632d8d0b')throw Error('Producer BossFang source mismatch');fs.writeFileSync(path.join(root,'build/integration-sources.json'),data);"
+      ],
+      "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9",
+      "performedBy": "root",
+      "note": "Only publisher-stage files change. Previous published remote tag is untouched; backup excludes binary copies."
+    },
+    {
+      "order": 3,
+      "action": "Overlay only new BossFang native artifact run onto existing reused closure",
+      "program": "node",
+      "args": [
+        "scripts/reuse-integration-tools.cjs"
+      ],
+      "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9",
+      "env": {
+        "GITHUB_REPOSITORY": "Prometheus-AGS/the-boss",
+        "NATIVE_RUNS": "38084557578"
+      },
+      "performedBy": "root",
+      "note": "Existing reused runs are already staged. Do not redownload/rebuild old tools. If this command's effect is interrupted, reconcile stored artifacts before repeating."
+    },
+    {
+      "order": 4,
+      "action": "Publish new immutable two-platform native payload using production publisher",
+      "program": "node",
+      "args": [
+        "scripts/publish-integration-payload.cjs"
+      ],
+      "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9",
+      "env": {
+        "GITHUB_REPOSITORY": "Prometheus-AGS/the-boss",
+        "GITHUB_SHA": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+        "PAYLOAD_TAG": "boss-tools-approval-repair-20261010-95719eae",
+        "PAYLOAD_PLATFORMS": "darwin-arm64,win32-x64",
+        "IMAGE_RUN": "38060700409"
+      },
+      "performedBy": "root",
+      "note": "GH_TOKEN remains in existing protected root environment, never in receipt. No --clobber or mutation to previous tag. Reused per-tool and image source identities remain actual originals."
+    },
+    {
+      "order": 5,
+      "action": "Download only published manifest for source import",
+      "program": "gh",
+      "args": [
+        "release",
+        "download",
+        "boss-tools-approval-repair-20261010-95719eae",
+        "--repo",
+        "Prometheus-AGS/the-boss",
+        "--pattern",
+        "integration-artifacts.json",
+        "--dir",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9/build/published-boss-tools-approval-repair-20261010-95719eae"
+      ],
+      "performedBy": "root",
+      "note": "No installer or artifact binary execution. Reconcile existing download directory rather than blindly overwriting."
+    },
+    {
+      "order": 6,
+      "action": "Merge ONLY repaired selected BossFang package records into application manifest",
+      "program": "node",
+      "args": [
+        "-e",
+        "const fs=require('node:fs');const path=require('node:path');const m=JSON.parse(fs.readFileSync('/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9/build/published-boss-tools-approval-repair-20261010-95719eae/integration-artifacts.json','utf8'));const f=path.join(process.cwd(),'build/integration-artifacts.json');const current=JSON.parse(fs.readFileSync(f,'utf8'));const incoming=m.tools.find(x=>x.name==='bossfang');const old=current.tools.find(x=>x.name==='bossfang');if(!incoming||!old)throw Error('BossFang record missing');for(const key of ['darwin-arm64','win32-x64']){const p=incoming.packages[key];if(p?.source?.revision!=='95719eaefc491e6d19c84ed7bf0b7d62632d8d0b'||p.source.repository!=='GQAdonis/librefang'||!p.url.startsWith('https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-approval-repair-20261010-95719eae/'))throw Error('Repaired BossFang provenance mismatch');}const updated={...current,tools:current.tools.map(x=>x.name==='bossfang'?{...x,version:incoming.version,packages:{...x.packages,'darwin-arm64':incoming.packages['darwin-arm64'],'win32-x64':incoming.packages['win32-x64']}}:x)};fs.writeFileSync(f,JSON.stringify(updated,null,2)+'\\n');"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "performedBy": "root",
+      "note": "No other tool URL or source is relabeled. Existing optional-platform package metadata retained; their binaries are not rebuilt."
+    },
+    {
+      "order": 7,
+      "action": "Root commits/pushes the narrowly updated integration-artifacts.json, freezes new application source, then builds and operates selected corrected customer candidate",
+      "performedBy": "root",
+      "note": "Native producer 0fa differs intentionally from application host bfbe plus the subsequent import commit. Final installer dispatch and manifest names must use actual new frozen host source, never the native producer SHA."
+    }
+  ],
+  "provenanceToRecordAfterEffects": [
+    "Actual native job/artifact IDs and records",
+    "New release URL and asset IDs",
+    "Native record SHA/size and per-tool source",
+    "Root application import commit",
+    "Actual downloaded candidate bytes and installed operation separately"
+  ],
+  "noTests": true,
+  "noReviews": true,
+  "noBuildPerformed": true,
+  "noDispatchPerformed": true,
+  "noPublicationPerformed": true,
+  "cadenceCountersMutated": false,
+  "qualificationLedgerMutated": false,
+  "excludedFilesInspected": false
+}
