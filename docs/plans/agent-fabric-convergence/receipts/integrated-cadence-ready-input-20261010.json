@@ -87,7 +87,7 @@
     "prerequisites": [
       {
         "id": "integrated-native-payload-records",
-        "description": "Actual UAR/BossFang source-matched native payload URLs, byte sizes, hashes and source revisions are recorded for the approved four targets before freezing this customer candidate."
+        "description": "Actual UAR/BossFang source-matched native payload URLs, byte sizes, hashes and source revisions are recorded for Mac ARM64 and Windows x64 before freezing this customer candidate; other targets are explicitly deferred by the operator."
       },
       {
         "id": "declared-gateway-reference",

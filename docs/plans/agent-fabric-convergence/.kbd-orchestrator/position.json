@@ -2,15 +2,15 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 666,
-  "derivedRevision": 666,
+  "sourceRevision": 667,
+  "derivedRevision": 667,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 427
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 428
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-10T14:49:02.015151Z",
+  "updatedAt": "2026-10-10T20:12:32.531928Z",
   "cursor": [
     "agent-fabric-convergence",
     "integrated-runtime-release-reconciliation",

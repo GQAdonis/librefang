@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 666,
-  "derivedRevision": 666,
+  "sourceRevision": 667,
+  "derivedRevision": 667,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 427
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 428
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -34,10 +34,10 @@
   "completionMetric": "implementation",
   "implementationCompleted": 28,
   "implementationTotal": 30,
-  "planRevision": 11,
-  "revision": 666,
-  "exactNextCommand": "/kbd-assess agent-fabric-convergence > integrated-runtime-release-reconciliation",
+  "planRevision": 12,
+  "revision": 667,
+  "exactNextCommand": "afc-runtime-admission-v2-release task 3: publish and import the ready Mac ARM64 and Windows x64 native payloads, then immediately build the local Mac ARM64 application",
   "nextChange": "afc-runtime-admission-v2-release",
   "nextTask": "3",
-  "updatedAt": "2026-10-10T14:49:02.015151Z"
+  "updatedAt": "2026-10-10T20:12:32.531928Z"
 }

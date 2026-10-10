@@ -7,16 +7,15 @@
   "inputs": {
     "release_version": "2.2.31",
     "release_profile": "uar-enabled",
-    "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+    "platforms": "darwin-arm64,win32-x64",
     "replace_published_platforms": false,
     "uar_darwin_arm64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-darwin-arm64.json",
-    "uar_darwin_x64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-darwin-x64.json",
-    "uar_win32_x64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-x64.json",
-    "uar_win32_arm64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-arm64.json"
+    "uar_win32_x64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-x64.json"
   },
   "conditions": [
     "Final native payload URLs/checksums/source committed before dispatch",
     "Completed local packaged operation before publishing customer installers",
-    "No Linux; immutable2.2.30 unchanged"
+    "No Linux; immutable2.2.30 unchanged",
+    "Operator 2026-10-10: Mac Intel and Windows ARM64 are deferred and cannot block this publication"
   ]
 }
