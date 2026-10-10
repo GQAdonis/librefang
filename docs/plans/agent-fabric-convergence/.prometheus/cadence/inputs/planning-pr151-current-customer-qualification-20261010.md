@@ -17,7 +17,7 @@ Corrective source was merged through [The Boss PR66](https://github.com/Promethe
 
 ## Explicitly pending
 
-The historical represented synthetic read expired without a decision and remains incomplete. A fresh exact read on the public2.2.30 installer is awaiting operator approval; no approved-read, disclosure, expiry/revocation/offboarding or organizational-authority qualification is claimed.
+The historical represented synthetic read expired without a decision and remains incomplete. The fresh exact read on the public2.2.30 installer also expired without a decision; no approved-read, disclosure, expiry/revocation/offboarding or organizational-authority qualification is claimed.
 
 Final2.2.30 publication for Mac Intel/Windows x64/ARM64 remains in progress. Apple Silicon public packaging/notarization, full downloaded bytes and the deployed website link now have passing receipts. Candidate-specific Mac ARM64/Windows x64 installed/operator acceptance remains pending; package operations do not substitute for operator acceptance.
 
