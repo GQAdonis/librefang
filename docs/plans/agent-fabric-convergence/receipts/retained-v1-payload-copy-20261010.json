@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "kind": "retained-v1-payload-copy",
+  "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+  "root": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-v1-instance-20261010-JiyaBu",
+  "archive": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-v1-instance-20261010-JiyaBu/uar-sidecar-darwin-arm64.tar.gz",
+  "record": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-v1-instance-20261010-JiyaBu/uar-sidecar-darwin-arm64.json",
+  "sha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893",
+  "copiedAt": "2026-10-10T15:07:45.921Z",
+  "processStarted": false
+}
