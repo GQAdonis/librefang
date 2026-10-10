@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T03:02:02.227Z",
+  "version": "2.2.28",
+  "platform": "darwin-arm64",
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "installedAcceptance": {
+    "darwinArm64": "pending for identified final customer candidate",
+    "win32X64": "pending for identified final customer candidate"
+  },
+  "verification": {
+    "scope": "Read actual completed packaged-operation evidence; no new operations or suites run",
+    "testSuitesRun": [],
+    "additionalBuildsRun": [],
+    "additionalApplicationOperationsRun": []
+  },
+  "kind": "customer-ordinary-uar-recovery-partial-evidence",
+  "sources": {
+    "boss": "6de6477cdddb0886387dcb752913c43bf3ec3de2",
+    "uar": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4",
+    "installedVersion": "2.2.28",
+    "installerSha256": "d4bd7a51715b2e6c53d0162a97a5094245fb77e549f33e34fafbbbb273d30a94",
+    "appAsarSha256": "d931ccf8aef130192bec9de4ea9bf7c11dc478e191aef89449fce8ff55df4386",
+    "sidecarSha256": "50f8365ed86545502345687e0dac253cbc044752f227fa8766897e00dc8d60bb",
+    "installationReceiptSha256": "474006412ec810ed6f138bfafb5d933228f7c05a0fa541dc7ecd968cf7104584",
+    "scenarioSha256": "cf7a9a326ce303113b02d8b741cd0d834acd617786f272ded6353612b7d21e7a",
+    "operationDriverSha256": "6aa210e1402cb7fbf5669dbea48a0a16e5bb0b9c4637b4e0f631249a52eeefb1",
+    "operationDriverRevision": "6de6477cdddb0886387dcb752913c43bf3ec3de2"
+  },
+  "startedAt": "2026-10-10T02:55:54.795Z",
+  "finishedAt": "2026-10-10T02:56:20.875Z",
+  "featureOperation": {
+    "status": "partially-passed",
+    "rawEvidenceStatus": "failed",
+    "complete": false,
+    "passed": false,
+    "route": "uar",
+    "assignment": {
+      "source": "gateway",
+      "modelId": "gpt-6.1-sol"
+    },
+    "expectedModel": {
+      "id": "gpt-6.1-sol",
+      "provider": "the-boss-gateway"
+    },
+    "turns": [
+      {
+        "kind": "retained-history-followup",
+        "status": "passed",
+        "startedAt": "2026-10-10T02:56:04.334Z",
+        "finishedAt": "2026-10-10T02:56:08.204Z",
+        "admitted": true,
+        "stream": {
+          "chunks": 7,
+          "textChunks": 2,
+          "textCharacters": 30,
+          "done": true,
+          "error": false,
+          "terminalStatus": "success",
+          "anchorMessageId": "01a123bd-32f4-73d9-b4fe-93adb0760af6",
+          "failure": null
+        },
+        "persisted": {
+          "id": "01a123bd-32f4-73d9-b4fe-93adb0760af6",
+          "status": "success",
+          "textCharacters": 30,
+          "expectedReply": true,
+          "model": {
+            "id": "gpt-6.1-sol",
+            "provider": "the-boss-gateway"
+          }
+        },
+        "cancelRequestedAt": null,
+        "cancelCommandAccepted": null,
+        "attach": null,
+        "streamFailure": null,
+        "failedTurnAbortRequested": null
+      },
+      {
+        "kind": "semantic-stream-cancellation",
+        "status": "passed",
+        "startedAt": "2026-10-10T02:56:08.204Z",
+        "finishedAt": "2026-10-10T02:56:14.103Z",
+        "admitted": true,
+        "stream": {
+          "chunks": 4,
+          "textChunks": 1,
+          "textCharacters": 7,
+          "done": true,
+          "error": false,
+          "terminalStatus": "paused",
+          "anchorMessageId": "01a123bd-4212-750e-a05d-3d25869c9510",
+          "failure": null
+        },
+        "persisted": {
+          "id": "01a123bd-4212-750e-a05d-3d25869c9510",
+          "status": "paused",
+          "textCharacters": 7,
+          "expectedReply": null,
+          "model": {
+            "id": "gpt-6.1-sol",
+            "provider": "the-boss-gateway"
+          }
+        },
+        "cancelRequestedAt": "2026-10-10T02:56:14.074Z",
+        "cancelCommandAccepted": true,
+        "attach": {
+          "status": "paused"
+        },
+        "streamFailure": null,
+        "failedTurnAbortRequested": null
+      },
+      {
+        "kind": "post-cancellation-followup",
+        "status": "pending",
+        "startedAt": "2026-10-10T02:56:20.653Z",
+        "finishedAt": null,
+        "admitted": true,
+        "stream": null,
+        "persisted": null,
+        "cancelRequestedAt": null,
+        "cancelCommandAccepted": null,
+        "attach": null,
+        "streamFailure": {
+          "name": "Error",
+          "reasonCode": null,
+          "statusCode": null,
+          "sourceLayer": null,
+          "rawMessageRecorded": false
+        },
+        "failedTurnAbortRequested": true
+      }
+    ],
+    "restart": {
+      "instanceId": "managed-local",
+      "beforeGeneration": 1,
+      "startedAt": "2026-10-10T02:56:14.139Z",
+      "status": "passed",
+      "bindingConfigurationMutated": false,
+      "operationId": "e99fc0cd-21e7-4b1a-873d-d94c9a84ff38",
+      "operationStatus": "succeeded",
+      "operationErrorCode": null,
+      "afterGeneration": 2,
+      "finishedAt": "2026-10-10T02:56:20.653Z"
+    },
+    "failureStage": "post-cancellation-followup",
+    "failureCode": "CUSTOMER_UAR_TURN_PROVIDER_ERROR"
+  },
+  "confirmedFollowupDefect": {
+    "status": "observed",
+    "httpStatus": 404,
+    "diagnosticAuthority": "Root diagnosis of the exact retained persisted native-agent state; raw evidence streamFailure does not itself encode HTTP status.",
+    "repair": {
+      "bossCommit": "ba75d50141b821adf4302aa5d1507c3761c532a2",
+      "scope": "New tool-free input admission after cancellation/restart; no prior tool-effect replay",
+      "status": "implemented; affected package build and operation pending"
+    }
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/ordinary-uar-lifecycle-6af35e17-9eea-4b47-89f3-a74b52dde995/evidence.json",
+    "sha256": "93428aaf85bf3282a978905a0f7563c9736f021eabd087cce2ed56dd1afac920"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/ordinary-uar-lifecycle-6af35e17-9eea-4b47-89f3-a74b52dde995/operation.json",
+    "sha256": "051a82c7abc58a4fcd5aae66e7ae0e1b9cfe72a2008ac7d2c7cca0b097bc529c"
+  },
+  "retainedBaseline": {
+    "evidenceSha256": "2346b6e980edea6f61ee138ea62310b77ab6bffc99abee14467225395833b7b1",
+    "applicabilityReceiptSha256": "5cf96f70cabf65f56e76ad56839ac982fa4c230d60d1564bb3a9d2133bb6037e",
+    "repeated": false
+  },
+  "limits": [
+    "Retained-history follow-up, semantic stream cancellation and managed runtime generation 1-to-2 restart passed individually.",
+    "Post-cancellation follow-up did not pass; its raw turn entry remains pending inside an overall failed, incomplete evidence record.",
+    "Ordinary UAR recovery cannot be wholly qualified until the corrected source is packaged and the affected operation passes.",
+    "No native Codex/Claude repetitions, credential output, ledger credit or delivery increment."
+  ]
+}
