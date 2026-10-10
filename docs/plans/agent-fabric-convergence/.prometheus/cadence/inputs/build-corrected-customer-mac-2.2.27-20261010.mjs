@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 const repository = '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance'
 const nativeSource = path.join(repository, 'build/integration-source/uar')
 const source = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repository, encoding: 'utf8' }).trim()
-if (source !== 'efc36dba3e482c30d4ce97874fed2f9573a38f1b' || JSON.parse(fs.readFileSync(path.join(repository, 'package.json'), 'utf8')).version !== '2.2.27') {
+if (source !== 'ff98af813c59e7c2733db74306ebfe087fec069a' || JSON.parse(fs.readFileSync(path.join(repository, 'package.json'), 'utf8')).version !== '2.2.27') {
   throw new Error('Corrective Boss checkout does not match frozen 2.2.27 source')
 }
 const nativeRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: nativeSource, encoding: 'utf8' }).trim()

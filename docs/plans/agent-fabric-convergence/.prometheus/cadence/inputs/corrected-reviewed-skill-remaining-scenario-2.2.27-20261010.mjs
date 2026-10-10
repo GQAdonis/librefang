@@ -11,7 +11,7 @@ const prior = path.join(initiative, '.prometheus/cadence/artifacts/customer-corr
   'reviewed-skills-proxy-repaired-2-2-26-e1d068fc-4df0-41b7-8b76-a6417883c434')
 const evidenceFile = path.join(prior, 'evidence.json')
 const preparationFile = path.join(prior, 'reviewed-skill-preparation.json')
-const frozenBoss = 'efc36dba3e482c30d4ce97874fed2f9573a38f1b'
+const frozenBoss = 'ff98af813c59e7c2733db74306ebfe087fec069a'
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 const git = (repository, args) => execFileSync('git', args, { cwd: repository, encoding: 'utf8' }).trim()
 const fileDigest = file => 'sha256:' + sha256(file)
@@ -41,6 +41,7 @@ export async function preparePublicOperation({ directory, installation, signal =
   const bossChanges = changes(boss, old.sourceRefs.boss, frozenBoss)
   const nativeChanges = changes(uar, old.sourceRefs.uar, expectedPins.uar)
   requireFact(bossChanges.every(file => ['build/integration-sources.json', 'build/local-uar-source.json', 'package.json',
+    'electron-builder.yml', 'resources/cherry-studio/release-history.json',
     'src/main/ai/runtime/uar/UarSidecarService.ts', 'src/main/ai/runtime/uar/uarTeamAuthoringPackage.ts'].includes(file)) &&
     nativeChanges.every(file => ['src/uar/runtime/instance/pump.rs', 'src/uar/runtime/thread/actor_host.rs'].includes(file)),
   'C15_RETAINED_ADMISSION_SOURCE_AGREEMENT_CHANGED')

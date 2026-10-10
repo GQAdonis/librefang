@@ -9,7 +9,7 @@ const [imageArgument, bossSource, nativeRecordArgument] = process.argv.slice(2)
 if (!imageArgument || !/^[a-f0-9]{40}$/.test(bossSource ?? '') || !nativeRecordArgument) {
   throw new Error('Provide actual built DMG, frozen Boss source and packaged native record')
 }
-if (bossSource !== 'efc36dba3e482c30d4ce97874fed2f9573a38f1b') throw new Error('Boss source differs from frozen 2.2.27 candidate')
+if (bossSource !== 'ff98af813c59e7c2733db74306ebfe087fec069a') throw new Error('Boss source differs from frozen 2.2.27 candidate')
 const image = path.resolve(imageArgument)
 const nativeRecord = JSON.parse(fs.readFileSync(nativeRecordArgument, 'utf8'))
 if (nativeRecord.source !== 'f55e6cf1dd0f2864b4426a614a2e8bc4dea42400') throw new Error('Native source differs from frozen 2.2.27 candidate')

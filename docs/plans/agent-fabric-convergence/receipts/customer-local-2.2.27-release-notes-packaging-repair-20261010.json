@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "corrective-release-notes-packaging-provenance",
+  "recordedAt": "2026-10-10T01:49:12.835Z",
+  "version": "2.2.27",
+  "failedAttempt": {
+    "receipt": ".prometheus/cadence/artifacts/customer-build-2.2.27-e2cb0775-4545-49b1-bee6-c235b6449642/build.json",
+    "receiptSha256": "8c93459877a94b7eccfc893e35830da0197505574855927dde4709553f0b36b3",
+    "source": "efc36dba3e482c30d4ce97874fed2f9573a38f1b",
+    "uarSource": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+    "status": "failed",
+    "startedAt": "2026-10-10T01:41:00.739Z",
+    "finishedAt": "2026-10-10T01:41:21.634Z",
+    "exitCode": 1,
+    "elapsedMs": 20895,
+    "observedFailure": "Error: release-history.json must contain current stable version 2.2.27",
+    "historyPreserved": true
+  },
+  "correctedInputs": {
+    "bossSource": "ff98af813c59e7c2733db74306ebfe087fec069a",
+    "uarSource": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+    "nativeSourceChanged": false,
+    "sourceDelta": [
+      "electron-builder.yml",
+      "resources/cherry-studio/release-history.json"
+    ],
+    "sourceRepair": "Generate current-version bilingual release history and align the packaging input; prior release entries retained.",
+    "preparationFiles": [
+      "build-corrected-customer-mac-2.2.27-20261010.mjs",
+      "stage-corrected-local-mac-2.2.27-20261010.mjs",
+      "corrected-reviewed-skill-remaining-scenario-2.2.27-20261010.mjs"
+    ],
+    "privateConfigurationDisposition": "Both 2.2.27 source-bound operation configuration files updated locally; excluded from this commit.",
+    "c15AgreementWhitelistDelta": [
+      "electron-builder.yml",
+      "resources/cherry-studio/release-history.json"
+    ]
+  },
+  "accounting": {
+    "newCadenceDelivery": false,
+    "clockMutation": false,
+    "publicationDebtMutation": false,
+    "qualificationMutation": false
+  },
+  "operation": {
+    "newBuild": "root-owned retry running; not a passing receipt",
+    "launch": "not-performed-by-this-preparation",
+    "featureOperation": "not-performed-by-this-preparation",
+    "installedAcceptance": "pending"
+  }
+}
