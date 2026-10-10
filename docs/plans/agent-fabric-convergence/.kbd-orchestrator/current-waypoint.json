@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 667,
-  "derivedRevision": 667,
+  "sourceRevision": 673,
+  "derivedRevision": 673,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 428
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 434
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -25,19 +25,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": "agent-fabric-convergence",
   "childPointer": "integrated-runtime-release-reconciliation",
-  "change": "afc-runtime-admission-v2-release",
-  "currentTask": "3",
+  "change": "afc-integrated-customer-qualification",
+  "currentTask": "1",
   "status": "running",
   "lifecycle": "running",
   "stageId": "execute",
   "stageStatus": "IN_PROGRESS",
   "completionMetric": "implementation",
-  "implementationCompleted": 28,
+  "implementationCompleted": 29,
   "implementationTotal": 30,
   "planRevision": 12,
-  "revision": 667,
+  "revision": 673,
   "exactNextCommand": "afc-runtime-admission-v2-release task 3: publish and import the ready Mac ARM64 and Windows x64 native payloads, then immediately build the local Mac ARM64 application",
-  "nextChange": "afc-runtime-admission-v2-release",
-  "nextTask": "3",
-  "updatedAt": "2026-10-10T20:12:32.531928Z"
+  "nextChange": "afc-integrated-customer-qualification",
+  "nextTask": "1",
+  "updatedAt": "2026-10-10T20:15:02.160615Z"
 }

@@ -2,28 +2,28 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 667,
-  "derivedRevision": 667,
+  "sourceRevision": 673,
+  "derivedRevision": 673,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 428
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 434
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-10T20:12:32.531928Z",
+  "updatedAt": "2026-10-10T20:15:02.160615Z",
   "cursor": [
     "agent-fabric-convergence",
     "integrated-runtime-release-reconciliation",
     "execute",
-    "afc-runtime-admission-v2-release",
-    "3"
+    "afc-integrated-customer-qualification",
+    "1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 28,
+      "done": 29,
       "total": 30
     },
     "children": [
@@ -65,7 +65,7 @@
             "canonicalId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
             "status": "IN_PROGRESS",
             "progress": {
-              "done": 2,
+              "done": 3,
               "total": 4
             },
             "children": [
@@ -90,16 +90,16 @@
               {
                 "type": "change",
                 "id": "afc-runtime-admission-v2-release",
-                "status": "IN_PROGRESS",
+                "status": "COMPLETE",
                 "progress": {
-                  "done": 2,
+                  "done": 3,
                   "total": 3
                 }
               },
               {
                 "type": "change",
                 "id": "afc-integrated-customer-qualification",
-                "status": "PENDING",
+                "status": "IN_PROGRESS",
                 "progress": {
                   "done": 0,
                   "total": 3
