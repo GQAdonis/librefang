@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { candidatePackage, requireCandidateConfiguration, requireFact } from './corrected-candidate-contract-2.2.28-20261010.mjs'
 import { ipc, setup } from '../../../scripts/c14-operation/setup.mjs'
 import { waitFor } from '../../../scripts/c14-operation/io.mjs'
-import { action, choose, managedConfig, openSettings, sameUar, saveDraft, status, uarState } from '../../../scripts/c14-operation/bossfang-controls.mjs'
+import { action, choose, diagnostic, managedConfig, openSettings, sameUar, saveDraft, status, uarState } from '../../../scripts/c14-operation/bossfang-controls.mjs'
 import { completeDiagnostic } from '../../../scripts/c14-operation/bossfang-boundaries.mjs'
 import { openWork } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/scenario.mjs'
 
@@ -24,6 +24,26 @@ export function preparePublicOperation({ installation }) {
 
 const save = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
 const isAlive = child => child?.pid && child.exitCode === null && child.signalCode === null
+
+// The terminal assertion can throw before its DTO is returned. Retain only
+// lifecycle classifications and known provider codes, never message bodies.
+function failedDiagnosticProjection(value) {
+  const providerCodes = new Set(['provider_invalid_request', 'provider_authentication_failed',
+    'provider_rate_limited', 'provider_overloaded', 'provider_timeout',
+    'provider_transport_failed', 'provider_stream_failed', 'provider_internal_error'])
+  return { id: value.id, taskId: value.taskId, instanceId: value.instanceId,
+    workspaceId: value.workspaceId, model: value.model, status: value.status,
+    startedAt: value.startedAt, completedAt: value.completedAt, checks: value.checks,
+    stages: value.stages.map(item => ({ id: item.id, status: item.status })),
+    events: value.events.map(item => {
+      let detail = {}
+      if (item.type === 'agui.error') {
+        try { detail = JSON.parse(item.detail) } catch { /* Arbitrary text is intentionally excluded. */ }
+      }
+      return { type: item.type, cursor: item.cursor,
+        ...(providerCodes.has(detail.code) ? { providerErrorCode: detail.code } : {}) }
+    }), rawMessagesRecorded: false }
+}
 
 async function freePort() {
   const listener = createServer()
@@ -124,9 +144,13 @@ export default async function scenario(context, configuration) {
     const providerId = 'customer-alternate-gateway'
     const credential = process.env[configuration.gateway.credentialEnv]
     requireFact(Boolean(credential), 'CUSTOMER_EXISTING_GATEWAY_CREDENTIAL_REQUIRED')
+    // The gateway service endpoint is its origin; native chat needs the same
+    // /v1 base used by ordinary configured UAR model setup.
+    const gateway = new URL(configuration.gateway.endpoint)
+    gateway.pathname = gateway.pathname.replace(/\/$/, '').replace(/\/v1$/, '') + '/v1'
     // JSON is valid YAML; private config contains the existing gateway credential, never a launch token.
     fs.writeFileSync(configFile, JSON.stringify({ providers: [{ id: providerId,
-      display_name: 'Disposable selected gateway', base_url: configuration.gateway.endpoint,
+      display_name: 'Disposable selected gateway', base_url: gateway.href.replace(/\/$/, ''),
       api_key: credential, protocol: 'chat', default_model: configuration.gateway.alias, enabled: true,
       models: [{ id: configuration.gateway.alias, enabled: true, supports_tools: true,
         supports_streaming: true }] }] }) + '\n',
@@ -209,7 +233,13 @@ export default async function scenario(context, configuration) {
     await choose(evaluate, signal, 'model', selectedModel.id)
     await saveDraft(evaluate, signal)
     stage = 'actual-external-no-effect-delegation'
-    evidence.diagnostic = await completeDiagnostic(evaluate, signal, { workspaceId, instanceId, modelId: selectedModel.id })
+    try {
+      evidence.diagnostic = await completeDiagnostic(evaluate, signal, { workspaceId, instanceId, modelId: selectedModel.id })
+    } catch (error) {
+      try { evidence.failedDiagnostic = failedDiagnosticProjection(await diagnostic(evaluate, signal)); persist() }
+      catch { evidence.failedDiagnosticCapture = 'unavailable' }
+      throw error
+    }
     evidence.externalDelegationQualified = true
     evidence.checks.push('real-external-no-effect-inference-correlated-to-selected-instance-and-workspace')
     requireFact(isAlive(child), 'CUSTOMER_BOSSFANG_STOPPED_SECONDARY_UAR')
