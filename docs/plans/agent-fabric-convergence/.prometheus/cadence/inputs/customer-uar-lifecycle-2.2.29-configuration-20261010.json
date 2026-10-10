@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "expectedBossSource": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+  "expectedUarSource": "308aea46ff26e7f61340281bb51f67ebe5351569",
+  "isolatedProfile": true,
+  "retainedProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-29WEuI",
+  "expectedGatewayEndpoint": "http://localhost:4000",
+  "priorInferenceEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-9a197eed-660e-44b6-aebe-5d409ab79570/evidence.json",
+  "applicabilityReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-retained-evidence-applicability-20261010.md",
+  "expectedInstalledVersion": "2.2.29",
+  "priorCancellationEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/ordinary-uar-lifecycle-6af35e17-9eea-4b47-89f3-a74b52dde995/evidence.json"
+}
