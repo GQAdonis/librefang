@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-10T14:29:20.323Z",
+  "repositories": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "head": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "divergence": "0\t0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner",
+      "head": "18d000f3e46952418f682159b227dbf71ce61dcb",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "18d000f3e46952418f682159b227dbf71ce61dcb",
+      "divergence": "0\t0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/sycophancy-correction",
+      "head": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+      "divergence": "0\t0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/surreal-memory-server",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/prometheus-knowledge",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/liter-llm",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/prometheus-entity-management",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/cowork-skills",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/disk-space-guardian",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/openai-proxy",
+      "head": "d269910e45811c8450c7d80004405b6ea3cd9665",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "b68861e0a6672f5ece900c58fd44b9e23a6b5691",
+      "divergence": "0\t1"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+      "head": "c3936d8c2264e0366b41a6d515479c6390db5fa9",
+      "status": "?? .prometheus/delivery-cadence-backups/",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "c3936d8c2264e0366b41a6d515479c6390db5fa9",
+      "divergence": "0\t0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/prometheus-knowledge",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/liter-llm",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/tools/surreal-memory-server",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "head": "fe77af32d38cc1ffcd0fdf5c34336943825e000d",
+      "status": "M pnpm-lock.yaml",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "fe77af32d38cc1ffcd0fdf5c34336943825e000d",
+      "divergence": "0\t0"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/models.dev",
+      "head": "f97df19af40bc322ccbffc91138f360154940a63",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/dev",
+      "remote": "4a0154da2410bca18e97be812fecb9e8f85466e8",
+      "divergence": "0\t2000"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system",
+      "head": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "divergence": "0\t247"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/frontend/packages/prometheus-entity-management",
+      "status": "not-initialized; fetch on pinned source materialization"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/liter-llm",
+      "head": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "divergence": "3\t0"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/rust-mcp-filesystem",
+      "head": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+      "divergence": "0\t21"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "head": "ed39c5f9d2c2dd0e876c6c0ccc1eb7575b5e9a8b",
+      "status": "?? build/payload-2.2.25/\n?? resources/convergence-supported-profile.json",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "2f6238fd02b6200dc1b878e5385d807cdbd1a24f",
+      "divergence": "2\t0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini",
+      "head": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "c3936d8c2264e0366b41a6d515479c6390db5fa9",
+      "divergence": "0\t13"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/know-me/boss-landing-spot",
+      "head": "019363e738f19fb6e53251bc14f511e3b3d779a2",
+      "status": "",
+      "defaultRef": "refs/remotes/origin/main",
+      "remote": "326e1f19da9af19d484f5a419fe1ca1f0c4bb1d8",
+      "divergence": "0\t74"
+    }
+  ]
+}

@@ -2,40 +2,42 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 615,
-  "derivedRevision": 615,
+  "sourceRevision": 650,
+  "derivedRevision": 650,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 376
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 411
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "integrated-runtime-release-reconciliation"
   ],
   "phaseIds": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "agent-fabric-convergence::integrated-runtime-release-reconciliation"
   ],
-  "activePhaseId": "agent-fabric-convergence",
-  "activePhase": "agent-fabric-convergence",
+  "activePhaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+  "activePhase": "integrated-runtime-release-reconciliation",
   "phase": "agent-fabric-convergence",
-  "parentPhase": null,
-  "childPointer": null,
-  "change": null,
-  "currentTask": null,
+  "parentPhase": "agent-fabric-convergence",
+  "childPointer": "integrated-runtime-release-reconciliation",
+  "change": "afc-runtime-source-reconciliation",
+  "currentTask": "1",
   "status": "running",
   "lifecycle": "running",
-  "stageId": null,
-  "stageStatus": null,
+  "stageId": "execute",
+  "stageStatus": "IN_PROGRESS",
   "completionMetric": "implementation",
   "implementationCompleted": 26,
-  "implementationTotal": 26,
+  "implementationTotal": 30,
   "planRevision": 11,
-  "revision": 615,
-  "exactNextCommand": "Complete C10 remaining production connector/intake wiring in parallel with C15 adapter capability handling and dependency-eligible C11-C13/C17 implementation; implementation20/20 independent of qualification gates.",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-10-09T21:28:01.435367Z"
+  "revision": 650,
+  "exactNextCommand": "/kbd-assess agent-fabric-convergence > integrated-runtime-release-reconciliation",
+  "nextChange": "afc-runtime-source-reconciliation",
+  "nextTask": "1",
+  "updatedAt": "2026-10-10T14:29:06.192728Z"
 }

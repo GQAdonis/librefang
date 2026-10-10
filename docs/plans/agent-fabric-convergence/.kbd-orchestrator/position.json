@@ -2,17 +2,21 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 615,
-  "derivedRevision": 615,
+  "sourceRevision": 650,
+  "derivedRevision": 650,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 376
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 411
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-09T21:28:01.435367Z",
+  "updatedAt": "2026-10-10T14:29:06.192728Z",
   "cursor": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "integrated-runtime-release-reconciliation",
+    "execute",
+    "afc-runtime-source-reconciliation",
+    "1"
   ],
   "root": {
     "type": "phase",
@@ -20,7 +24,7 @@
     "status": "running",
     "progress": {
       "done": 26,
-      "total": 26
+      "total": 30
     },
     "children": [
       {
@@ -50,6 +54,55 @@
                 "progress": {
                   "done": 13,
                   "total": 13
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "integrated-runtime-release-reconciliation",
+            "canonicalId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 0,
+              "total": 4
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-runtime-source-reconciliation",
+                "status": "IN_PROGRESS",
+                "progress": {
+                  "done": 0,
+                  "total": 1
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-cadence-historical-publication",
+                "status": "IN_PROGRESS",
+                "progress": {
+                  "done": 0,
+                  "total": 2
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-runtime-admission-v2-release",
+                "status": "IN_PROGRESS",
+                "progress": {
+                  "done": 0,
+                  "total": 3
+                }
+              },
+              {
+                "type": "change",
+                "id": "afc-integrated-customer-qualification",
+                "status": "PENDING",
+                "progress": {
+                  "done": 0,
+                  "total": 3
                 }
               }
             ],

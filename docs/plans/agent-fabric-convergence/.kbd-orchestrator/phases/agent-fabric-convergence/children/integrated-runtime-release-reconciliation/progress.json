@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "2",
+  "generatedBy": "kbd-runtime",
+  "projectionContractVersion": 2,
+  "sourceRevision": 650,
+  "derivedRevision": 650,
+  "frontier": {
+    "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 411
+  },
+  "conflictCount": 0,
+  "phase": "integrated-runtime-release-reconciliation",
+  "phaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+  "parentPhase": "agent-fabric-convergence",
+  "last_updated": "2026-10-10T14:29:06.192728Z",
+  "last_updated_by": "kbd-runtime",
+  "changes_total": 4,
+  "changes_completed": 0,
+  "implementation_total": 4,
+  "implementation_completed": 0,
+  "completion": {
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 0,
+      "total": 4,
+      "status": "PENDING"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 26,
+      "total": 30,
+      "status": "IN_PROGRESS"
+    },
+    "evidence": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "changes": [
+    {
+      "id": "afc-runtime-source-reconciliation",
+      "title": "afc-runtime-source-reconciliation",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
+      "tasks_total": 1,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Capture and integrate latest connected fork revisions with preserved local work",
+      "blockers": []
+    },
+    {
+      "id": "afc-cadence-historical-publication",
+      "title": "afc-cadence-historical-publication",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
+      "tasks_total": 2,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Implement and distribute historical publication adoption without delivery credit",
+      "blockers": []
+    },
+    {
+      "id": "afc-runtime-admission-v2-release",
+      "title": "afc-runtime-admission-v2-release",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Integrate UAR and BossFang admission-v2 capability and ownership contracts",
+      "blockers": []
+    },
+    {
+      "id": "afc-integrated-customer-qualification",
+      "title": "afc-integrated-customer-qualification",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Build and operate integrated Mac ARM64 candidate and missing customer scenarios",
+      "blockers": []
+    }
+  ],
+  "children": {},
+  "migrationStatus": null
+}
