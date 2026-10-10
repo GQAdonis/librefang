@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { openWork, setup } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/scenario.mjs'
+import { candidatePackage, requireCandidateConfiguration } from './corrected-candidate-contract-2.2.27-20261010.mjs'
 
 const digest = value => createHash('sha256').update(value).digest('hex')
 const delay = (ms, signal) => new Promise((resolve, reject) => {
@@ -11,6 +12,23 @@ const delay = (ms, signal) => new Promise((resolve, reject) => {
   signal.addEventListener('abort', abort, { once: true })
 })
 const requireFact = (value, code) => { if (!value) throw new Error(code) }
+const outcomeCodes = new Set([
+  'actor_root_request_scope_mismatch', 'actor_root_artifact_scope_failed', 'actor_root_catalog_binding_failed',
+  'actor_root_instance_epoch_failed', 'actor_root_previous_recovery_failed', 'actor_root_identity_failed',
+  'actor_root_registration_failed', 'actor_root_terminal_epoch_failed', 'actor_root_terminal_persistence_failed',
+  'actor_host_failed', 'actor_kernel_failed', 'actor_root_mismatch', 'run_owner_mismatch',
+  'mcp_catalog_unavailable', 'mcp_capture_mismatch', 'child_bindings_unavailable', 'sandbox_binding_unavailable',
+  'mcp_server_not_run_scoped', 'mcp_preflight_failed', 'approval_channel_unavailable', 'world_state_load_failed',
+  'tool_admission_context_failed', 'provider_model_unavailable', 'thread_attachment_failed',
+  'turn_assembly_rejected', 'root_resource_binding_conflict', 'kernel_completion_closed', 'kernel_panicked',
+  'thread_cleanup_unconfirmed', 'session_persistence_unconfirmed', 'representation_cedar_required',
+  'representation_history_scope_unsupported', 'representation_instance_scope_denied', 'representation_admission_denied'
+])
+
+export async function preparePublicOperation({ installation }) {
+  candidatePackage(installation)
+  return { configuration: { expectedBossSource: installation.source } }
+}
 
 /** Root owns the sole installed-package session. This driver never starts another runtime or supplies human approval. */
 export default async function run({ evaluate, signal, onObservation }, configuration) {
@@ -51,6 +69,23 @@ export default async function run({ evaluate, signal, onObservation }, configura
     return response.data
   }
   const selector = () => ({ workspaceId: state.workspaceId, instanceId: state.instanceId })
+  function stopOnUncertain(instance, command, page) {
+    if (command?.status !== 'uncertain') return
+    const outcome = command.outcome
+    const diagnostic = outcomeCodes.has(outcome?.errorCode) && ['actor_host', 'run_kernel'].includes(outcome?.sourceStage)
+      ? { sourceStage: outcome.sourceStage, errorCode: outcome.errorCode } : null
+    const eventCodes = [...new Set((page?.events?.events ?? []).filter(event => event.eventName === 'agui.error' &&
+      event.data?.request_id === command.rootRunId && outcomeCodes.has(event.data?.code)).map(event => event.data.code))]
+    state.uncertainCommand = { commandId: command.commandId, attemptId: command.attemptId ?? null,
+      runId: command.rootRunId ?? null, status: command.status, observedAt: new Date().toISOString(),
+      lastErrorCode: instance.lastErrorCode === 'turn_outcome_uncertain' ? instance.lastErrorCode : null,
+      diagnostic, diagnosticAvailable: diagnostic !== null, eventCodes }
+    result.status = 'pending-reconciliation'; result.uncertainCommand = state.uncertainCommand
+    result.resumeState = stateFile; result.sameTurn = { commandId: command.commandId, runId: command.rootRunId ?? null }
+    result.replayAuthorized = false
+    persist()
+    throw new Error('C17_NATIVE_TURN_UNCERTAIN_RECONCILIATION_REQUIRED')
+  }
   function recordHumanReceipt(pending) {
     const human = JSON.parse(fs.readFileSync(approvalReceiptPath, 'utf8'))
     requireFact(human.kind === 'operator-exact-native-approval' && human.approved === true &&
@@ -76,6 +111,7 @@ export default async function run({ evaluate, signal, onObservation }, configura
     while (Date.now() < until) {
       const instance = await readInstance()
       const command = instance.commands.find(row => row.commandId === commandId)
+      stopOnUncertain(instance, command)
       if (command && (command.rootRunId || ['failed', 'cancelled'].includes(command.status))) return command
       await delay(500, signal)
     }
@@ -94,7 +130,9 @@ export default async function run({ evaluate, signal, onObservation }, configura
     const until = Date.now() + 30000
     while (!['failed', 'cancelled', 'completed'].includes(current.status) && Date.now() < until) {
       await delay(500, signal)
-      current = (await readInstance()).commands.find(row => row.commandId === command.commandId)
+      const instance = await readInstance()
+      current = instance.commands.find(row => row.commandId === command.commandId)
+      stopOnUncertain(instance, current)
     }
     requireFact(current?.status === 'failed', `C17_${name}_REFUSAL_NOT_OBSERVED`)
     if (current.rootRunId) {
@@ -106,9 +144,7 @@ export default async function run({ evaluate, signal, onObservation }, configura
     persist()
   }
   try {
-    requireFact(configuration.sourceRefs?.boss && configuration.sourceRefs?.uar &&
-      configuration.sourceRefs?.appAsarSha256 && configuration.sourceRefs?.sidecarSha256 &&
-      configuration.sourceRefs?.installedVersion !== '2.2.25', 'C17_REPAIRED_CANDIDATE_REQUIRED')
+    requireCandidateConfiguration(configuration)
     requireFact(JSON.stringify(state.sourceRefs) === JSON.stringify(configuration.sourceRefs), 'C17_RESUME_SOURCE_CHANGED')
     if (!configuration.resumeState) {
       stage = 'configure-isolated-gateway-and-native-model'
@@ -202,6 +238,9 @@ export default async function run({ evaluate, signal, onObservation }, configura
     let until = Date.now() + 90000
     let page, text = ''
     while (Date.now() < until) {
+      let instance = await readInstance()
+      let current = instance.commands.find(row => row.commandId === state.command.commandId)
+      stopOnUncertain(instance, current, page)
       page = await ipc('prometheus.uar.durable.run', { ...selector(), runId: state.runId, after: 0 })
       const pending = page.approval
       if (pending) {
@@ -228,10 +267,17 @@ export default async function run({ evaluate, signal, onObservation }, configura
         if (!configuration.holdForOperator) return result
         while (!fs.existsSync(approvalReceiptPath) && Date.now() < Date.parse(state.operatorDeadline)) {
           await delay(1000, signal)
-          const current = (await readInstance()).commands.find(row => row.commandId === state.command.commandId)
+          const waitingInstance = await readInstance()
+          const current = waitingInstance.commands.find(row => row.commandId === state.command.commandId)
+          if (current?.status === 'uncertain') paused = false
+          stopOnUncertain(waitingInstance, current, page)
           if (current?.status === 'failed' || current?.status === 'cancelled') { paused = false; throw new Error('C17_PENDING_TURN_TERMINATED_BEFORE_APPROVAL') }
         }
         if (!fs.existsSync(approvalReceiptPath)) {
+          const waitingInstance = await readInstance()
+          const waitingCommand = waitingInstance.commands.find(row => row.commandId === state.command.commandId)
+          if (waitingCommand?.status === 'uncertain') paused = false
+          stopOnUncertain(waitingInstance, waitingCommand, page)
           const latest = await ipc('prometheus.uar.durable.run', { ...selector(), runId: state.runId, after: 0 })
           result.status = latest.approval ? 'pending-human-approval' : 'approval-outcome-unresolved'
           return result
@@ -246,7 +292,9 @@ export default async function run({ evaluate, signal, onObservation }, configura
       }
       text = page.events.events.flatMap(event => event.eventName === 'agui.message.delta' &&
         event.data?.request_id === state.runId && typeof event.data?.delta?.text === 'string' ? [event.data.delta.text] : []).join('')
-      const current = (await readInstance()).commands.find(row => row.commandId === state.command.commandId)
+      instance = await readInstance()
+      current = instance.commands.find(row => row.commandId === state.command.commandId)
+      stopOnUncertain(instance, current, page)
       if (current?.status === 'completed') break
       requireFact(current?.status !== 'failed' && current?.status !== 'cancelled', 'C17_REPRESENTED_TURN_FAILED')
       await delay(500, signal)
@@ -295,6 +343,7 @@ export default async function run({ evaluate, signal, onObservation }, configura
     }
     result.passed = result.complete
     result.observedBehavior = JSON.stringify({ status: result.status, complete: result.complete, checks: result.checks,
+      uncertainCommand: result.uncertainCommand,
       failureCode: result.failureCode, failureStage: result.failureStage, resumeState: result.resumeState, evidencePath: configuration.evidence })
     result.finishedAt = new Date().toISOString(); result.fixtures = { workspaceId: state.workspaceId, instanceId: state.instanceId, grantId: state.grant?.grantId }
     persist(); fs.writeFileSync(configuration.evidence, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 })
