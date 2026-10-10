@@ -27,7 +27,27 @@ export default async function run({ evaluate, signal, onObservation }, configura
   async function ipc(route, input, cleanup = false) {
     if (!cleanup) signal.throwIfAborted()
     const response = await evaluate(`window.api.ipcApi.request(${JSON.stringify(route)},${JSON.stringify(input)})`)
-    if (!response?.ok) throw new Error(response?.error?.code ?? 'C17_TYPED_OPERATION_FAILED')
+    if (!response?.ok) {
+      const message = String(response?.error?.message ?? '')
+      const http = message.match(/failed with HTTP (\d{3})(?: \(([A-Za-z0-9_.:-]+)\))?/)
+      let validationIssues
+      try {
+        const issues = JSON.parse(message)
+        if (Array.isArray(issues)) validationIssues = issues.map(({ code, path }) => ({ code, path }))
+      } catch {}
+      let redactedMessage = message
+      for (const [name, value] of Object.entries(process.env))
+        if (/TOKEN|SECRET|PASSWORD|KEY/i.test(name) && value?.length >= 6)
+          redactedMessage = redactedMessage.split(value).join('[credential]')
+      result.failedApplicationRequest ??= {
+        route, code: response?.error?.code,
+        category: http ? 'native-http' : validationIssues ? 'response-projection' : 'host-adapter',
+        httpStatus: http ? Number(http[1]) : undefined, nativeCode: http?.[2], validationIssues,
+        redactedMessage: redactedMessage.replace(/https?:\/\/[^\s"']+/g, '[endpoint]')
+          .replace(/Bearer\s+\S+/gi, 'Bearer [credential]').slice(0, 500)
+      }
+      throw new Error(response?.error?.code ?? 'C17_TYPED_OPERATION_FAILED')
+    }
     return response.data
   }
   const selector = () => ({ workspaceId: state.workspaceId, instanceId: state.instanceId })
