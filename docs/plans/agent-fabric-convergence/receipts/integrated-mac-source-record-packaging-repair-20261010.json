@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-packaging-source-record-repair",
+  "recordedAt": "2026-10-10T23:35:20.513Z",
+  "failedAttempt": "08ed75ee-3c61-4af6-b687-d316d1be61a7",
+  "failedCandidate": "b5688ac8-4bca-441a-a55d-891cc4b13506",
+  "error": "The packaged mini revision does not match the pinned integration revision",
+  "source": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "changedPaths": [
+    "build/integration-artifacts.json"
+  ],
+  "selectedMini": "6c63c0acec67444e30f65461836e7a943316e242",
+  "selectedFull": "547a9bc93de61246bbe38567796d5fa2d0f616f0",
+  "preserved": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+    "successfulDeliveries": 15,
+    "originalClock": true,
+    "priorAttempts": true
+  },
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "linux": "excluded",
+  "qualificationCredit": false,
+  "deliveryCredit": false,
+  "rerun": "Actual pnpm build:mac:arm64; no test suite or standalone verification build",
+  "securityChanges": "none"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "mac-arm64-build",
+  "reason": "Repeat only failed actual Mac installer packaging after observed mini/full artifact-source record mismatch was corrected in committed Boss21b9c65931. Preserve original attempts, candidate history, clock and delivery count.",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.31-mac-arm64.dmg",
+      "platform": "darwin-arm64",
+      "signingStatus": "Developer-ID-signed-local-not-notarized"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/convergence-supported-profile.json"
+    }
+  ]
+}
