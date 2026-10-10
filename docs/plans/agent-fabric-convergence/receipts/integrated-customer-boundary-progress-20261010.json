@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-customer-boundary-progress",
+  "recordedAt": "2026-10-10T20:33:44.659Z",
+  "version": "2.2.31",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "build": {
+    "processExitCode": 0,
+    "installerIntegrity": "valid",
+    "applicationSignature": "Developer ID verified",
+    "notarization": "not performed by local build",
+    "cadence": "adopted preserving original source-drift failure"
+  },
+  "launch": {
+    "status": "success",
+    "operation": "provider setup UI"
+  },
+  "bossfang": {
+    "status": "failed",
+    "passed": [
+      "compiled authenticated dashboard",
+      "visible workflow authoring and persistence",
+      "selected UAR process preserved"
+    ],
+    "failure": "C14W_CANONICAL_HOST_DECISION_UNSETTLED",
+    "repairOwners": [
+      "boss-core.desktop",
+      "boss-core.runtime"
+    ]
+  },
+  "accounting": {
+    "codeTasks": 61,
+    "codeTasksTotal": 61,
+    "codeChanges": 20,
+    "codeChangesTotal": 20,
+    "portfolioTerminal": 43,
+    "portfolioTotal": 61,
+    "successfulCadenceDeliveries": 15,
+    "originalRunStartedAt": "2026-10-06T17:07:34.783Z"
+  },
+  "publication": "pending corrected complete operation",
+  "installedAcceptance": "pending identified final candidate",
+  "evidence": [
+    {
+      "path": "receipts/integrated-checkpoint-adoption-20261010/build-receipt.json",
+      "sha256": "8ca277f47322c22ea6aac494a79a1318659aa85a09f29b565513cd56787ef330"
+    },
+    {
+      "path": "receipts/integrated-checkpoint-adoption-20261010/build-generated-output-provenance.json",
+      "sha256": "525eb99b58ee5a266c14f14c68ea0760423fe400cffcc54711d0b9dcfe735683"
+    },
+    {
+      "path": "receipts/integrated-checkpoint-adoption-20261010/launch-receipt.json",
+      "sha256": "23f2a509ef55322b54da30c5af5561e3871c372090a8289aeabed8088112713a"
+    },
+    {
+      "path": ".prometheus/cadence/artifacts/integrated-2.2.31-workflow-delegation-20261010/integrated-admission-v2-bossfang-0b6da348-900d-4e53-b21e-c0725dc95e74/ordinary-workflow-evidence.json",
+      "sha256": "4d6f26f04a011b88f085f075e8922599640849b0ee9f616599c0979505d021fa"
+    }
+  ]
+}

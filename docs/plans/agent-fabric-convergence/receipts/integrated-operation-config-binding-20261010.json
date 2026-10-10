@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-post-build-operation-configuration-binding",
+  "recordedAt": "2026-10-10T20:29:03.047Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+  "candidateId": "02c4dd1a-3344-4b97-9f49-08f7a84bb2ab",
+  "contentManifestDigest": "db0d10a5965863a42d3d98dbfcd3eeffab174bde494396333216d986627fc1da",
+  "releaseVersion": "2.2.31",
+  "configuration": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json",
+    "sha256": "3a3e92ffcd9ce0f6f6972e3a75e0a66ec4df624280f2a237313945184b5a9ef1"
+  },
+  "candidate": {
+    "boss": "d9bbf5a044b3c39800a212959836677ca3173eea",
+    "uar": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+    "bossfang": "4971458c70543b592cc534986737a9d045164547",
+    "appAsarSha256": "5177ed32895ea2cd9342e387b918f9df28cb0219c6e0b98389020ca1b2cda2d8",
+    "uarSha256": "da15621b4ce70e31b509c187c62d16c299190611e7193e22b9646f1b4e4622c3",
+    "bossfangSha256": "cb24db4935cc77deda149ca0e0c8fbe5b96bafb4cab70a2c1d27e07ac0cbb82e"
+  },
+  "builtSource": {
+    "boss": "d9bbf5a044b3c39800a212959836677ca3173eea",
+    "candidateId": "02c4dd1a-3344-4b97-9f49-08f7a84bb2ab",
+    "contentManifestDigest": "db0d10a5965863a42d3d98dbfcd3eeffab174bde494396333216d986627fc1da"
+  },
+  "operatedSource": {
+    "boss": "d9bbf5a044b3c39800a212959836677ca3173eea",
+    "driverDiffPaths": []
+  },
+  "requiresFrozenBuildReconciliation": false,
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app",
+  "inputRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-cadence-ready-input-20261010.json",
+      "sha256": "dd7e2b0059ec2258b8b7ae98a34815f37c8739d1aae837c8a4ece7bb6aaf6eed"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-sources.json",
+      "sha256": "bb016e5baf826caca1545af6fe0be535e022d02af7243a1724299a26ec72b000"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-artifacts.json",
+      "sha256": "fd3e8cb7baf11d57f643fe26dea59516349c05740815da1c6d2daddf0ce3a802"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/local-uar-source.json",
+      "sha256": "a6a07e49538ff630e32702b5911356d1a6d42eb2dd9040db1c2de906fd2219bb"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/c14-gpt-6.1-sol-context-declaration-20261008.json",
+      "sha256": "41ec0ddfec278c57d2bfd9af4c141b2fba2b524502679cbbae196a2b14e0f33b"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/composite-operation-evidence.json",
+      "sha256": "9d66552685c38b73fccb43d7c699e377de96db181d2a2b1ab4094603082d002d"
+    }
+  ],
+  "operationRun": false,
+  "authenticationProbeRun": false,
+  "inferenceRun": false,
+  "candidateAcceptance": "pending",
+  "publicationScope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64"
+    ]
+  },
+  "limitations": [
+    "Parent invokes after successful actual build completion; this receipt alone does not prove build completion.",
+    "candidate.boss names the operation checkout; builtSource.boss remains the immutable application source. A later scripts-only repair requires supported candidate reconcile-frozen before receipt adoption.",
+    "Signed packaged byte hashes bind the operation; signing, installer acceptance and runtime behavior require their own actual receipts.",
+    "No credential values were read or recorded; prior receipt remains historical evidence at its original source and package."
+  ]
+}

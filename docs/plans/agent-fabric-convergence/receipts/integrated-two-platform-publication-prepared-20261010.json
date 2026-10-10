@@ -16,7 +16,7 @@
     "linux": "excluded"
   },
   "candidate": {
-    "source": "b4d9f93101ebe7ed254ee365dcd6b1c63629487e",
+    "source": "d9bbf5a044b3c39800a212959836677ca3173eea",
     "ref": "codex/integrated-runtime-release-reconciliation",
     "sourceMustBeRecheckedBeforeDispatch": true,
     "notes": "If payload pins or production code change after this source, freeze the resulting full commit and update immutable manifest names before dispatch."
@@ -138,7 +138,7 @@
         "-f",
         "arch=arm64",
         "-f",
-        "manifestAsset=release-platform-v2.2.31-uar-enabled-darwin-arm64-b4d9f93101ebe7ed254ee365dcd6b1c63629487e.json"
+        "manifestAsset=release-platform-v2.2.31-uar-enabled-darwin-arm64-d9bbf5a044b3c39800a212959836677ca3173eea.json"
       ],
       "onlyIf": "Exact current-source immutable manifest and installer public, and automatic matching landing publication missing/failed. Record returned run; do not duplicate an existing active/successful event."
     },
@@ -166,7 +166,7 @@
         "-f",
         "arch=x64",
         "-f",
-        "manifestAsset=release-platform-v2.2.31-uar-enabled-win32-x64-b4d9f93101ebe7ed254ee365dcd6b1c63629487e.json"
+        "manifestAsset=release-platform-v2.2.31-uar-enabled-win32-x64-d9bbf5a044b3c39800a212959836677ca3173eea.json"
       ],
       "onlyIf": "Exact current-source immutable manifest and installer public, and automatic matching landing publication missing/failed. Record returned run; do not duplicate an existing active/successful event."
     }
