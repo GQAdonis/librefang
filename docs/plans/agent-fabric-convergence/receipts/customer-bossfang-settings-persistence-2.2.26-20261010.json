@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-bossfang-settings-and-retained-profile-operation",
+  "status": "passed",
+  "sourceRefs": {
+    "boss": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "installedVersion": "2.2.26",
+    "appAsarSha256": "2f83a209d73feebd9f4fd99200804c17bff1fc4e402102234a9145ce66a8ffc4",
+    "sidecarSha256": "e8282f646b850f644a3046396f9234766c6e69c8fdff9301072fc45c42279466",
+    "installerSha256": "3be06ee7815d6760d27fcb5aaf1d65a8a29fc174e2ea98bf7544c21066ce4053",
+    "installationReceiptSha256": "b98269f6525738183ff03c89fc7c195eb99c65fd82c6adf8f530607df7cc0c43",
+    "scenarioSha256": "aab44bb27215888fd70a7dc48bbc7d2c24658b129671b0e43188e6ccb95bdc58",
+    "operationDriverSha256": "526ef34d90771ba368a5e7c6de5f1180ddb6515fa8fa9badb59482b6f145cc13",
+    "operationDriverRevision": "5b317b64c65928492f913fc41946d55ee099b472"
+  },
+  "originalOperation": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/bossfang-whole-app-reopen-7db46cfd-13ea-4046-89df-c63a17abc683/operation.json",
+  "operationSha256": "cd02b560e25c6f079ae316175fb2c2111ccb519a896291686f16e64b49ac525d",
+  "phases": [
+    {
+      "phase": "configure",
+      "pid": 52300,
+      "status": "passed",
+      "evidenceSha256": "54a4a02ba857d479a822408e7af93b3550625e4ac55a4bb0b29187f8e6bcaa7e",
+      "checks": [
+        "requested-effective-port-pending-change-and-owned-process-replacement",
+        "bossfang-stop-restart-preserves-existing-uar-process",
+        "renderer-reopen-retains-requested-and-effective-settings"
+      ],
+      "restarts": [
+        {
+          "previousOwnedPids": [],
+          "newOwnedPid": 58606,
+          "requestedPort": 56614,
+          "effectivePort": 56614,
+          "ownership": "managed",
+          "restartRequired": false
+        },
+        {
+          "previousOwnedPids": [
+            58606
+          ],
+          "newOwnedPid": 63614,
+          "requestedPort": 56800,
+          "effectivePort": 56800,
+          "ownership": "managed",
+          "restartRequired": false
+        },
+        {
+          "previousOwnedPids": [],
+          "newOwnedPid": 66972,
+          "requestedPort": 56800,
+          "effectivePort": 56800,
+          "ownership": "managed",
+          "restartRequired": false
+        }
+      ],
+      "initialRuntime": {
+        "state": "running",
+        "processId": 54565,
+        "startedAt": 1791592317341,
+        "port": 1907,
+        "selectedInstanceId": "managed-local"
+      },
+      "finalRuntime": {
+        "state": "running",
+        "processId": 54565,
+        "startedAt": 1791592317341,
+        "port": 1907,
+        "selectedInstanceId": "managed-local"
+      },
+      "expectedPersistedConfig": {
+        "ownership": "managed",
+        "port": 56800,
+        "portPolicy": "fixed",
+        "uarInstanceId": "managed-local",
+        "workspaceId": "6ba418a7-d2f9-44f5-9710-8c1afe1822ab"
+      }
+    },
+    {
+      "phase": "reopen",
+      "pid": 68880,
+      "status": "passed",
+      "evidenceSha256": "b680eda378ed8b9119d1eccd4bcb5f6878b15c3d49e1821eb758facd0a439073",
+      "checks": [
+        "requested-port-and-instance-persisted-across-owned-app-replacement"
+      ],
+      "restarts": [],
+      "initialRuntime": {
+        "state": "running",
+        "processId": 69209,
+        "startedAt": 1791592366101,
+        "port": 1907,
+        "selectedInstanceId": "managed-local"
+      },
+      "finalRuntime": {
+        "state": "running",
+        "processId": 69209,
+        "startedAt": 1791592366101,
+        "port": 1907,
+        "selectedInstanceId": "managed-local"
+      },
+      "persisted": {
+        "requested": {
+          "ownership": "managed",
+          "port": 56800,
+          "portPolicy": "fixed",
+          "uarInstanceId": "managed-local",
+          "workspaceId": "6ba418a7-d2f9-44f5-9710-8c1afe1822ab"
+        },
+        "effectivePort": 56800
+      }
+    }
+  ],
+  "shutdowns": [
+    {
+      "phase": "configure",
+      "pid": 52300,
+      "processGroup": 52300,
+      "groupCreated": true,
+      "startedAt": "2026-10-10T00:32:28.266Z",
+      "gracefulQuitConfirmed": false,
+      "forceUsed": false,
+      "signals": [
+        {
+          "target": "owned-main",
+          "signal": "SIGTERM"
+        }
+      ],
+      "groupStopped": true,
+      "ownedProcessesStopped": true,
+      "foreignUidGroupMembers": [],
+      "mode": "sigterm-without-forced-escalation",
+      "childExitCode": 0,
+      "childSignalCode": null,
+      "finishedAt": "2026-10-10T00:32:31.840Z"
+    },
+    {
+      "phase": "reopen",
+      "pid": 68880,
+      "processGroup": 68880,
+      "groupCreated": true,
+      "startedAt": "2026-10-10T00:32:55.416Z",
+      "gracefulQuitConfirmed": false,
+      "forceUsed": false,
+      "signals": [
+        {
+          "target": "owned-main",
+          "signal": "SIGTERM"
+        }
+      ],
+      "groupStopped": true,
+      "ownedProcessesStopped": true,
+      "foreignUidGroupMembers": [],
+      "mode": "sigterm-without-forced-escalation",
+      "childExitCode": 0,
+      "childSignalCode": null,
+      "finishedAt": "2026-10-10T00:32:59.028Z"
+    }
+  ],
+  "sameDisposableProfile": true,
+  "oldApplicationPid": 52300,
+  "newApplicationPid": 68880,
+  "gracefulQuitQualification": "not-demonstrated",
+  "externalInstanceSwitch": "pending-authenticated-fixture",
+  "operatorAcceptance": "pending",
+  "qualificationTaskCompletion": false,
+  "newCadenceDelivery": false,
+  "applicability": "BossFang controls unchanged by subsequent 5b317 owner-scoped durable-turn allowlist entry; exact original e27 package provenance retained."
+}
