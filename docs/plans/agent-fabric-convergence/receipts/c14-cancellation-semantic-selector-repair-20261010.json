@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T01:04:20.834Z",
+  "requirement": "C14 failed-only cancellation controls",
+  "evidence": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-retained-recovery-081d8742-d44b-495f-8cbf-3fff5ef3129e/operation.json",
+  "observed": {
+    "failureCode": "C14_RETAINED_CANCEL_CONTROL_UNAVAILABLE",
+    "teamId": "9e202453-dafa-47d2-a022-d93d8a2ba845",
+    "attemptId": "8192e02c-76f6-4407-b8f5-572d288002a7",
+    "nativeStatus": "running",
+    "renderedAttemptStatus": "running",
+    "reasonPresent": true,
+    "oldSelectorMatched": false
+  },
+  "sourceFinding": {
+    "file": "scripts/uiContract/runtime.ts",
+    "function": "mergeDataUi",
+    "contract": "Preserves only last forwarded semantic token and structural part tokens.",
+    "packagedButton": "out/renderer/assets/button-BfTaJsUb.js uses mergeUiProps(props, part:button).",
+    "packagedCancel": "out/renderer/assets/uarWorkflows-DAmjCYAA.js supplies teams-cancel teams-stop-executor for running attempt.",
+    "conclusion": "Running control is expected to expose teams-stop-executor part:button; driver incorrectly required discarded teams-cancel semantic."
+  },
+  "repair": {
+    "productionSourceChanged": false,
+    "driver": ".prometheus/cadence/inputs/customer-coding-retained-recovery-20261010.mjs",
+    "selector": "Within matching actual attempt row accept teams-stop-executor or teams-cancel; retain reason/disabled guards and record exact rendered data-ui and matching native attempt.",
+    "reuse": "Inspect existing 9e202453 team before admitting another required read-only turn.",
+    "priorPassingEvidenceReplayed": false,
+    "operationExecuted": false
+  }
+}

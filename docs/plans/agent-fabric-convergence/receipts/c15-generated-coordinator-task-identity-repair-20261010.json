@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T00:56:16.234Z",
+  "requirement": "C15 reviewed skill team delegation",
+  "observed": {
+    "candidateVersion": "2.2.26",
+    "sourceCommit": "5b317b64c65928492f913fc41946d55ee099b472",
+    "evidence": "../.prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/reviewed-skills-proxy-repaired-2-2-26-e1d068fc-4df0-41b7-8b76-a6417883c434/evidence.json",
+    "failureStage": "normal-work-run-with-read-only-approval",
+    "failureCode": "C15_APPROVAL_DELEGATION_SCOPE_MISMATCH",
+    "failedCondition": "taskIdIsNew",
+    "taskIdExists": true,
+    "expectedTeamRevision": 5,
+    "liveTeamRevision": 5,
+    "otherApprovalConditionsPassed": 10,
+    "approvalSubmitted": false
+  },
+  "diagnosis": {
+    "driver": "Correctly refused an invalid delegation proposal; no authority bypass or approval fabrication.",
+    "product": "Generated coordinator prompt instructed copying task IDs without distinguishing a newly created delegation task from existing task references.",
+    "causalLimit": "The request reused an existing task ID. Prompt contradiction is confirmed in source; the model reasoning and exact copied source task are not retained and are not asserted."
+  },
+  "repair": {
+    "file": "src/main/ai/runtime/uar/uarTeamAuthoringPackage.ts",
+    "scope": "Generated coordinator guidance only: fresh command and task IDs for new delegation; existing references copied exactly; replay preserves unchanged IDs.",
+    "unchanged": [
+      "UAR collision and current-authority checks",
+      "Tool eligibility and scope",
+      "Budgets and policies",
+      "Immutable deployed bindings and definitions"
+    ],
+    "deployment": "Repair applies to subsequently compiled/deployed authored revisions, not an in-place rewrite of existing bindings.",
+    "nextCandidateVersion": "2.2.27",
+    "versionBumped": false
+  },
+  "operation": {
+    "verification": "Pending root-owned completed-delivery build and failed-only packaged operation; no tests, builds or application launches performed by this owner."
+  }
+}
