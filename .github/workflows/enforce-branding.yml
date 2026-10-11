@@ -1,0 +1,50 @@
+name: enforce-branding
+
+# BossFang branding guard.
+#
+# Upstream LibreFang ships sky-blue tokens (#0284c7, #38bdf8, #0ea5e9) and a
+# #020617 dark background. Every upstream merge can reintroduce them, and the
+# fix has until now been a manual post-merge step in CLAUDE.md that is easy to
+# forget. This job makes a regression fail the build instead.
+#
+# scripts/enforce-branding.py --check is read-only: it exits 0 when clean and 1
+# when any upstream token survives, naming the offending files. To fix, run the
+# same script without --check (it is idempotent) and commit the result.
+#
+# Path filters mirror COLOR_SCAN_DIRS in the script itself. Keep them in sync —
+# a scan root added there but not here means regressions land unnoticed.
+
+on:
+  pull_request:
+    paths:
+      - 'crates/librefang-api/dashboard/**'
+      - 'crates/librefang-api/static/**'
+      - 'crates/librefang-desktop/frontend/**'
+      - 'crates/librefang-desktop/src/**'
+      - 'scripts/enforce-branding.py'
+      - '.github/workflows/enforce-branding.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/librefang-api/dashboard/**'
+      - 'crates/librefang-api/static/**'
+      - 'crates/librefang-desktop/frontend/**'
+      - 'crates/librefang-desktop/src/**'
+      - 'scripts/enforce-branding.py'
+      - '.github/workflows/enforce-branding.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  enforce-branding:
+    name: enforce-branding (--check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Audit for upstream branding tokens
+        run: python3 scripts/enforce-branding.py --check
