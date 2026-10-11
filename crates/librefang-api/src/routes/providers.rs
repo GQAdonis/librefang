@@ -330,6 +330,11 @@ pub async fn list_models(
     // Every other provider used to be served from the checked-in catalogue alone, which has nothing to show for a self-hosted OpenAI-compatible gateway: the model ids there are the operator's own, so no snapshot can ship them (#7775).
     // The probe below is the same `/models` listing the periodic loop and `GET /api/providers` already query — this handler previously only *read* `provider_probe_cache` for the #3191 filter and never filled it, so a `/api/models` call that arrived before either of those had run reported the gateway as having no models at all.
     refresh_discovered_models(&state, provider_filter.as_deref()).await;
+    let uar_catalog = if provider_filter.as_deref().is_none_or(|provider| provider == "uar") {
+        Some(super::uar_model_catalog::selected_models().await)
+    } else {
+        None
+    };
     let cli_tier_ok = tier_filter
         .as_deref()
         .map(|t| t == "custom")
@@ -388,6 +393,8 @@ pub async fn list_models(
         .list_models()
         .iter()
         .filter(|m| {
+            // UAR models belong to the connected runtime, not our static catalog.
+            if m.provider.eq_ignore_ascii_case("uar") { return false; }
             if let Some(ref p) = provider_filter {
                 if m.provider.to_lowercase() != *p {
                     return false;
@@ -502,9 +509,16 @@ pub async fn list_models(
         }
     }
 
-    // `total` / `available` count the static catalog only — the per-response synthesized CLI rows are deliberately not added.
-    let total = catalog.list_models().len();
-    let available_count = catalog.available_models().len();
+    let live_uar_count = uar_catalog.as_ref().map_or(0, |(models, _)| models.len());
+    let uar_status = uar_catalog.map(|(live_models, status)| {
+        if tier_filter.as_deref().is_none_or(|tier| tier == "custom") {
+            models.extend(live_models);
+        }
+        status
+    });
+    // Preserve existing global catalog counts while replacing stale UAR entries.
+    let total = catalog.list_models().iter().filter(|model| model.provider != "uar").count() + live_uar_count;
+    let available_count = catalog.available_models().iter().filter(|model| model.provider != "uar").count() + live_uar_count;
 
     (
         StatusCode::OK,
@@ -512,6 +526,7 @@ pub async fn list_models(
             "models": models,
             "total": total,
             "available": available_count,
+            "uar_catalog": uar_status,
         })),
     )
 }

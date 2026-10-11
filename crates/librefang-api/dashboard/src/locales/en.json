@@ -954,6 +954,19 @@
     }
   },
   "providers": {
+    "uar_model_unavailable": "The selected model “{{model}}” is not available from the connected runtime. Choose a configured model or update the UAR binding.",
+    "uar_readiness": "Connection readiness",
+    "uar_readiness_connection": "Runtime connected",
+    "uar_readiness_binding": "Compatible binding",
+    "uar_readiness_models": "Configured models",
+    "uar_readiness_inference": "Inference operated",
+    "uar_readiness_confirmed": "Confirmed",
+    "uar_readiness_pending": "Not yet confirmed",
+    "uar_catalog_loading": "Loading models from the selected UAR instance…",
+    "uar_catalog_ready": "Models are available from the selected UAR instance.",
+    "uar_catalog_empty": "The selected UAR has no enabled models. Configure a provider and enable a model.",
+    "uar_catalog_unavailable": "The UAR model catalog is unavailable. Check the selected instance and its credentials.",
+    "uar_catalog_configure": "Configure UAR connection and models",
     "uar_connect": "Connect",
     "uar_disconnect": "Disconnect",
     "uar_reconnect": "Reconnect",
@@ -1499,6 +1512,8 @@
     }
   },
   "memory": {
+    "internal_title": "BossFang internal memory",
+    "shared_service_notice": "This page manages BossFang’s internal agent memory and private key/value store. Shared Surreal Memory is separate: configure its connection and workspace in The Boss → Settings → Services and BossFang. Agents use shared_memory_remember, shared_memory_retrieve and shared_memory_search for that service. A configured connection is not proof of a successful memory operation.",
     "title": "Memory",
     "subtitle": "Persistent vector storage for agent context.",
     "cognitive_layer": "Cognitive Layer",

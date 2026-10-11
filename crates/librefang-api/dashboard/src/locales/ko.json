@@ -953,6 +953,19 @@
     }
   },
   "providers": {
+    "uar_model_unavailable": "선택한 모델 “{{model}}”은 연결된 런타임에서 사용할 수 없습니다. 구성된 모델을 선택하거나 UAR 연결 설정을 업데이트하세요.",
+    "uar_readiness": "연결 준비 상태",
+    "uar_readiness_connection": "런타임 연결",
+    "uar_readiness_binding": "호환되는 연결 설정",
+    "uar_readiness_models": "구성된 모델",
+    "uar_readiness_inference": "추론 실행",
+    "uar_readiness_confirmed": "확인됨",
+    "uar_readiness_pending": "아직 확인되지 않음",
+    "uar_catalog_loading": "선택한 UAR 인스턴스에서 모델을 불러오는 중…",
+    "uar_catalog_ready": "선택한 UAR 인스턴스의 모델을 사용할 수 있습니다.",
+    "uar_catalog_empty": "선택한 UAR에 활성화된 모델이 없습니다. 공급자를 구성하고 모델을 활성화하세요.",
+    "uar_catalog_unavailable": "UAR 모델 목록을 사용할 수 없습니다. 선택한 인스턴스와 자격 증명을 확인하세요.",
+    "uar_catalog_configure": "UAR 연결 및 모델 구성",
     "uar_connect": "연결",
     "uar_disconnect": "연결 해제",
     "uar_reconnect": "다시 연결",
@@ -1497,6 +1510,8 @@
     }
   },
   "memory": {
+    "internal_title": "BossFang 내부 메모리",
+    "shared_service_notice": "이 페이지는 BossFang의 내부 에이전트 메모리와 비공개 키/값 저장소를 관리합니다. 공유 Surreal Memory는 별도 서비스입니다. The Boss → 설정 → 서비스 및 BossFang에서 연결과 작업 공간을 설정하세요. 에이전트는 해당 서비스에 shared_memory_remember, shared_memory_retrieve, shared_memory_search를 사용합니다. 연결 설정만으로 메모리 작업의 성공을 확인할 수는 없습니다.",
     "title": "메모리",
     "subtitle": "에이전트 컨텍스트를 위한 지속적인 벡터 저장소입니다.",
     "cognitive_layer": "인지층",

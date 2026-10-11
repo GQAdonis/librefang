@@ -2614,13 +2614,25 @@ export async function updateAgentModelRouting(
   return put<AgentModelRouting>(`/api/agents/${encodeURIComponent(agentId)}/model_routing`, routing);
 }
 
-export async function listModels(params?: { provider?: string; tier?: string; available?: boolean }): Promise<{ models: ModelItem[]; total: number; available: number }> {
+export interface UarCatalogStatus {
+  state: "ready" | "empty" | "unavailable";
+  error?: string;
+}
+
+export interface ModelListResult {
+  models: ModelItem[];
+  total: number;
+  available: number;
+  uar_catalog?: UarCatalogStatus | null;
+}
+
+export async function listModels(params?: { provider?: string; tier?: string; available?: boolean }): Promise<ModelListResult> {
   const query = new URLSearchParams();
   if (params?.provider) query.set("provider", params.provider);
   if (params?.tier) query.set("tier", params.tier);
   if (params?.available !== undefined) query.set("available", String(params.available));
   const qs = query.toString();
-  return get<{ models: ModelItem[]; total: number; available: number }>(`/api/models${qs ? `?${qs}` : ""}`);
+  return get<ModelListResult>(`/api/models${qs ? `?${qs}` : ""}`);
 }
 
 export async function addCustomModel(model: {

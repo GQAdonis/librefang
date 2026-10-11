@@ -1,3 +1,4 @@
+import { UarCatalogNotice } from "../components/UarCatalogNotice";
 import { formatRelativeTime } from "../lib/datetime";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -3309,6 +3310,7 @@ export function AgentsPage() {
                                   : t("agents.form.model_id_placeholder", { defaultValue: "e.g. gpt-4o" })
                             }
                           />
+                          <UarCatalogNotice provider={modelDraft.provider} status={modelsQuery.data?.uar_catalog} loading={modelsQuery.isLoading} selectedModel={modelDraft.model} modelIds={modelsQuery.data?.models.map(model => model.id)} />
                           <datalist id="agent-detail-model-options">
                             {visibleModels.map(m => (
                               <option key={m.id} value={m.id}>{m.display_name || m.id}</option>
@@ -3816,6 +3818,7 @@ export function AgentsPage() {
               </p>
             ) : (
               <div className="max-h-[65vh] overflow-y-auto pr-1">
+                <UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={showCreate ? formState.model.model : manifestEditorFormState.model.model} modelIds={formModelsQuery.data?.models.map(model => model.id)} />
                 <ManifestEditorForm
                   agent={detailAgent}
                   value={manifestEditorFormState}
@@ -4056,6 +4059,7 @@ export function AgentsPage() {
 
           {createMode === "form" ? (
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 max-h-[60vh] overflow-y-auto pr-1">
+              {formModelsQueryProvider === "uar" && <div className="lg:col-span-2"><UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={formState.model.model} modelIds={formModelsQuery.data?.models.map(model => model.id)} /></div>}
               <AgentManifestForm
                 value={formState}
                 onChange={setFormState}

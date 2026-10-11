@@ -51,6 +51,7 @@ pub mod task_queue;
 pub mod terminal;
 pub mod tools_sessions;
 pub mod uar;
+mod uar_model_catalog;
 pub mod uar_delegation;
 pub mod uar_supervisor;
 pub mod users;

@@ -954,6 +954,19 @@
     }
   },
   "providers": {
+    "uar_model_unavailable": "连接的运行时不提供所选模型“{{model}}”。请选择已配置的模型或更新 UAR 绑定。",
+    "uar_readiness": "连接就绪状态",
+    "uar_readiness_connection": "运行时已连接",
+    "uar_readiness_binding": "兼容的绑定",
+    "uar_readiness_models": "已配置的模型",
+    "uar_readiness_inference": "已运行推理",
+    "uar_readiness_confirmed": "已确认",
+    "uar_readiness_pending": "尚未确认",
+    "uar_catalog_loading": "正在从所选 UAR 实例加载模型…",
+    "uar_catalog_ready": "所选 UAR 实例的模型可用。",
+    "uar_catalog_empty": "所选 UAR 未启用任何模型。请配置提供商并启用模型。",
+    "uar_catalog_unavailable": "UAR 模型目录不可用。请检查所选实例及其凭据。",
+    "uar_catalog_configure": "配置 UAR 连接和模型",
     "uar_connect": "连接",
     "uar_disconnect": "断开连接",
     "uar_reconnect": "重新连接",
@@ -1498,6 +1511,8 @@
     }
   },
   "memory": {
+    "internal_title": "BossFang 内部记忆",
+    "shared_service_notice": "此页面管理 BossFang 的内部代理记忆和私有键值存储。共享 Surreal Memory 是独立服务：请在 The Boss → 设置 → 服务和 BossFang 中配置连接与工作区。代理通过 shared_memory_remember、shared_memory_retrieve 和 shared_memory_search 使用该服务。已配置连接并不代表记忆操作已成功。",
     "title": "记忆",
     "subtitle": "智能体的持久化记忆存储。",
     "cognitive_layer": "认知层",

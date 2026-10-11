@@ -32,6 +32,7 @@ mod process;
 mod sandbox;
 mod schedule;
 mod search;
+mod shared_memory;
 mod shell;
 mod shell_safety;
 mod skill;

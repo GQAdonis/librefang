@@ -221,7 +221,7 @@ fn builtin_tool_names() -> &'static std::collections::HashSet<String> {
 pub fn builtin_tool_definitions() -> Vec<ToolDefinition> {
     static DEFNS: OnceLock<Vec<ToolDefinition>> = OnceLock::new();
     DEFNS.get_or_init(|| {
-        let mut tools = Vec::new();
+        let mut tools = super::shared_memory::definitions();
 
         tools.extend(vec![
             ToolDefinition {

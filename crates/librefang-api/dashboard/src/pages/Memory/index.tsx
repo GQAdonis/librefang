@@ -162,7 +162,7 @@ export function MemoryPage() {
     <div className="flex flex-col gap-6 transition-colors duration-300">
       <PageHeader
         badge={t("memory.cognitive_layer")}
-        title={t("memory.title")}
+        title={t("memory.internal_title")}
         subtitle={t("memory.subtitle")}
         isFetching={globalStatsQuery.isFetching || agentsQuery.isFetching}
         onRefresh={() => {
@@ -182,6 +182,10 @@ export function MemoryPage() {
           </div>
         }
       />
+
+      <div role="note" className="rounded-lg border border-border-subtle bg-bg-subtle p-4 text-sm text-text-dim">
+        {t("memory.shared_service_notice")}
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         <AgentRail

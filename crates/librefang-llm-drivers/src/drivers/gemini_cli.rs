@@ -110,6 +110,8 @@ impl GeminiCliDriver {
     /// Detect if the Gemini CLI is available on PATH.
     pub fn detect() -> Option<String> {
         let output = std::process::Command::new("gemini")
+            .env_remove("BOSS_SHARED_MEMORY_URL")
+            .env_remove("BOSS_SHARED_MEMORY_TOKEN")
             .arg("--version")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -260,6 +262,8 @@ impl LlmDriver for GeminiCliDriver {
         let args = self.build_args(&request.model);
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         for arg in &args {
             cmd.arg(arg);
         }

@@ -152,6 +152,8 @@ impl QwenCodeDriver {
     /// Try to run a CLI binary and return its version string.
     fn try_cli(path: &str) -> Option<String> {
         let output = std::process::Command::new(path)
+            .env_remove("BOSS_SHARED_MEMORY_URL")
+            .env_remove("BOSS_SHARED_MEMORY_TOKEN")
             .arg("--version")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -173,6 +175,8 @@ impl QwenCodeDriver {
         let cmd = "which";
 
         let output = std::process::Command::new(cmd)
+            .env_remove("BOSS_SHARED_MEMORY_URL")
+            .env_remove("BOSS_SHARED_MEMORY_TOKEN")
             .arg(name)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -691,6 +695,8 @@ impl QwenCodeDriver {
         let args = self.build_args(&prepared.text, &request.model, false);
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         for arg in &args {
             cmd.arg(arg);
         }
@@ -828,6 +834,8 @@ impl QwenCodeDriver {
         let args = self.build_args(&prepared.text, &request.model, true);
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         for arg in &args {
             cmd.arg(arg);
         }

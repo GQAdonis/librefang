@@ -47,6 +47,8 @@ const BLOCKED_ENV_SUBSTRINGS: &[&str] = &[
 /// whether they contain a blocked substring. This catches names that are
 /// conventional secrets but do not contain any of the substrings above.
 const BLOCKED_ENV_EXACT: &[&str] = &[
+    "BOSS_SHARED_MEMORY_URL",
+    "BOSS_SHARED_MEMORY_TOKEN",
     "LIBREFANG_VAULT_KEY",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",

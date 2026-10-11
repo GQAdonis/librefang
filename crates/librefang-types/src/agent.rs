@@ -688,6 +688,8 @@ impl AgentMode {
                     "file_list",
                     "memory_list",
                     "memory_recall",
+                    "shared_memory_retrieve",
+                    "shared_memory_search",
                     "web_fetch",
                     "web_search",
                     "agent_list",

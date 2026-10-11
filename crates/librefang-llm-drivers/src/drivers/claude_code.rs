@@ -198,6 +198,8 @@ impl ClaudeCodeDriver {
 
         for candidate in candidates {
             let output = std::process::Command::new(candidate)
+                .env_remove("BOSS_SHARED_MEMORY_URL")
+                .env_remove("BOSS_SHARED_MEMORY_TOKEN")
                 .arg("--version")
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::null())
@@ -1007,6 +1009,8 @@ impl LlmDriver for ClaudeCodeDriver {
         }
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         let mut args = self.build_command_args("json", false, model_flag.as_deref());
         if let Some(ref path) = prepared.mcp_config_path {
             Self::append_mcp_args(&mut args, path);
@@ -1279,6 +1283,8 @@ impl LlmDriver for ClaudeCodeDriver {
         }
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         let mut args = self.build_command_args("stream-json", true, model_flag.as_deref());
         if let Some(ref path) = prepared.mcp_config_path {
             Self::append_mcp_args(&mut args, path);

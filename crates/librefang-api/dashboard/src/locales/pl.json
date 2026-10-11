@@ -955,6 +955,19 @@
     }
   },
   "providers": {
+    "uar_model_unavailable": "Wybrany model „{{model}}” nie jest dostępny w połączonym runtime. Wybierz skonfigurowany model lub zaktualizuj powiązanie UAR.",
+    "uar_readiness": "Gotowość połączenia",
+    "uar_readiness_connection": "Połączony runtime",
+    "uar_readiness_binding": "Zgodne powiązanie",
+    "uar_readiness_models": "Skonfigurowane modele",
+    "uar_readiness_inference": "Wykonane wnioskowanie",
+    "uar_readiness_confirmed": "Potwierdzono",
+    "uar_readiness_pending": "Jeszcze nie potwierdzono",
+    "uar_catalog_loading": "Wczytywanie modeli z wybranej instancji UAR…",
+    "uar_catalog_ready": "Modele wybranej instancji UAR są dostępne.",
+    "uar_catalog_empty": "Wybrana instancja UAR nie ma włączonych modeli. Skonfiguruj dostawcę i włącz model.",
+    "uar_catalog_unavailable": "Katalog modeli UAR jest niedostępny. Sprawdź wybraną instancję i jej dane uwierzytelniające.",
+    "uar_catalog_configure": "Konfiguruj połączenie i modele UAR",
     "uar_connect": "Połącz",
     "uar_disconnect": "Rozłącz",
     "uar_reconnect": "Połącz ponownie",
@@ -1491,6 +1504,8 @@
     }
   },
   "memory": {
+    "internal_title": "Wewnętrzna pamięć BossFang",
+    "shared_service_notice": "Ta strona zarządza wewnętrzną pamięcią agentów BossFang i prywatnym magazynem klucz/wartość. Współdzielona Surreal Memory to osobna usługa: skonfiguruj połączenie i obszar roboczy w The Boss → Ustawienia → Usługi oraz BossFang. Agenci korzystają z niej przez shared_memory_remember, shared_memory_retrieve i shared_memory_search. Samo skonfigurowanie połączenia nie potwierdza działania pamięci.",
     "title": "Pamięć",
     "subtitle": "Trwałe przechowywanie wektorów dla kontekstu agenta.",
     "cognitive_layer": "Warstwa poznawcza",

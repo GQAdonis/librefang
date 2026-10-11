@@ -35,6 +35,8 @@ impl AiderDriver {
     /// Detect if the Aider CLI is available on PATH.
     pub fn detect() -> Option<String> {
         let output = std::process::Command::new("aider")
+            .env_remove("BOSS_SHARED_MEMORY_URL")
+            .env_remove("BOSS_SHARED_MEMORY_TOKEN")
             .arg("--version")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -110,6 +112,8 @@ impl LlmDriver for AiderDriver {
         let args = self.build_args(&prompt, &request.model);
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
+        cmd.env_remove("BOSS_SHARED_MEMORY_URL");
+        cmd.env_remove("BOSS_SHARED_MEMORY_TOKEN");
         for arg in &args {
             cmd.arg(arg);
         }

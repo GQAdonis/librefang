@@ -1688,11 +1688,13 @@ function UarControlPanel() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const modelOptions = useMemo(
-    () => Object.entries(modelsQuery.data ?? {}).flatMap(([provider, detail]) =>
-      Object.keys(detail.models ?? {}).map(modelId =>
+    () => Object.entries(modelsQuery.data ?? {}).filter(([, detail]) => detail.configured === true).flatMap(([provider, detail]) =>
+      Object.entries(detail.models ?? {}).filter(([, model]) => typeof model === "object" && model !== null && "enabled" in model && model.enabled === true).map(([modelId]) =>
         modelId.includes("/") ? modelId : `${provider}/${modelId}`)),
     [modelsQuery.data],
   );
+
+  useEffect(() => { setTestResult(null); }, [model, status?.effective_binding?.instance_id, status?.endpoint, healthy]);
 
   const runLifecycle = async (action: "start" | "stop" | "restart") => {
     setActionError(null);
@@ -1776,6 +1778,20 @@ function UarControlPanel() {
         </div>
       </div>
 
+      <ol aria-label={t("providers.uar_readiness")} className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { key: "connection", ready: healthy },
+          { key: "binding", ready: healthy && !!status?.effective_binding },
+          { key: "models", ready: healthy && !modelsQuery.isError && modelOptions.length > 0 },
+          { key: "inference", ready: healthy && !!testResult },
+        ].map(stage => (
+          <li key={stage.key} className="rounded-lg border border-border-subtle bg-bg-subtle p-3 space-y-1">
+            <p className="font-bold">{t("providers.uar_readiness_" + stage.key)}</p>
+            <p className={stage.ready ? "text-success" : "text-text-dim"}>{t(stage.ready ? "providers.uar_readiness_confirmed" : "providers.uar_readiness_pending")}</p>
+          </li>
+        ))}
+      </ol>
+
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="rounded-lg border border-border-subtle bg-bg-subtle p-3">
           <div className="mb-2 text-[10px] font-bold uppercase text-text-dim">
@@ -1830,12 +1846,12 @@ function UarControlPanel() {
         </span>
       </div>
 
-      {(actionError || statusError || status?.last_error || status?.compatibility?.message) && (
+      {(actionError || statusError || modelsQuery.error || status?.last_error || status?.compatibility?.message) && (
         <div className="rounded-lg border border-error/30 bg-error/5 p-3 text-xs text-error" role="alert">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span className="break-all">
-              {actionError || statusError || status?.last_error || `${status?.compatibility?.code}: ${status?.compatibility?.message}`}
+              {actionError || statusError || (modelsQuery.error ? getErrorMessage(modelsQuery.error) : null) || status?.last_error || `${status?.compatibility?.code}: ${status?.compatibility?.message}`}
             </span>
           </div>
         </div>

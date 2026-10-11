@@ -316,6 +316,12 @@ async fn dispatch_tool_call(
     // instead of being flattened to a hard string error that death-spirals the
     // turn on a permanent, non-fatal denial. (#5984)
     let acl_gated: Option<TypedToolResult> = match tool_name {
+        "shared_memory_remember" | "shared_memory_retrieve" | "shared_memory_search" => Some(
+            super::shared_memory::execute(
+                tool_name.trim_start_matches("shared_memory_"), input, *kernel,
+                *caller_agent_id, *sender_id, *channel,
+            ).await,
+        ),
         "memory_store" => Some(tool_memory_store(
             input,
             *kernel,

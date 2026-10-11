@@ -956,6 +956,19 @@
     }
   },
   "providers": {
+    "uar_model_unavailable": "Вибрана модель «{{model}}» недоступна в підключеному середовищі. Виберіть налаштовану модель або оновіть прив’язку UAR.",
+    "uar_readiness": "Готовність з’єднання",
+    "uar_readiness_connection": "Середовище підключено",
+    "uar_readiness_binding": "Сумісна прив’язка",
+    "uar_readiness_models": "Налаштовані моделі",
+    "uar_readiness_inference": "Виконано виведення",
+    "uar_readiness_confirmed": "Підтверджено",
+    "uar_readiness_pending": "Ще не підтверджено",
+    "uar_catalog_loading": "Завантаження моделей із вибраного екземпляра UAR…",
+    "uar_catalog_ready": "Моделі вибраного екземпляра UAR доступні.",
+    "uar_catalog_empty": "У вибраному UAR немає ввімкнених моделей. Налаштуйте постачальника та ввімкніть модель.",
+    "uar_catalog_unavailable": "Каталог моделей UAR недоступний. Перевірте вибраний екземпляр і його облікові дані.",
+    "uar_catalog_configure": "Налаштувати підключення та моделі UAR",
     "uar_connect": "Підключити",
     "uar_disconnect": "Відключити",
     "uar_reconnect": "Підключити знову",
@@ -1505,6 +1518,8 @@
     }
   },
   "memory": {
+    "internal_title": "Внутрішня пам’ять BossFang",
+    "shared_service_notice": "Ця сторінка керує внутрішньою пам’яттю агентів BossFang і приватним сховищем ключ/значення. Спільна Surreal Memory — окрема служба: налаштуйте з’єднання та робочий простір у The Boss → Налаштування → Служби та BossFang. Агенти використовують shared_memory_remember, shared_memory_retrieve і shared_memory_search. Налаштоване з’єднання ще не підтверджує успішну роботу пам’яті.",
     "title": "Пам'ять",
     "subtitle": "Персистентне векторне сховище для контексту агента.",
     "cognitive_layer": "Когнітивний шар",

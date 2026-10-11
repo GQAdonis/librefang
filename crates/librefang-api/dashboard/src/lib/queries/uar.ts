@@ -18,5 +18,6 @@ export function useUarModels(enabled: boolean) {
     queryKey: uarKeys.models(),
     queryFn: getUarModels,
     enabled,
+    refetchInterval: 30_000,
   });
 }
