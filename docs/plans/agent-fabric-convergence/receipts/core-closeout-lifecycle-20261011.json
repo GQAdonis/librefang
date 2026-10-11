@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "kind": "core-closeout-lifecycle",
+  "startedAt": "2026-10-11T14:04:22.752Z",
+  "steps": [
+    {
+      "op": "verify",
+      "id": "afc-runtime-source-reconciliation",
+      "status": 0,
+      "at": "2026-10-11T14:04:23.089Z",
+      "stdout": "verify: PASS\n",
+      "stderr": ""
+    },
+    {
+      "op": "verify",
+      "id": "afc-cadence-historical-publication",
+      "status": 0,
+      "at": "2026-10-11T14:04:23.360Z",
+      "stdout": "verify: PASS\n",
+      "stderr": ""
+    },
+    {
+      "op": "verify",
+      "id": "afc-runtime-admission-v2-release",
+      "status": 0,
+      "at": "2026-10-11T14:04:23.623Z",
+      "stdout": "verify: PASS\n",
+      "stderr": ""
+    },
+    {
+      "op": "verify",
+      "id": "afc-integrated-customer-qualification",
+      "status": 0,
+      "at": "2026-10-11T14:04:23.880Z",
+      "stdout": "verify: PASS\n",
+      "stderr": ""
+    },
+    {
+      "op": "archive",
+      "id": "afc-runtime-source-reconciliation",
+      "status": 0,
+      "at": "2026-10-11T14:04:24.134Z",
+      "stdout": "archived: afc-runtime-source-reconciliation\n",
+      "stderr": ""
+    },
+    {
+      "op": "archive",
+      "id": "afc-cadence-historical-publication",
+      "status": 0,
+      "at": "2026-10-11T14:04:24.378Z",
+      "stdout": "archived: afc-cadence-historical-publication\n",
+      "stderr": ""
+    },
+    {
+      "op": "archive",
+      "id": "afc-runtime-admission-v2-release",
+      "status": 0,
+      "at": "2026-10-11T14:04:24.628Z",
+      "stdout": "archived: afc-runtime-admission-v2-release\n",
+      "stderr": ""
+    },
+    {
+      "op": "archive",
+      "id": "afc-integrated-customer-qualification",
+      "status": 0,
+      "at": "2026-10-11T14:04:24.868Z",
+      "stdout": "archived: afc-integrated-customer-qualification\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "stage",
+        "transition",
+        "--command-id",
+        "core-closeout-execute-complete-20261011",
+        "--phase",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--id",
+        "execute",
+        "--status",
+        "complete"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:22.901Z",
+      "revision": 689,
+      "stderr": ""
+    },
+    {
+      "hook": "execute:after",
+      "status": 0,
+      "at": "2026-10-11T14:05:22.908Z",
+      "interpretation": "Dispatcher completed; optional hook warnings retained in hook log."
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "stage",
+        "enter",
+        "--command-id",
+        "core-closeout-reflect-enter-20261011",
+        "--phase",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--id",
+        "reflect",
+        "--title",
+        "Accepted core release reflection",
+        "--sequence",
+        "4"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:23.916Z",
+      "revision": 690,
+      "stderr": ""
+    },
+    {
+      "hook": "reflect:before",
+      "status": 0,
+      "at": "2026-10-11T14:05:23.917Z",
+      "interpretation": "Dispatcher completed; optional hook warnings retained in hook log."
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "stage",
+        "transition",
+        "--command-id",
+        "core-closeout-reflect-complete-20261011",
+        "--phase",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--id",
+        "reflect",
+        "--status",
+        "complete"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:24.919Z",
+      "revision": 691,
+      "stderr": ""
+    },
+    {
+      "hook": "reflect:after",
+      "status": 0,
+      "at": "2026-10-11T14:05:24.920Z",
+      "interpretation": "Dispatcher completed; optional hook warnings retained in hook log."
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "guard",
+        "evaluate",
+        "--boundary",
+        "phase",
+        "--edge",
+        "after",
+        "--subject",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--json",
+        "--repair-projections",
+        "--precommit"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:25.297Z",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "phase",
+        "transition",
+        "--command-id",
+        "core-closeout-child-complete-20261011",
+        "--id",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--status",
+        "complete"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:26.350Z",
+      "revision": 692,
+      "stderr": ""
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "guard",
+        "evaluate",
+        "--boundary",
+        "phase",
+        "--edge",
+        "after",
+        "--subject",
+        "agent-fabric-convergence::integrated-runtime-release-reconciliation",
+        "--json",
+        "--repair-projections"
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:27.332Z",
+      "stderr": ""
+    },
+    {
+      "hook": "phase:after",
+      "status": 0,
+      "at": "2026-10-11T14:05:27.333Z",
+      "interpretation": "Dispatcher completed; optional hook warnings retained in hook log."
+    },
+    {
+      "command": [
+        "prometheus",
+        "kbd",
+        "--path",
+        ".",
+        "phase",
+        "activate",
+        "--command-id",
+        "core-closeout-restore-parent-20261011",
+        "--id",
+        "agent-fabric-convergence",
+        "--exact-next-work",
+        "Accepted core customer milestone closed. Representation and remaining portfolio qualification separately pending; do not dispatch further approval cycles."
+      ],
+      "status": 0,
+      "at": "2026-10-11T14:05:28.303Z",
+      "revision": 694,
+      "stderr": ""
+    },
+    {
+      "hook": "child:after",
+      "status": 0,
+      "at": "2026-10-11T14:05:28.390Z",
+      "interpretation": "Dispatcher completed; optional hook warnings retained in hook log."
+    }
+  ],
+  "finishedAt": "2026-10-11T14:05:28.391Z",
+  "status": "complete",
+  "finalState": {
+    "revision": 694,
+    "activePhaseId": "agent-fabric-convergence",
+    "childStatus": "complete",
+    "childChanges": 4,
+    "childTasks": 9,
+    "successfulDeliveries": 17,
+    "cadenceStartedAt": "2026-10-06T17:07:34.783Z",
+    "publicationDue": false
+  }
+}

@@ -22,3 +22,11 @@ Finish all production before applicable completed boundary. No unit/per-edit/moc
 ## Operator revision — 2026-10-10 customer platforms
 
 The operator explicitly limits this release gate to Mac ARM64 and Windows x64. Mac Intel and Windows ARM64 are deferred and must not block local packaging, qualification or website publication. Retain completed native artifacts and the running Intel job as separate provenance, without making their completion a customer milestone requirement. Historical four-platform releases and receipts are unchanged. The 120-minute clock, 15 successful deliveries and every-second-delivery frequency remain unchanged. Canonical task IDs and historical counters remain stable; older task titles are interpreted under this revision.
+
+## Operator revision — 2026-10-11 accepted core closeout
+
+The operator explicitly approved: “Yes, close the accepted core customer milestone and track representation qualification separately. Preserve the evidence and both acceptance records, commit and push the closeout, and stop repeating approval cycles.”
+
+This revision closes the core customer scope at public 2.2.32 for Mac ARM64 and Windows x64, using retained source-applicable operations and the operator’s acceptance of both exact installers. Synthetic representation read/disclosure and grant-lifecycle qualification are excluded from this milestone and remain unresolved under original C17 criteria, tracked in `receipts/representation-qualification-followup-20261011.md`. Exclusion is not a pass or a waiver of representation safety. No further approval or read cycles are authorized by this closeout.
+
+Preserve historical code completion 61/61 tasks and 20/20 changes, portfolio 43/61 terminal (42 qualified plus one skipped duplicate), all original receipts, Cadence timestamps and 17 successful deliveries. Qualification-only closeout creates no delivery. Broader portfolio qualification remains open.

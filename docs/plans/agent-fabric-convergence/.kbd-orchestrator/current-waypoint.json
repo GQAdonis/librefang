@@ -2,42 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 677,
-  "derivedRevision": 677,
+  "sourceRevision": 694,
+  "derivedRevision": 694,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 438
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 455
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence",
-    "integrated-runtime-release-reconciliation"
+    "agent-fabric-convergence"
   ],
   "phaseIds": [
-    "agent-fabric-convergence",
-    "agent-fabric-convergence::integrated-runtime-release-reconciliation"
+    "agent-fabric-convergence"
   ],
-  "activePhaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
-  "activePhase": "integrated-runtime-release-reconciliation",
+  "activePhaseId": "agent-fabric-convergence",
+  "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
-  "childPointer": "integrated-runtime-release-reconciliation",
-  "change": "afc-integrated-customer-qualification",
-  "currentTask": "1",
+  "parentPhase": null,
+  "childPointer": null,
+  "change": null,
+  "currentTask": null,
   "status": "running",
   "lifecycle": "running",
-  "stageId": "execute",
-  "stageStatus": "IN_PROGRESS",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 29,
+  "implementationCompleted": 30,
   "implementationTotal": 30,
-  "planRevision": 12,
-  "revision": 677,
-  "exactNextCommand": "afc-runtime-admission-v2-release task 3: publish and import the ready Mac ARM64 and Windows x64 native payloads, then immediately build the local Mac ARM64 application",
-  "nextChange": "afc-integrated-customer-qualification",
-  "nextTask": "1",
-  "updatedAt": "2026-10-11T01:45:02.556856Z"
+  "planRevision": 13,
+  "revision": 694,
+  "exactNextCommand": "Accepted core customer milestone closed. Representation and remaining portfolio qualification separately pending; do not dispatch further approval cycles.",
+  "nextChange": null,
+  "nextTask": null,
+  "updatedAt": "2026-10-11T14:05:28.269817Z"
 }

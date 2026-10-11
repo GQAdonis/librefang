@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "kind": "interrupted-qualification-recovery-preparation",
+  "recordedAt": "2026-10-11T13:47:14.522Z",
+  "approvalId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+  "humanDecisionSubmitted": true,
+  "nativeDecisionResolved": true,
+  "observedShutdown": "2026-10-11T13:42:56Z",
+  "shutdownCause": "unknown",
+  "recoveryMode": "same isolated profile; read-only existing run; no effect replay",
+  "launcherSource": ".prometheus/cadence/inputs/boss-launch-main-window-20261010.mjs",
+  "launcherSha256": "c9092e16c95fb61ccc78f09f7dde227c10ae833dd88306d9e30d14fa04843b0f"
+}

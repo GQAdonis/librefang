@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "accepted-core-customer-milestone-closeout",
+  "recordedAt": "2026-10-11T14:04:07.677Z",
+  "version": "2.2.32",
+  "status": "accepted-core-closed",
+  "authority": {
+    "decisionId": "core-customer-acceptance-closeout-20261011",
+    "planRevision": 13,
+    "operatorInstruction": "Close the accepted core customer milestone and track representation qualification separately; preserve evidence and both acceptance records; commit/push and stop approval cycles."
+  },
+  "acceptance": {
+    "path": "receipts/integrated-operator-acceptance-2.2.32-20261011.json",
+    "sha256": "aab3049250843e7d9cacf73e2fb1850fd7b08138b5ebc45bea823be38f9a8d30",
+    "platforms": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "evidenceClass": "operator-reported-installed-operation-and-acceptance"
+  },
+  "representation": {
+    "status": "unqualified-excluded-from-core",
+    "followup": "receipts/representation-qualification-followup-20261011.md",
+    "preserved": "receipts/representation-preserved-20261011/manifest.json",
+    "newApprovals": 0,
+    "newReads": 0
+  },
+  "accounting": {
+    "codeTasks": "61/61",
+    "codeChanges": "20/20",
+    "portfolioTerminal": "43/61",
+    "qualified": 42,
+    "historicalSkippedDuplicate": 1,
+    "cadenceRunId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "cadenceStartedAt": "2026-10-06T17:07:34.783Z",
+    "successfulDeliveries": 17,
+    "publicationDue": false,
+    "newDeliveryCredit": 0
+  },
+  "review": {
+    "path": ".kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/review/core-closeout/findings.json",
+    "verdict": "PASS",
+    "isolation": "fresh REST request",
+    "crossModelIndependence": "unverified-producer-unknown",
+    "sycophancyScore": 0
+  },
+  "lifecycle": {
+    "status": "complete",
+    "receipt": "receipts/core-closeout-lifecycle-20261011.json"
+  },
+  "parentDisposition": "Broader portfolio qualification remains open. No follow-up operation dispatched."
+}

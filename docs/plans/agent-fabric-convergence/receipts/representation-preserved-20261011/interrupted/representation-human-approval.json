@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "operator-exact-native-approval",
+  "approved": true,
+  "workspaceId": "b4b19eb3-3f39-4cd4-afa0-4e6ef5a1229f",
+  "instanceId": "be088616-61ca-4e8b-81b8-292b1e5208c9",
+  "commandId": "1abd85b8-bfe9-4d82-bf84-5530aeb0c6b2",
+  "runId": "734993cf-9f3e-4a08-b992-55da87d788a7",
+  "approvalId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+  "issuerId": "9e3a5f91-4ff1-4e61-95c8-4af1b815ad82",
+  "challengeId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+  "toolName": "file_read",
+  "argumentsSha256": "3401abb2d0d14c419c2630b6af1aa000bddf3bb057fa96a07d89368deab2f501",
+  "fileSha256": "c588f806e6a802ce150738453592aeb11b9014cf0024fedeaf174ff5b90c148f",
+  "exactFile": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/workspace/representation-synthetic.txt",
+  "operatorResponseRef": "request_user_input_async/call_a8f18fd858ea463d8efdc40a2127421a/0",
+  "operatorResponse": "Approve this exact read",
+  "recordedAt": "2026-10-11T13:42:37.989Z"
+}

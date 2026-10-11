@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-customer-executive-representation",
+  "complete": false,
+  "status": "pending-human-approval",
+  "sourceRefs": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "mini": "6c63c0acec67444e30f65461836e7a943316e242",
+    "full": "547a9bc93de61246bbe38567796d5fa2d0f616f0",
+    "installedVersion": "2.2.32",
+    "appAsarSha256": "8832383025dc209fbbbc44534d0e0ace4b64f5089c93c9ec60b88ec1b42bcc19",
+    "sidecarSha256": "a83cf8af2069db2c03aae72f15311c4b2ca7472b0f96d584ff658fb260461bd9",
+    "installerSha256": "453a66c892460d5e849ab262518d8b7f415bc30f7acdce5db021a40f76865920",
+    "installationReceiptSha256": "984cb6c8924da4c92cfac695e0dea90d0c5913895824d2d23f0a7dbc795958e2",
+    "configurationSha256": "0cd5b3b70f77011b5ddbc4800138f95f1c00776704117cf1d4db795cd378e507",
+    "selectedScenarioSha256": "1f4db18c815fe6ffd9e018cec082eaf037135d1476cb6668bb7814ba4dad2a75",
+    "operationDriverRevision": "5f3f33d4f2f19d9a399547a693ba1fa23344bbef",
+    "operationDriverSha256": "cdf29a94f28b6539c5cb9f7e008706bf758398079143e4261c1432281c4ad59a",
+    "candidateContractSha256": "97898d13dcc6b74e3ce29713c221754d367c4826b2d68288ffd8272b830a59f3",
+    "historicalPendingReceiptSha256": "9d0509e0cbf10cac8eb6a628eabad4f8d53cafd04af0e7f8e433a7795fb5e269",
+    "launcherSha256": "e348c971f429668dbe0e23deaa00f5dad40eae11752284042f4510456aa931e4"
+  },
+  "startedAt": "2026-10-11T13:39:41.222Z",
+  "checks": [
+    {
+      "name": "isolated-gateway-and-native-model-prepared-through-typed-settings",
+      "passed": true,
+      "workspaceId": "b4b19eb3-3f39-4cd4-afa0-4e6ef5a1229f",
+      "model": {
+        "source": "gateway",
+        "providerId": "the-boss-gateway",
+        "modelId": "gpt-6.1-sol"
+      },
+      "credentialReference": "LITER_LLM_MASTER_KEY",
+      "interpretation": "Configuration and native provider preparation only; inference operation remains required."
+    },
+    {
+      "name": "selected-native-model-observed-context-capacity-applied",
+      "passed": true,
+      "providerId": "boss-team-gateway-fcff971815db60fb",
+      "modelId": "gpt-6.1-sol",
+      "contextWindow": 272000,
+      "priorContextWindow": null,
+      "route": "prometheus.uar.providers.save",
+      "nativeField": "ModelConfig.context_window",
+      "authority": "Observed route metadata; isolated selected model only. Generic budgets and grant scopes unchanged.",
+      "source": {
+        "kind": "local-codex-model-cache",
+        "clientVersion": "0.162.0",
+        "fetchedAt": "2026-10-10T02:09:17.941282Z",
+        "model": "gpt-6.1-sol",
+        "contextWindow": 272000,
+        "sha256": "e4a459b1d0b550d89a41a26863f33265116f5fd971e90a63355e241fd449a1a5"
+      },
+      "credentialMutation": "unchanged"
+    },
+    {
+      "name": "synthetic-role-and-exact-private-grant-applied",
+      "passed": true,
+      "instanceId": "be088616-61ca-4e8b-81b8-292b1e5208c9",
+      "grantId": "customer-synthetic-cio-c0168347-dd65-406a-a7ba-127174c3abc7",
+      "revision": 1,
+      "constraintDigest": "sha256:8097172bb9ca27250ecf29cda4ac263b92e5285df211d9ec4e4e70ef32e981cc"
+    }
+  ],
+  "historicalCandidate": "2.2.30 exact challenge expired without operator decision; no represented-read qualification retained",
+  "newCadenceDelivery": false,
+  "pendingApproval": {
+    "attemptId": "efe1d9bc-f75a-45f5-8a1e-15c00fd6ab1b",
+    "runId": "734993cf-9f3e-4a08-b992-55da87d788a7",
+    "approvalId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+    "issuerId": "9e3a5f91-4ff1-4e61-95c8-4af1b815ad82",
+    "challengeId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+    "rootRunId": "734993cf-9f3e-4a08-b992-55da87d788a7",
+    "toolCallId": "call_4c46f85d9f42459680e6f9751afe20ba",
+    "callIndex": 0,
+    "admissionOwner": "paired-host",
+    "decisionOwner": "uar-runtime",
+    "eventId": "b0c42440-815e-4a3d-8a9a-6a864d087d94",
+    "cursor": 13,
+    "toolName": "file_read",
+    "argumentsJson": "{\"operation\":\"file_read\",\"detailsAvailable\":true,\"target\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/workspace/representation-synthetic.txt\"}",
+    "riskReason": "Tool 'file_read' requires approval under the paired host policy",
+    "argumentsSha256": "3401abb2d0d14c419c2630b6af1aa000bddf3bb057fa96a07d89368deab2f501",
+    "exactFile": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/workspace/representation-synthetic.txt",
+    "exactContents": "Synthetic advisory record only.\nMarker: 4bd860e3-ec9b-4768-a3c7-cade8c9d63c1\nNo real person, authority, spending or organizational data.\n",
+    "fileSha256": "c588f806e6a802ce150738453592aeb11b9014cf0024fedeaf174ff5b90c148f"
+  },
+  "resumeState": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/representation-state.json",
+  "sameTurn": {
+    "commandId": "1abd85b8-bfe9-4d82-bf84-5530aeb0c6b2",
+    "runId": "734993cf-9f3e-4a08-b992-55da87d788a7"
+  },
+  "uiPath": "/settings/uar?panel=instances&adminWorkspaceId=b4b19eb3-3f39-4cd4-afa0-4e6ef5a1229f",
+  "operatorDeadline": "2026-10-11T13:45:15.298Z",
+  "approvalReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/representation-human-approval.json"
+}
