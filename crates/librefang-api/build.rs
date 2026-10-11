@@ -32,6 +32,7 @@ fn main() {
     println!("cargo:rerun-if-changed=dashboard/vite.config.ts");
     println!("cargo:rerun-if-changed=dashboard/tsconfig.json");
     println!("cargo:rerun-if-changed=dashboard/index.html");
+    println!("cargo:rerun-if-env-changed=BOSSFANG_REQUIRE_EMBEDDED_DASHBOARD");
 
     // Re-run when the env inputs to git-sha / build-date capture change so
     // cargo invalidates this build script appropriately (refs #5667).
@@ -104,6 +105,34 @@ fn main() {
         assert!(build.success(), "pnpm run build failed");
     }
     // --------------------------------
+
+    // The Boss ships this crate inside a single sidecar executable. Its
+    // dashboard defaults to embedded-only, so an empty static/react directory
+    // would leave the installed MiniApp unusable even though Rust compiled.
+    if std::env::var("BOSSFANG_REQUIRE_EMBEDDED_DASHBOARD").as_deref() == Ok("1") {
+        let index = std::fs::read_to_string(dashboard_dir.join("index.html"))
+            .expect("BossFang sidecar requires a built dashboard index.html");
+        assert!(
+            index.contains("/dashboard/"),
+            "BossFang sidecar dashboard index.html must use the /dashboard/ base"
+        );
+        let assets = std::fs::read_dir(dashboard_dir.join("assets"))
+            .expect("BossFang sidecar requires built dashboard assets");
+        let mut javascript = false;
+        let mut stylesheet = false;
+        for entry in assets {
+            let path = entry.expect("failed to read dashboard asset").path();
+            match path.extension().and_then(|extension| extension.to_str()) {
+                Some("js") => javascript = true,
+                Some("css") => stylesheet = true,
+                _ => {}
+            }
+        }
+        assert!(
+            javascript && stylesheet,
+            "BossFang sidecar requires nonempty dashboard JavaScript and CSS assets"
+        );
+    }
 
     // Capture git commit hash at build time.
     //
