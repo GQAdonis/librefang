@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-11T14:41:32.004Z",
+  "phase": "agent-fabric-convergence",
+  "disposition": "closed-administratively-with-manual-certification-handoff",
+  "canonicalKbdRevision": 705,
+  "code": {
+    "tasks": 61,
+    "totalTasks": 61,
+    "changes": 20,
+    "totalChanges": 20
+  },
+  "qualification": {
+    "qualified": 42,
+    "historicalSkippedDuplicate": 1,
+    "terminal": 43,
+    "total": 61,
+    "remainingManual": 18
+  },
+  "acceptedRelease": "2.2.32",
+  "acceptedPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "newlyConsolidatedSourceQualified": false,
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "startedAt": "2026-10-06T17:07:34.783Z",
+    "eventsSeq": 1457,
+    "successfulDeliveries": 17,
+    "publicationDue": false,
+    "activeIterationId": null
+  },
+  "recoveryDirectory": "/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011",
+  "permanentInitiativeDirectory": "/Users/gqadonis/Projects/references/librefang/docs/plans/agent-fabric-convergence",
+  "worktreePolicy": "Only primary checkout remains per source repository. Local branches and canonical origin branches are main-only. Tags, upstream and secondary-fork reference namespaces remain unchanged.",
+  "exceptions": [
+    {
+      "repository": "universal-agent-runtime",
+      "branch": "codex/uar-presentation-wip",
+      "disposition": "operator-approved archived incompatible WIP; not integrated",
+      "reason": "Older presentation runtime conflicts with current admission, approvals, cancellation and settlement.",
+      "recovery": "/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/universal-agent-runtime/final-refs.bundle"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "disposition": "unqualified restored frontend source",
+      "reason": "Mandatory pre-commit frontend typecheck failed on existing Zod/A2UI typing; preservation commit bypassed the hook. Hook-generated dependency churn excluded. No new application build or qualification claimed."
+    }
+  ],
+  "repositories": [
+    {
+      "name": "librefang",
+      "path": "/Users/gqadonis/Projects/references/librefang",
+      "head": "61a092de4563923437e8f084854143b6e2d87c05",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "61a092de4563923437e8f084854143b6e2d87c05",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/references/librefang"
+      ],
+      "trackedStatus": "Final closeout documentation committed after this source snapshot."
+    },
+    {
+      "name": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+      "head": "14852d213185dea673197ffca0f535b01c49ad04",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "14852d213185dea673197ffca0f535b01c49ad04",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/universal-agent-runtime"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "the-boss",
+      "path": "/Users/gqadonis/Projects/prometheus/the-boss",
+      "head": "7d99c4383998b246ab354b5fcc103a22b03580a5",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "7d99c4383998b246ab354b5fcc103a22b03580a5",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/the-boss"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "flint-gate",
+      "path": "/Users/gqadonis/Projects/prometheus/flint-gate",
+      "head": "8fc3eb4cb58a514485007b75b0c6121c07fedaa4",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "8fc3eb4cb58a514485007b75b0c6121c07fedaa4",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/flint-gate"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "flint-realtime-fabric",
+      "path": "/Users/gqadonis/Projects/prometheus/flint-realtime-fabric",
+      "head": "f072c6ff31d1dfd5c4ccd3da6756252ed76b99b7",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "f072c6ff31d1dfd5c4ccd3da6756252ed76b99b7",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/flint-realtime-fabric"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "flint-forge",
+      "path": "/Users/gqadonis/Projects/prometheus/flint-forge",
+      "head": "ce1efd189bcb520242acd530848e3b920d1036cd",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "ce1efd189bcb520242acd530848e3b920d1036cd",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/flint-forge"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "surreal-memory-server",
+      "path": "/Users/gqadonis/Projects/prometheus/surreal-memory-server",
+      "head": "1184156d9cf2fb576faf83284cb7339f42011ef5",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "1184156d9cf2fb576faf83284cb7339f42011ef5",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/surreal-memory-server"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "prometheus-skill-pack",
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack",
+      "head": "1f9b7318e2dad337c0d649529233b6f680693c91",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "1f9b7318e2dad337c0d649529233b6f680693c91",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "prometheus-skills-mini",
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini",
+      "head": "508c77c7e8edbe174e8d1b4f7605fd0e48ce9d87",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "508c77c7e8edbe174e8d1b4f7605fd0e48ce9d87",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "know-me-app",
+      "path": "/Users/gqadonis/Projects/know-me/know-me-app",
+      "head": "c0ccd5eeb352132eb16c9dbc725c187c4d4301f6",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "c0ccd5eeb352132eb16c9dbc725c187c4d4301f6",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/know-me/know-me-app"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "know-me-system",
+      "path": "/Users/gqadonis/Projects/know-me/know-me-system",
+      "head": "f5a9a67e739baaebd7f5a4b87d95e78fe7486b61",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "f5a9a67e739baaebd7f5a4b87d95e78fe7486b61",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/know-me/know-me-system"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "boss-landing-spot",
+      "path": "/Users/gqadonis/Projects/know-me/boss-landing-spot",
+      "head": "9bfd716fbc5cfa3a1cffba574593730054ae4e5a",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "9bfd716fbc5cfa3a1cffba574593730054ae4e5a",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/know-me/boss-landing-spot"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "compass",
+      "path": "/Users/gqadonis/Projects/references/compass",
+      "head": "acd6866d6ac9a0d791b0eaab8cb2082954ee2e64",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "acd6866d6ac9a0d791b0eaab8cb2082954ee2e64",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/references/compass"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "rust-mcp-filesystem",
+      "path": "/Users/gqadonis/Projects/references/rust-mcp-filesystem",
+      "head": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/references/rust-mcp-filesystem"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "liter-llm",
+      "path": "/Users/gqadonis/Projects/references/liter-llm",
+      "head": "d70c3283630ad37247020b21ddf7cc92da18f4b4",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "d70c3283630ad37247020b21ddf7cc92da18f4b4",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/references/liter-llm"
+      ],
+      "trackedStatus": ""
+    },
+    {
+      "name": "prometheus-knowledge",
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-knowledge",
+      "head": "2a2ac382750d5e3cc619164195d97c9af7ffb125",
+      "branch": "main",
+      "localBranches": [
+        "main"
+      ],
+      "remoteBranches": [
+        {
+          "commit": "2a2ac382750d5e3cc619164195d97c9af7ffb125",
+          "ref": "refs/heads/main"
+        }
+      ],
+      "worktrees": [
+        "/Users/gqadonis/Projects/prometheus/prometheus-knowledge"
+      ],
+      "trackedStatus": ""
+    }
+  ],
+  "evidenceRelocation": {
+    "schemaVersion": 1,
+    "at": "2026-10-11T14:34:27.193Z",
+    "from": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "to": "/Users/gqadonis/Projects/references/librefang/docs/plans/agent-fabric-convergence",
+    "moves": [
+      {
+        "name": ".prometheus",
+        "backup": "/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/librefang/primary-before-initiative-move/.prometheus"
+      },
+      {
+        "name": ".kbd-orchestrator",
+        "backup": "/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/librefang/primary-before-initiative-move/.kbd-orchestrator"
+      }
+    ],
+    "policy": "Historical absolute paths and receipts preserved unchanged; this prefix relocation maps them to permanent main checkout."
+  },
+  "appMetadata": "Five historical Codex attachment entries could not be archived through the app because it reports ownership by other tasks. Their source worktrees are absent from active Git registrations; this does not recreate them."
+}

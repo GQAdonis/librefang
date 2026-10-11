@@ -91,3 +91,7 @@ The [I1 implementation child](.kbd-orchestrator/phases/agent-fabric-convergence/
 ## Phase closed — operator handoff, 11 October 2026
 
 The operator closed this phase administratively after accepting The Boss 2.2.32 on Mac ARM64 and Windows x64. [Manual certification handoff](manual-certification-handoff.md) assigns the remaining 18 portfolio criteria to the operator. Code remains 61/61 tasks and 20/20 changes; qualification remains 43/61 terminal (42 qualified, one historical skipped duplicate). No remaining criterion is certified by this closure. [Canonical closeout receipt](receipts/phase-manual-closeout-20261011.json). Earlier next-task directions below or in historical plans are retained history, not an instruction to resume.
+
+## Final administrative closeout
+
+The phase is closed by operator direction. See the [main-only consolidation and recovery index](main-consolidation-closeout.md) and [remaining manual certification scenarios](manual-certification-handoff.md). Remaining qualification is not marked passed.
