@@ -1644,32 +1644,17 @@ impl LibreFangKernel {
         }
     }
 
-    /// Name of the active semantic / vector backend.
+    /// Name of the backend that ranks semantic-memory vectors: the attached `VectorStore`'s `backend_name()` (`"surreal"`, `"http"`), or `"sqlite"` when recall uses the built-in SQLite vectors.
     ///
-    /// Returns `"surreal"` when `surreal-backend` is compiled in and the
-    /// configured `vector_backend` is `"surreal"` or `None`/`"auto"`;
-    /// `"sqlite"` for the built-in SQLite fallback; and the raw config value
-    /// for any other backend (e.g. `"http"`).
+    /// Reads the substrate, so it reports what boot actually attached — an implicit SurrealDB default that fell back to SQLite reports `"sqlite"`.
     ///
     /// BossFang addition — used by `/api/config` and health endpoints to
     /// surface which storage layer is active.
     pub fn semantic_backend_name(&self) -> String {
-        let cfg = self.config.load();
-        match cfg.memory.vector_backend.as_deref() {
-            Some("surreal") => "surreal".to_string(),
-            Some("sqlite") | Some("") => "sqlite".to_string(),
-            None => {
-                #[cfg(feature = "surreal-backend")]
-                {
-                    "surreal".to_string()
-                }
-                #[cfg(not(feature = "surreal-backend"))]
-                {
-                    "sqlite".to_string()
-                }
-            }
-            Some(other) => other.to_string(),
-        }
+        self.memory
+            .substrate
+            .vector_backend_name()
+            .unwrap_or_else(|| "sqlite".to_string())
     }
 }
 

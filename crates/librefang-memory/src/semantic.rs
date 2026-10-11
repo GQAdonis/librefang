@@ -60,7 +60,10 @@ const MAX_FTS_TERMS: usize = 32;
 #[derive(Clone)]
 pub struct SemanticStore {
     pool: Pool<SqliteConnectionManager>,
-    vector_store: Option<Arc<dyn VectorStore>>,
+    /// External vector backend, when one is attached.
+    ///
+    /// Shared through an `Arc` for the same reason as `active_embedding_model` below: the kernel can only attach a backend that needs the embedding driver (`[memory] vector_backend = "surreal"`) after the driver is resolved, by which point the substrate is behind an `Arc` and clones of this store already exist.
+    vector_store: Arc<RwLock<Option<Arc<dyn VectorStore>>>>,
     /// Identity of the embedding model the daemon is currently configured with,
     /// in `provider/model` form (#7912).
     ///
@@ -89,7 +92,7 @@ impl SemanticStore {
     pub fn new(pool: Pool<SqliteConnectionManager>) -> Self {
         Self {
             pool,
-            vector_store: None,
+            vector_store: Arc::new(RwLock::new(None)),
             active_embedding_model: Arc::new(RwLock::new(None)),
         }
     }
@@ -101,14 +104,98 @@ impl SemanticStore {
     ) -> Self {
         Self {
             pool,
-            vector_store: Some(vector_store),
+            vector_store: Arc::new(RwLock::new(Some(vector_store))),
             active_embedding_model: Arc::new(RwLock::new(None)),
         }
     }
 
     /// Set or replace the vector store backend at runtime.
-    pub fn set_vector_store(&mut self, store: Arc<dyn VectorStore>) {
-        self.vector_store = Some(store);
+    ///
+    /// Every clone of this store sees the new backend.
+    pub fn set_vector_store(&self, store: Arc<dyn VectorStore>) {
+        match self.vector_store.write() {
+            Ok(mut guard) => *guard = Some(store),
+            Err(poisoned) => *poisoned.into_inner() = Some(store),
+        }
+    }
+
+    /// The attached external vector backend, if any.
+    pub fn vector_store(&self) -> Option<Arc<dyn VectorStore>> {
+        match self.vector_store.read() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
+
+    /// Copy every live SQLite vector the attached backend does not hold yet into it; returns how many were copied.
+    ///
+    /// A backend attached to an existing store starts empty, and `recall_with_embedding` ranks only what the backend holds, so without this every memory written before the switch would drop out of vector recall.
+    /// Only vectors of `dimensions` length are copied: a vector from another model cannot be compared with the backend's and would be rejected by its index.
+    /// Rows are read in pages and each page asks the backend which ids it already has, so re-running is cheap and never duplicates a vector.
+    pub async fn sync_vector_store(&self, dimensions: usize) -> LibreFangResult<usize> {
+        const PAGE: usize = 256;
+        let Some(vs) = self.vector_store() else {
+            return Ok(0);
+        };
+        let mut after = String::new();
+        let mut copied = 0usize;
+        let mut skipped_dimension = 0usize;
+        loop {
+            let pool = self.pool.clone();
+            let cursor = after.clone();
+            let page: Vec<(String, String, String, Vec<u8>)> =
+                tokio::task::spawn_blocking(move || -> LibreFangResult<_> {
+                    let conn = pool.get().map_err(LibreFangError::memory)?;
+                    let mut stmt = conn
+                        .prepare(
+                            "SELECT id, content, metadata, embedding FROM memories \
+                             WHERE deleted = 0 AND embedding IS NOT NULL AND id > ?1 \
+                             ORDER BY id LIMIT ?2",
+                        )
+                        .map_err(LibreFangError::memory)?;
+                    let rows = stmt
+                        .query_map(rusqlite::params![cursor, PAGE as i64], |r| {
+                            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                        })
+                        .map_err(LibreFangError::memory)?;
+                    rows.collect::<Result<Vec<_>, _>>()
+                        .map_err(LibreFangError::memory)
+                })
+                .await
+                .map_err(|e| LibreFangError::memory_msg(format!("sync_vector_store: {e}")))??;
+            let Some(last) = page.last() else {
+                break;
+            };
+            after = last.0.clone();
+            let ids: Vec<&str> = page.iter().map(|row| row.0.as_str()).collect();
+            let present = vs.get_embeddings(&ids).await?;
+            for (id, content, meta_str, bytes) in &page {
+                if present.contains_key(id) {
+                    continue;
+                }
+                let embedding = embedding_from_bytes(bytes);
+                if embedding.len() != dimensions {
+                    skipped_dimension += 1;
+                    continue;
+                }
+                let metadata: HashMap<String, serde_json::Value> =
+                    serde_json::from_str(meta_str).unwrap_or_default();
+                vs.insert(id, &embedding, content, metadata).await?;
+                copied += 1;
+            }
+            if page.len() < PAGE {
+                break;
+            }
+        }
+        if skipped_dimension > 0 {
+            warn!(
+                backend = vs.backend_name(),
+                skipped_dimension,
+                dimensions,
+                "sync_vector_store: left out vectors whose length does not match the active embedding model; re-embed them to make them recallable"
+            );
+        }
+        Ok(copied)
     }
 
     /// Record the embedding model the daemon is currently configured with, in
@@ -311,7 +398,7 @@ impl SemanticStore {
         // external store is write-blind: every embedding recall against it
         // hydrates zero ids and silently returns empty. Uses the same
         // async->sync bridge as recall_via_vector_store.
-        if let (Some(vs), Some(emb)) = (&self.vector_store, embedding) {
+        if let (Some(vs), Some(emb)) = (self.vector_store(), embedding) {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(vs.insert(
                     &id.0.to_string(),
@@ -380,8 +467,8 @@ impl SemanticStore {
         track_access: bool,
     ) -> LibreFangResult<Vec<MemoryFragment>> {
         // ── Delegate to external vector store when available ──────────
-        if let (Some(vs), Some(qe)) = (&self.vector_store, query_embedding) {
-            return self.recall_via_vector_store(vs, qe, limit, filter.clone(), track_access);
+        if let (Some(vs), Some(qe)) = (self.vector_store(), query_embedding) {
+            return self.recall_via_vector_store(&vs, qe, limit, filter.clone(), track_access);
         }
 
         // mut: needed for the `transaction()` call inside
@@ -1191,7 +1278,7 @@ impl SemanticStore {
         // ranks against it — the same write-blindness the `remember` path fixes,
         // on the update side. The default SQLite path leaves vector_store = None,
         // so this is a no-op there.
-        if let Some(vs) = &self.vector_store {
+        if let Some(vs) = self.vector_store() {
             let row = conn.query_row(
                 "SELECT content, metadata FROM memories WHERE id = ?1 AND deleted = 0",
                 rusqlite::params![id.0.to_string()],
@@ -3219,7 +3306,7 @@ mod tests {
         // returns ids for a different agent / peer than the filter requested,
         // the hydration path must re-enforce the MemoryFilter so no
         // cross-tenant content leaks.
-        let mut store = setup();
+        let store = setup();
         let agent_a = AgentId::new();
         let agent_b = AgentId::new();
 
@@ -3297,7 +3384,7 @@ mod tests {
         // recall. Before this fix the parse error propagated out of
         // `recall_via_vector_store` and every hydratable memory in the same
         // result set was denied along with it.
-        let mut store = setup();
+        let store = setup();
         let agent = AgentId::new();
 
         let good = store
@@ -3353,7 +3440,7 @@ mod tests {
         // defense-in-depth re-check must enforce it too, or a backend that
         // ignores the filter widens the caller's scope on the external path
         // only.
-        let mut store = setup();
+        let store = setup();
         let agent = AgentId::new();
 
         let mut tenant_a = HashMap::new();
@@ -3482,7 +3569,7 @@ mod tests {
         // must push the embedding to that backend. Pre-fix the write path only
         // touched SQLite, so the external store stayed empty and every
         // embedding recall against it silently returned nothing.
-        let mut store = setup();
+        let store = setup();
         let vs = Arc::new(RecordingVectorStore {
             inserted: std::sync::Mutex::new(Vec::new()),
         });
@@ -3535,7 +3622,7 @@ mod tests {
         // through, so after an update the external store kept the OLD embedding
         // and `recall_via_vector_store` ranked against a stale vector — a query
         // matching the new content failed to surface the memory.
-        let mut store = setup();
+        let store = setup();
         let vs = Arc::new(RecordingVectorStore {
             inserted: std::sync::Mutex::new(Vec::new()),
         });

@@ -6028,6 +6028,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "hex",
+ "rmp-serde",
  "rusqlite",
  "schemars 0.8.22",
  "serde",

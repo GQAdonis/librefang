@@ -3,23 +3,29 @@
 //!
 //! ## Design
 //!
-//! Reuses the `surreal-memory` crate's `memory` table, which already carries
-//! HNSW vector indexes (v5 migration, 1536-dim COSINE TYPE F32).  Two search
-//! paths are provided:
+//! Both faces live in the `surreal-memory` crate's `memory` table, which carries an HNSW vector index sized from the embedding driver's dimension.
+//! Every query in this file runs on the memory store's own connection ([`SurrealStorage::db`]); the operational `librefang.surreal` database never holds a `memory` row, so querying it would always find nothing.
 //!
-//! 1. **Text / BM25 path** (`recall` without a precomputed embedding) →
-//!    delegates to `surreal_memory::MemoryStorage::search_memories`.
-//! 2. **Vector / HNSW path** (`recall` with a precomputed embedding) →
-//!    issues a `SELECT … <|k,COSINE|> $vec` KNN query directly
-//!    against the connection pool.  All values are bound — no caller-supplied
-//!    strings are ever interpolated.  SurrealDB requires the KNN `k` operand
-//!    to be a literal unsigned integer, so LibreFang clamps and formats that
-//!    numeric value itself while still binding user-derived filters and vectors.
+//! Each row is keyed by the librefang id (`memory:⟨<MemoryId>⟩`), so `forget`, `update_access`, `delete` and `get_embeddings` address a row directly instead of searching metadata for it.
+//!
+//! Two search paths are provided:
+//!
+//! 1. **Text path** (`recall` without a query embedding) → `surreal_memory::MemoryStorage::search_memories`.
+//! 2. **Vector path** (`recall` with a query embedding, and `VectorStore::search`) → a `SELECT … <|k,COSINE|> $vec` KNN query.
+//!    SurrealDB requires the KNN `k` operand to be a literal unsigned integer, so LibreFang clamps and formats that number itself; every caller-derived value is bound.
+//!
+//! ## The two faces write different rows
+//!
+//! `SemanticBackend::remember` writes a full fragment: `agent_id`, the scope as the first category, and the librefang-only fields nested under `metadata.librefang` / `metadata.user`.
+//! `VectorStore::insert` is the mirror the kernel attaches to the SQLite `SemanticStore` (`[memory] vector_backend = "surreal"`): SQLite stays the system of record, and the mirror row holds only the id, the content and the vector.
+//! The `VectorStore` contract gives an insert no agent, so mirror rows carry no `agent_id`; `VectorStore::search` therefore lets unowned rows through its agent filter, and the `SemanticStore` re-applies the caller's filter to the fragments it hydrates from SQLite.
+//! `SemanticBackend::recall` and `count` filter strictly, so a mirror row can never surface as another agent's memory there.
 //!
 //! ## `MemoryFragment` ↔ `surreal_memory::Memory` mapping
 //!
 //! | `MemoryFragment` field | `Memory` field / location |
 //! |---|---|
+//! | `id` | record key, and `metadata["librefang"]["lf_id"]` |
 //! | `content` | `content` |
 //! | `embedding` | `embedding` |
 //! | `agent_id` | `agent_id` (string) |
@@ -27,7 +33,7 @@
 //! | `confidence` | `importance` |
 //! | `peer_id` (from filter) | `user_id` |
 //! | `created_at` | `created_at` (Datetime) |
-//! | `accessed_at` / `access_count` | stored in `metadata["librefang"]["accessed_at"]` / `["access_count"]` |
+//! | `accessed_at` / `access_count` | `last_accessed_at` / `access_count` |
 //! | `source`, `modality`, `image_url`, `image_embedding`, caller `metadata` | nested under `metadata["librefang"]` and `metadata["user"]` |
 //!
 //! The round-trip is lossless: `fragment_to_memory` → store → `memory_to_fragment`
@@ -39,11 +45,11 @@
 //! All SurrealQL queries in this file use parameterised bindings (`.bind()`).
 //! No caller-supplied strings are ever interpolated into query text.
 
+use super::shared::memory_error;
 use crate::backend::SemanticBackend;
 use crate::proactive::EmbeddingFn;
 use async_trait::async_trait;
 use chrono::DateTime;
-use librefang_storage::pool::SurrealSession;
 use librefang_types::error::{LibreFangError, LibreFangResult};
 use librefang_types::memory::{
     MemoryFilter, MemoryFragment, MemoryId, MemoryModality, MemorySource, VectorSearchResult,
@@ -54,51 +60,56 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use surreal_memory::{MemoryStorage, SurrealStorage};
 use surrealdb::{engine::any::Any, Surreal};
-use tracing::{debug, warn};
 use uuid::Uuid;
 
 // ── Re-export so the AgentId → String conversion is available ─────────────────
 use librefang_types::agent::AgentId;
 
+/// Upper bound on the KNN `k` operand, which SurrealDB needs as a literal.
+const MAX_KNN_K: usize = 1000;
+
 // ── SurrealSemanticBackend ────────────────────────────────────────────────────
 
 /// SurrealDB-backed semantic memory store.
 ///
-/// Wraps `surreal_memory::SurrealStorage` for BM25-based recall and issues
-/// direct KNN queries over the pooled connection for vector recall.
+/// Wraps `surreal_memory::SurrealStorage` for text recall and CRUD, and issues KNN queries on the same store's connection for vector recall.
 pub struct SurrealSemanticBackend {
-    /// `surreal-memory` storage for BM25/embedding search and CRUD.
+    /// `surreal-memory` storage for text search, writes and deletes.
     storage: Arc<SurrealStorage>,
-    /// Raw DB handle for direct KNN SurrealQL queries.
-    db: Arc<Surreal<Any>>,
-    /// Optional embedding driver — when `Some`, `add_memory` will embed the
-    /// content before writing; when `None`, the `SurrealStorage` internal
-    /// embedding service is used (which may be a `NoopEmbedding`).
-    pub embedding: Option<Arc<dyn EmbeddingFn>>,
+    /// Connection to the memory store, for the queries `MemoryStorage` has no method for (KNN, count, access bump).
+    db: Surreal<Any>,
+    /// Embeds the content of a `remember` call that arrives without a vector.
+    embedding: Arc<dyn EmbeddingFn>,
 }
 
 impl SurrealSemanticBackend {
-    /// Create from an existing `SurrealStorage` and a raw connection session.
+    /// Wrap an open `SurrealStorage`.
+    ///
+    /// `embedding` must be the driver the storage was opened with (see [`super::shared::open_shared_memory_storage`]), so a vector computed here lands in the same space as the storage's own.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the storage's connection is not live.
     pub fn new(
         storage: Arc<SurrealStorage>,
-        session: &SurrealSession,
-        embedding: Option<Arc<dyn EmbeddingFn>>,
-    ) -> Self {
-        Self {
+        embedding: Arc<dyn EmbeddingFn>,
+    ) -> LibreFangResult<Self> {
+        let db = storage
+            .db()
+            .map_err(|e| memory_error("SurrealSemanticBackend: memory store connection", e))?;
+        Ok(Self {
             storage,
-            db: Arc::new(session.client().clone()),
+            db,
             embedding,
-        }
+        })
     }
 
-    /// Open a `SurrealSemanticBackend` from a kernel storage config, building a
-    /// dedicated `SurrealStorage` connection internally.
+    /// Open a `SurrealSemanticBackend` from a kernel storage config, building a dedicated `SurrealStorage` connection internally.
     ///
-    /// Meant for `librefang-kernel`, so that `surreal-memory` is not a direct dependency of the kernel crate (it reaches it via `librefang-memory`); the kernel does not call it today.
+    /// This is the factory `librefang-kernel` uses, so that `surreal-memory` is not a direct dependency of the kernel crate.
     ///
-    /// `embedding` and `dimensions` are passed to [`super::shared::open_shared_memory_storage`]: `SurrealStorage` embeds every memory it stores, and every recall made without `query_embedding`, with that driver, so it must be the driver the `ContextEngine` uses for `query_embedding`.
+    /// `embedding` and `dimensions` are passed to [`super::shared::open_shared_memory_storage`]: `SurrealStorage` embeds every memory it stores without a vector, and every recall made without `query_embedding`, with that driver, so it must be the driver the `ContextEngine` uses for `query_embedding`.
     pub async fn open_with_storage(
-        session: &SurrealSession,
         storage_cfg: &librefang_storage::config::StorageConfig,
         embedding: Arc<dyn EmbeddingFn>,
         dimensions: usize,
@@ -108,7 +119,13 @@ impl SurrealSemanticBackend {
             super::shared::open_shared_memory_storage(storage_cfg, embedding.clone(), dimensions)
                 .await
                 .map_err(|e| format!("SurrealStorage (semantic backend): {e}"))?;
-        Ok(Self::new(storage, session, Some(embedding)))
+        Self::new(storage, embedding).map_err(|e| e.to_string())
+    }
+
+    /// The underlying `SurrealStorage`, for callers that need a second backend on the same store (the proactive backend).
+    #[must_use]
+    pub fn storage(&self) -> Arc<SurrealStorage> {
+        Arc::clone(&self.storage)
     }
 }
 
@@ -131,8 +148,6 @@ pub fn fragment_to_memory(frag: &MemoryFragment) -> surreal_memory::memory::Memo
         "lf_id":         frag.id.0.to_string(),
         "source":        source_str,
         "modality":      modality_str,
-        "accessed_at":   frag.accessed_at.to_rfc3339(),
-        "access_count":  frag.access_count,
         "image_url":     frag.image_url,
         "image_embedding": frag.image_embedding,
     });
@@ -165,8 +180,8 @@ pub fn fragment_to_memory(frag: &MemoryFragment) -> surreal_memory::memory::Memo
         metadata: Some(metadata),
         token_count: None,
         importance: frag.confidence,
-        access_count: frag.access_count as u32,
-        last_accessed_at: None,
+        access_count: u32::try_from(frag.access_count).unwrap_or(u32::MAX),
+        last_accessed_at: Some(frag.accessed_at.into()),
         valid_until: None,
         version: 1,
         created_at: surrealdb::types::Datetime::default(),
@@ -193,12 +208,14 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    // Recover the original `MemoryId` from `lf["lf_id"]`; generate a new one
-    // if missing (e.g. for memories not written by librefang).
+    // Recover the original `MemoryId` from `lf["lf_id"]`, then from the record key; generate a new one only for rows librefang did not write.
+    let record_key = mem.id.as_ref().map(record_key_string);
     let id = lf
         .get("lf_id")
         .and_then(|v| v.as_str())
-        .and_then(|s| Uuid::parse_str(s).ok())
+        .map(str::to_string)
+        .or(record_key)
+        .and_then(|s| Uuid::parse_str(&s).ok())
         .map(MemoryId)
         .unwrap_or_default();
 
@@ -223,17 +240,10 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
         .and_then(|s| serde_json::from_str(&format!("\"{s}\"")).ok())
         .unwrap_or_default();
 
-    let accessed_at = lf
-        .get("accessed_at")
-        .and_then(|v| v.as_str())
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .unwrap_or_else(chrono::Utc::now);
-
-    let access_count: u64 = lf
-        .get("access_count")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(mem.access_count as u64);
+    let created_at: DateTime<chrono::Utc> = mem.created_at.into();
+    // `last_accessed_at` is what `update_access` bumps; a row that was never accessed has none and was last touched at creation.
+    let accessed_at: DateTime<chrono::Utc> =
+        mem.last_accessed_at.map(Into::into).unwrap_or(created_at);
 
     let image_url: Option<String> = lf
         .get("image_url")
@@ -243,12 +253,6 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
     let image_embedding: Option<Vec<f32>> = lf
         .get("image_embedding")
         .and_then(|v| serde_json::from_value::<Vec<f32>>(v.clone()).ok());
-
-    // `created_at` is stored as an RFC-3339 string inside the SurrealDB Datetime.
-    // The `Datetime` type's Display is already RFC-3339 compatible.
-    let created_at = DateTime::parse_from_rfc3339(&mem.created_at.to_string())
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .unwrap_or_else(|_| chrono::Utc::now());
 
     MemoryFragment {
         id,
@@ -260,7 +264,7 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
         confidence: mem.importance,
         created_at,
         accessed_at,
-        access_count,
+        access_count: u64::from(mem.access_count),
         scope,
         image_url,
         image_embedding,
@@ -270,6 +274,15 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
         // scope, so there is nothing to score against — matching upstream's own
         // construction sites (semantic.rs:726, proactive.rs:4277).
         similarity: None,
+    }
+}
+
+/// The key of a `memory` record as a plain string (`memory:⟨k⟩` → `k`).
+fn record_key_string(id: &surrealdb::types::RecordId) -> String {
+    match &id.key {
+        surrealdb::types::RecordIdKey::String(s) => s.clone(),
+        surrealdb::types::RecordIdKey::Uuid(u) => u.to_string(),
+        other => format!("{other:?}"),
     }
 }
 
@@ -286,16 +299,17 @@ impl SemanticBackend for SurrealSemanticBackend {
         metadata: HashMap<String, serde_json::Value>,
         embedding: Option<Vec<f32>>,
     ) -> LibreFangResult<MemoryId> {
+        let now = chrono::Utc::now();
         let frag = MemoryFragment {
             id: MemoryId::new(),
             agent_id,
             content: content.to_string(),
-            embedding,
+            embedding: None,
             metadata,
             source,
             confidence: 0.8,
-            created_at: chrono::Utc::now(),
-            accessed_at: chrono::Utc::now(),
+            created_at: now,
+            accessed_at: now,
             access_count: 0,
             scope: scope.to_string(),
             image_url: None,
@@ -305,12 +319,21 @@ impl SemanticBackend for SurrealSemanticBackend {
             // scored against; `similarity` is populated only on recall.
             similarity: None,
         };
+        // Store the caller's vector as given instead of embedding the content a second time; only a call without one pays for an embedding.
+        let vector = match embedding.filter(|v| !v.is_empty()) {
+            Some(v) => v,
+            None => self.embedding.embed_one(content).await?,
+        };
         let lf_id = frag.id;
-        let mem = fragment_to_memory(&frag);
         self.storage
-            .add_memory(mem)
+            .store_indexed_memory(
+                &lf_id.0.to_string(),
+                fragment_to_memory(&frag),
+                vector,
+                None,
+            )
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::remember", e))?;
         Ok(lf_id)
     }
 
@@ -325,19 +348,35 @@ impl SemanticBackend for SurrealSemanticBackend {
         let agent_id_str = filter.agent_id.map(|a| a.0.to_string());
         let peer_id_str = filter.peer_id.clone();
 
-        if let Some(vec) = query_embedding {
-            // ── HNSW vector path (fully parameterised) ────────────────────────
-            if vec.is_empty() {
-                // Embedding service produced an empty vector (Noop) — fall back.
-                debug!("SurrealSemanticBackend: empty embedding, falling back to BM25 recall");
-            } else {
-                return self
-                    .knn_recall(&vec, limit, agent_id_str.as_deref(), peer_id_str.as_deref())
-                    .await;
+        if let Some(vec) = query_embedding.filter(|v| !v.is_empty()) {
+            let hits = self
+                .knn(
+                    &vec,
+                    limit,
+                    agent_id_str.as_deref(),
+                    peer_id_str.as_deref(),
+                    AgentFilter::Strict,
+                )
+                .await?;
+            let mut fragments = Vec::with_capacity(hits.len());
+            for hit in hits {
+                let Some(mem) = self
+                    .storage
+                    .get_memory(&hit.key)
+                    .await
+                    .map_err(|e| memory_error("SurrealSemanticBackend::recall (hydrate)", e))?
+                else {
+                    // Deleted between the KNN query and this read.
+                    continue;
+                };
+                let mut frag = memory_to_fragment(mem);
+                frag.similarity = Some(hit.score);
+                fragments.push(frag);
             }
+            return Ok(fragments);
         }
 
-        // ── BM25 / embedding path via surreal-memory ──────────────────────────
+        // ── Text path via surreal-memory ──────────────────────────────────────
         let results = self
             .storage
             .search_memories(
@@ -349,84 +388,62 @@ impl SemanticBackend for SurrealSemanticBackend {
                 limit,
             )
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::recall (search_memories)", e))?;
 
         Ok(results.into_iter().map(memory_to_fragment).collect())
     }
 
     async fn forget(&self, id: MemoryId) -> LibreFangResult<bool> {
-        // `delete_memory` takes a SurrealDB record-ID string.  Since we store
-        // the librefang `lf_id` inside metadata, we cannot reverse-lookup by ID
-        // efficiently without a dedicated index.  For now we delete by searching
-        // for the `lf_id` tag.
-        let db = self.db.clone();
-        let id_str = id.0.to_string();
-        let rows: Vec<JsonValue> = db
-            .query(
-                "SELECT id FROM memory WHERE meta::value(metadata.librefang.lf_id) = $lf_id \
-                 LIMIT 1",
-            )
-            .bind(("lf_id", id_str))
+        let key = id.0.to_string();
+        let exists = self
+            .storage
+            .get_memory(&key)
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?
-            .take(0)
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
-
-        if let Some(row) = rows.into_iter().next() {
-            if let Some(surreal_id) = row.get("id").and_then(|v| v.as_str()) {
-                self.storage
-                    .delete_memory(surreal_id)
-                    .await
-                    .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
-                return Ok(true);
-            }
+            .map_err(|e| memory_error("SurrealSemanticBackend::forget (lookup)", e))?
+            .is_some();
+        if !exists {
+            return Ok(false);
         }
-        Ok(false)
+        self.storage
+            .delete_memory(&key)
+            .await
+            .map_err(|e| memory_error("SurrealSemanticBackend::forget", e))?;
+        Ok(true)
     }
 
     async fn count(&self, filter: MemoryFilter) -> LibreFangResult<u64> {
         let agent_id_str = filter.agent_id.map(|a| a.0.to_string());
         let peer_id_str = filter.peer_id;
-        let db = self.db.clone();
 
-        // Build a parameterised COUNT query — no string interpolation.
-
-        let rows: Vec<JsonValue> = db
-            .query(
-                "SELECT count() FROM memory \
-                 WHERE ($agent_id IS NONE OR agent_id = $agent_id) \
-                 AND ($peer_id IS NONE OR user_id = $peer_id) \
-                 GROUP ALL",
-            )
+        let rows: Vec<JsonValue> = self
+            .db
+            .query(COUNT_QUERY)
             .bind(("agent_id", agent_id_str))
             .bind(("peer_id", peer_id_str))
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?
+            .map_err(|e| memory_error("SurrealSemanticBackend::count", e))?
             .take(0)
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::count (decode)", e))?;
 
-        let count = rows
+        Ok(rows
             .first()
             .and_then(|r| r.get("count"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-        Ok(count)
+            .and_then(JsonValue::as_u64)
+            .unwrap_or(0))
     }
 
     async fn update_access(&self, id: MemoryId) -> LibreFangResult<()> {
-        let db = self.db.clone();
-        let id_str = id.0.to_string();
-        db.query(
-            "UPDATE memory SET \
-               access_count = access_count + 1, \
-               last_accessed_at = time::now(), \
-               metadata.librefang.accessed_at = time::now(), \
-               metadata.librefang.access_count = <int>(meta::value(metadata.librefang.access_count)) + 1 \
-             WHERE meta::value(metadata.librefang.lf_id) = $lf_id",
-        )
-        .bind(("lf_id", id_str))
-        .await
-        .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+        self.db
+            .query(
+                "UPDATE type::record('memory', $key) SET \
+                   access_count += 1, \
+                   last_accessed_at = time::now()",
+            )
+            .bind(("key", id.0.to_string()))
+            .await
+            .map_err(|e| memory_error("SurrealSemanticBackend::update_access", e))?
+            .check()
+            .map_err(|e| memory_error("SurrealSemanticBackend::update_access", e))?;
         Ok(())
     }
 
@@ -435,25 +452,52 @@ impl SemanticBackend for SurrealSemanticBackend {
     }
 }
 
-// ── VectorStore shim ──────────────────────────────────────────────────────────
-//
-// Implement `VectorStore` so existing callers that reach the semantic backend
-// through the `set_vector_store` path (e.g. kernel wiring prior to full trait
-// migration) also get HNSW vector search.
+/// Count query shared by [`SemanticBackend::count`] and its template test.
+const COUNT_QUERY: &str = "SELECT count() FROM memory \
+     WHERE ($agent_id IS NONE OR agent_id = $agent_id) \
+     AND ($peer_id IS NONE OR user_id = $peer_id) \
+     GROUP ALL";
+
+// ── VectorStore (mirror of the SQLite SemanticStore) ─────────────────────────
 
 #[async_trait]
 impl VectorStore for SurrealSemanticBackend {
+    /// Upsert the vector for `id`.
+    ///
+    /// The row carries no metadata: SQLite holds the fragment, and the `SemanticStore` hydrates every hit from there by id.
     async fn insert(
         &self,
         id: &str,
         embedding: &[f32],
         payload: &str,
-        metadata: HashMap<String, serde_json::Value>,
+        _metadata: HashMap<String, serde_json::Value>,
     ) -> LibreFangResult<()> {
+        let existing = self
+            .storage
+            .get_memory(id)
+            .await
+            .map_err(|e| memory_error("SurrealSemanticBackend::insert (lookup)", e))?;
+        if existing.is_some() {
+            // `update_embedding` re-inserts an id with its new vector; the contract is an upsert.
+            self.db
+                .query(
+                    "UPDATE type::record('memory', $key) SET \
+                       content = $content, embedding = $embedding, updated_at = time::now()",
+                )
+                .bind(("key", id.to_string()))
+                .bind(("content", payload.to_string()))
+                .bind(("embedding", embedding.to_vec()))
+                .await
+                .map_err(|e| memory_error("SurrealSemanticBackend::insert (update)", e))?
+                .check()
+                .map_err(|e| memory_error("SurrealSemanticBackend::insert (update)", e))?;
+            return Ok(());
+        }
+        let now = surrealdb::types::Datetime::default();
         let mem = surreal_memory::memory::Memory {
             id: None,
             content: payload.to_string(),
-            embedding: Some(embedding.to_vec()),
+            embedding: None,
             scope: surreal_memory::memory::MemoryScope::default(),
             memory_type: surreal_memory::memory::MemoryType::default(),
             user_id: None,
@@ -461,23 +505,20 @@ impl VectorStore for SurrealSemanticBackend {
             agent_id: None,
             task_stream_id: None,
             categories: Vec::new(),
-            metadata: Some(serde_json::json!({
-                "librefang": { "lf_id": id },
-                "user": serde_json::to_value(&metadata).unwrap_or(JsonValue::Null),
-            })),
+            metadata: None,
             token_count: None,
             importance: 0.5,
             access_count: 0,
             last_accessed_at: None,
             valid_until: None,
             version: 1,
-            created_at: surrealdb::types::Datetime::default(),
-            updated_at: surrealdb::types::Datetime::default(),
+            created_at: now,
+            updated_at: now,
         };
         self.storage
-            .add_memory(mem)
+            .store_indexed_memory(id, mem, embedding.to_vec(), None)
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::insert", e))?;
         Ok(())
     }
 
@@ -490,32 +531,34 @@ impl VectorStore for SurrealSemanticBackend {
         let filter = filter.unwrap_or_default();
         let agent_id_str = filter.agent_id.map(|a| a.0.to_string());
         let peer_id_str = filter.peer_id;
-        let results = self
-            .knn_recall(
+        let hits = self
+            .knn(
                 query_embedding,
                 limit,
                 agent_id_str.as_deref(),
                 peer_id_str.as_deref(),
+                AgentFilter::AllowUnowned,
             )
             .await?;
-        Ok(results
+        Ok(hits
             .into_iter()
-            .map(|f| VectorSearchResult {
-                id: f.id.0.to_string(),
-                payload: f.content,
-                score: f.confidence,
-                metadata: f.metadata,
+            .map(|hit| VectorSearchResult {
+                id: hit.key,
+                payload: hit.content,
+                score: hit.score,
+                metadata: HashMap::new(),
             })
             .collect())
     }
 
     async fn delete(&self, id: &str) -> LibreFangResult<()> {
-        let db = self.db.clone();
-        let id_str = id.to_string();
-        db.query("DELETE memory WHERE meta::value(metadata.librefang.lf_id) = $lf_id")
-            .bind(("lf_id", id_str))
+        self.db
+            .query("DELETE type::record('memory', $key)")
+            .bind(("key", id.to_string()))
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::delete", e))?
+            .check()
+            .map_err(|e| memory_error("SurrealSemanticBackend::delete", e))?;
         Ok(())
     }
 
@@ -523,31 +566,28 @@ impl VectorStore for SurrealSemanticBackend {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let db = self.db.clone();
-        let ids_json: JsonValue = serde_json::to_value(ids).unwrap_or(JsonValue::Array(vec![]));
-        let rows: Vec<JsonValue> = db
+        let keys: Vec<String> = ids.iter().map(|s| (*s).to_string()).collect();
+        let rows: Vec<JsonValue> = self
+            .db
             .query(
-                "SELECT metadata.librefang.lf_id AS lf_id, embedding \
-                 FROM memory \
-                 WHERE meta::value(metadata.librefang.lf_id) IN $ids \
-                 AND embedding != NONE",
+                "SELECT record::id(id) AS key, embedding \
+                 FROM array::map($keys, |$k| type::record('memory', $k)) \
+                 WHERE embedding != NONE",
             )
-            .bind(("ids", ids_json))
+            .bind(("keys", keys))
             .await
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?
+            .map_err(|e| memory_error("SurrealSemanticBackend::get_embeddings", e))?
             .take(0)
-            .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend::get_embeddings (decode)", e))?;
 
-        let mut map = HashMap::new();
+        let mut map = HashMap::with_capacity(rows.len());
         for row in rows {
-            if let (Some(lf_id), Some(emb)) = (
-                row.get("lf_id")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string),
-                row.get("embedding")
-                    .and_then(|v| serde_json::from_value::<Vec<f32>>(v.clone()).ok()),
-            ) {
-                map.insert(lf_id, emb);
+            let key = row.get("key").and_then(JsonValue::as_str);
+            let emb = row
+                .get("embedding")
+                .and_then(|v| serde_json::from_value::<Vec<f32>>(v.clone()).ok());
+            if let (Some(key), Some(emb)) = (key, emb) {
+                map.insert(key.to_string(), emb);
             }
         }
         Ok(map)
@@ -560,56 +600,91 @@ impl VectorStore for SurrealSemanticBackend {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
+/// How the KNN query treats rows that carry no `agent_id`.
+#[derive(Clone, Copy)]
+enum AgentFilter {
+    /// Only rows owned by the requested agent (the `SemanticBackend` face, which returns the rows themselves).
+    Strict,
+    /// Also rows with no owner: the `VectorStore` mirror writes none, and its caller re-filters what it hydrates.
+    AllowUnowned,
+}
+
+/// One KNN hit: record key, stored content and cosine similarity to the query.
+struct KnnHit {
+    key: String,
+    content: String,
+    score: f32,
+}
+
+/// Build the KNN query for a clamped `k`.
+fn knn_query(k: usize, agent_filter: AgentFilter) -> String {
+    let agent_clause = match agent_filter {
+        AgentFilter::Strict => "($agent_id IS NONE OR agent_id = $agent_id)",
+        AgentFilter::AllowUnowned => {
+            "($agent_id IS NONE OR agent_id IS NONE OR agent_id = $agent_id)"
+        }
+    };
+    // SurrealDB KNN syntax requires a literal unsigned integer in the `<|k,COSINE|>` slot.
+    // `k` is a clamped `usize`, so formatting it into the query does not introduce caller-controlled SQL; every user-derived value stays bound.
+    format!(
+        "SELECT record::id(id) AS key, content, \
+                vector::similarity::cosine(embedding, $vec) AS score \
+         FROM memory \
+         WHERE embedding <|{k},COSINE|> $vec \
+           AND {agent_clause} \
+           AND ($peer_id IS NONE OR user_id = $peer_id) \
+         ORDER BY score DESC \
+         LIMIT $k"
+    )
+}
+
 impl SurrealSemanticBackend {
-    /// Issue a parameterised KNN query using SurrealDB's `<|k,COSINE|>` syntax.
-    ///
-    /// All user-supplied values (agent_id, peer_id, limit) are bound — the KNN
-    /// vector itself is also bound as `$vec`.
-    async fn knn_recall(
+    /// Nearest neighbours of `embedding` by cosine similarity, best first.
+    async fn knn(
         &self,
         embedding: &[f32],
         limit: usize,
         agent_id: Option<&str>,
         peer_id: Option<&str>,
-    ) -> LibreFangResult<Vec<MemoryFragment>> {
-        let db = self.db.clone();
-        let vec = embedding.to_vec();
-        let k = limit.clamp(1, 1000) as u64;
-
-        // SurrealDB KNN syntax requires a literal unsigned integer in the
-        // `<|k,COSINE|>` slot. `k` is derived from `usize` and clamped above,
-        // so formatting it into the query does not introduce caller-controlled
-        // SQL. User-derived values remain bound below.
-        let query = format!(
-            "SELECT *, vector::similarity::cosine(embedding, $vec) AS _score \
-             FROM memory \
-             WHERE embedding <|{k},COSINE|> $vec \
-               AND ($agent_id IS NONE OR agent_id = $agent_id) \
-               AND ($peer_id  IS NONE OR user_id  = $peer_id) \
-             ORDER BY _score DESC \
-             LIMIT $k"
-        );
-        let rows: Vec<JsonValue> = db
-            .query(query)
-            .bind(("vec", vec))
-            .bind(("k", k))
+        agent_filter: AgentFilter,
+    ) -> LibreFangResult<Vec<KnnHit>> {
+        let k = limit.clamp(1, MAX_KNN_K);
+        let rows: Vec<JsonValue> = self
+            .db
+            .query(knn_query(k, agent_filter))
+            .bind(("vec", embedding.to_vec()))
+            .bind(("k", k as u64))
             .bind(("agent_id", agent_id.map(str::to_string)))
             .bind(("peer_id", peer_id.map(str::to_string)))
             .await
-            .map_err(|e| LibreFangError::memory_msg(format!("knn_recall query: {e}")))?
+            .map_err(|e| memory_error("SurrealSemanticBackend knn query", e))?
             .take(0)
-            .map_err(|e| LibreFangError::memory_msg(format!("knn_recall take: {e}")))?;
+            .map_err(|e| memory_error("SurrealSemanticBackend knn query (decode)", e))?;
 
-        let mut fragments = Vec::with_capacity(rows.len());
-        for row in rows {
-            match serde_json::from_value::<surreal_memory::memory::Memory>(row) {
-                Ok(mem) => fragments.push(memory_to_fragment(mem)),
-                Err(e) => {
-                    warn!("SurrealSemanticBackend: failed to deserialize memory row: {e}");
-                }
-            }
-        }
-        Ok(fragments)
+        rows.into_iter()
+            .map(|row| {
+                let key = row
+                    .get("key")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| {
+                        LibreFangError::memory_msg(format!(
+                            "SurrealSemanticBackend knn query: row without a string key: {row}"
+                        ))
+                    })?
+                    .to_string();
+                let content = row
+                    .get("content")
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let score = row.get("score").and_then(JsonValue::as_f64).unwrap_or(0.0) as f32;
+                Ok(KnnHit {
+                    key,
+                    content,
+                    score,
+                })
+            })
+            .collect()
     }
 }
 
@@ -726,160 +801,31 @@ mod tests {
         assert!((recovered.confidence - frag.confidence).abs() < 1e-6);
     }
 
-    /// Verify that the KNN query template does not contain caller-supplied
-    /// filter values as literals in the query text — the parameterized binding
-    /// path is the only way those values reach the query.
-    ///
-    /// SurrealDB requires the KNN `k` operand to be a literal unsigned integer,
-    /// so only that clamped numeric value is formatted into the query.
+    /// The KNN query binds every caller-derived value; only the clamped numeric `k` is formatted in, because SurrealDB needs it as a literal.
     #[test]
     fn knn_query_template_has_no_inline_caller_values() {
-        let k = 5_u64;
-        let knn_query = format!(
-            "SELECT *, vector::similarity::cosine(embedding, $vec) AS _score \
-             FROM memory \
-             WHERE embedding <|{k},COSINE|> $vec \
-            AND ($agent_id IS NONE OR agent_id = $agent_id) \
-            AND ($peer_id IS NONE OR user_id = $peer_id) \
-            AND ($scope IS NONE OR $scope IN categories) \
-             ORDER BY _score DESC \
-             LIMIT $k"
-        );
-
-        // All variable references use the `$name` placeholder form —
-        // none of the caller-derived filters are interpolated inline.
-        assert!(knn_query.contains("$vec"), "embedding vector must be bound");
-        assert!(knn_query.contains("$agent_id"), "agent_id must be bound");
-        assert!(knn_query.contains("$peer_id"), "peer_id must be bound");
-        assert!(knn_query.contains("$scope"), "scope must be bound");
-        assert!(
-            knn_query.contains("$k"),
-            "limit must remain bound outside the KNN operator"
-        );
-        assert!(
-            knn_query.contains("embedding <|5,COSINE|> $vec"),
-            "KNN operator must use a literal numeric k"
-        );
-
-        // No raw string interpolation: the dangerous injection payload
-        // cannot appear because the template is a compile-time constant.
-        let injection = "'; DROP TABLE memory; --";
-        assert!(
-            !knn_query.contains(injection),
-            "injection string must not appear in query template"
-        );
+        for agent_filter in [AgentFilter::Strict, AgentFilter::AllowUnowned] {
+            let knn = knn_query(5, agent_filter);
+            assert!(knn.contains("$vec"), "embedding vector must be bound");
+            assert!(knn.contains("$agent_id"), "agent_id must be bound");
+            assert!(knn.contains("$peer_id"), "peer_id must be bound");
+            assert!(
+                knn.contains("LIMIT $k"),
+                "limit must stay bound outside the KNN operator"
+            );
+            assert!(
+                knn.contains("embedding <|5,COSINE|> $vec"),
+                "KNN operator must use a literal numeric k"
+            );
+        }
+        assert!(!knn_query(5, AgentFilter::Strict).contains("OR agent_id IS NONE OR"));
+        assert!(knn_query(5, AgentFilter::AllowUnowned).contains("OR agent_id IS NONE OR"));
     }
 
-    /// Verify the count query template uses parameterized bindings.
+    /// The count query binds its filters.
     #[test]
     fn count_query_template_is_parameterized() {
-        const COUNT_QUERY: &str = "SELECT count() FROM memory \
-            WHERE ($agent_id IS NONE OR agent_id = $agent_id) \
-            AND ($peer_id IS NONE OR user_id = $peer_id) \
-            GROUP ALL";
-
         assert!(COUNT_QUERY.contains("$agent_id"));
         assert!(COUNT_QUERY.contains("$peer_id"));
-
-        // A crafted agent-id string must not appear literally in the template.
-        let fake_id = "00000000-0000-0000-0000-000000000000";
-        assert!(!COUNT_QUERY.contains(fake_id));
-    }
-
-    /// Integration test: insert 5 fragments with distinct embeddings and verify
-    /// that a KNN query returns them in cosine-similarity order.
-    ///
-    /// Requires a running SurrealDB instance.  Run with:
-    ///   `cargo test --features surreal-backend -- --ignored knn_hnsw_relevance`
-    #[tokio::test]
-    #[ignore = "requires a running SurrealDB instance"]
-    async fn knn_hnsw_relevance() {
-        use librefang_types::memory::MemorySource;
-
-        // Synthetic 3-dim embeddings.  Fragment 0 is the "target" query vector.
-        // `SurrealStorage::add_memory` re-embeds content with the storage's driver and merges near-duplicates (cosine >= 0.92), so every pair stays below that threshold.
-        let query_vec = vec![1.0_f32, 0.0, 0.0];
-        let vecs: Vec<Vec<f32>> = vec![
-            vec![1.0, 0.0, 0.0],   // 0: identical to query → highest similarity
-            vec![0.85, 0.53, 0.0], // 1: close
-            vec![0.5, 0.0, 0.866], // 2: moderate
-            vec![0.1, 0.995, 0.0], // 3: distant
-            vec![0.0, 0.0, 1.0],   // 4: orthogonal → lowest similarity
-        ];
-
-        // The storage embeds each fragment's content itself, so hand it a driver that returns the synthetic vector for that content.
-        struct LookupEmbedding(Vec<Vec<f32>>);
-        #[async_trait]
-        impl EmbeddingFn for LookupEmbedding {
-            async fn embed_one(&self, text: &str) -> LibreFangResult<Vec<f32>> {
-                let idx = text
-                    .strip_prefix("Memory fragment ")
-                    .and_then(|i| i.parse::<usize>().ok())
-                    .unwrap_or(0);
-                Ok(self.0[idx].clone())
-            }
-        }
-
-        // Build the backend using a SurrealSession pointing at the local instance.
-        // SurrealSession is obtained via SurrealConnectionPool::open(cfg).
-        // Consult integration_test.rs for the full boot sequence.
-        use librefang_storage::config::StorageConfig;
-        use librefang_storage::pool::SurrealConnectionPool;
-        let pool = SurrealConnectionPool::default();
-        let storage_cfg = StorageConfig::default();
-        let session = pool
-            .open(&storage_cfg)
-            .await
-            .expect("Failed to connect to SurrealDB");
-        let backend = SurrealSemanticBackend::open_with_storage(
-            &session,
-            &storage_cfg,
-            Arc::new(LookupEmbedding(vecs.clone())),
-            3,
-        )
-        .await
-        .expect("Failed to create SurrealSemanticBackend");
-
-        // Insert all 5 fragments.
-        let agent_id = AgentId(uuid::Uuid::new_v4());
-        let mut ids = vec![];
-        for (i, emb) in vecs.iter().enumerate() {
-            let mut meta = HashMap::new();
-            meta.insert("test_idx".to_string(), serde_json::json!(i));
-            let id = backend
-                .remember(
-                    agent_id,
-                    &format!("Memory fragment {}", i),
-                    MemorySource::Conversation,
-                    "test",
-                    meta,
-                    Some(emb.clone()),
-                )
-                .await
-                .unwrap_or_else(|e| panic!("remember failed for fragment {}: {}", i, e));
-            ids.push(id);
-        }
-
-        // Issue a KNN recall with the query vector.
-        let filter = Some(librefang_types::memory::MemoryFilter::agent(agent_id));
-        let results = backend
-            .recall("", 5, filter, Some(query_vec))
-            .await
-            .expect("recall failed");
-
-        assert!(!results.is_empty(), "expected at least one result");
-
-        // The first result should be the identical vector (fragment 0).
-        let top = &results[0];
-        assert_eq!(
-            top.metadata.get("test_idx").and_then(|v| v.as_u64()),
-            Some(0),
-            "highest-similarity fragment should rank first"
-        );
-
-        // Clean up.
-        for id in ids {
-            let _ = backend.forget(id).await;
-        }
     }
 }

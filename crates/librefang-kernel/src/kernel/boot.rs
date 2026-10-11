@@ -441,27 +441,13 @@ impl LibreFangKernel {
         // `[memory]` is restart-required in `build_reload_plan`, so a value read once here cannot go stale relative to the config on disk.
         substrate.set_max_episodic_chars(config.memory.max_episodic_chars);
 
-        // Optionally attach an external vector store backend.
-        if let Some(ref backend) = config.memory.vector_backend {
-            match backend.as_str() {
-                "http" => {
-                    let url = config.memory.vector_store_url.as_deref().ok_or_else(|| {
-                        LibreFangError::BootFailed(
-                            "vector_backend = \"http\" requires vector_store_url".into(),
-                        )
-                    })?;
-                    let store = std::sync::Arc::new(librefang_memory::HttpVectorStore::new(url));
-                    substrate.set_vector_store(store);
-                    tracing::info!("Vector store backend: http ({})", url);
-                }
-                "sqlite" | "" => { /* default — no external backend */ }
-                other => {
-                    return Err(LibreFangError::BootFailed(format!(
-                        "Unknown vector_backend: {other:?}"
-                    ))
-                    .into());
-                }
-            }
+        // Attach the external vector backend `[memory] vector_backend` selects.
+        // The SurrealDB index needs the embedding driver, which is resolved further down, so it is attached there.
+        let vector_backend = super::vector_backend::resolve(&config)?;
+        if let super::vector_backend::VectorBackendChoice::Http(ref url) = vector_backend {
+            let store = std::sync::Arc::new(librefang_memory::HttpVectorStore::new(url));
+            substrate.set_vector_store(store);
+            tracing::info!("Vector store backend: http ({})", url);
         }
 
         let memory = Arc::new(substrate);
@@ -1654,6 +1640,16 @@ impl LibreFangKernel {
                     warn!(error = %e, "Embedding model census failed; skipping the model-drift check");
                 }
             }
+        }
+
+        #[cfg(feature = "surreal-backend")]
+        if let super::vector_backend::VectorBackendChoice::Surreal { required } = vector_backend {
+            super::vector_backend::attach_surreal(
+                &config,
+                &memory,
+                embedding_driver.as_ref(),
+                required,
+            )?;
         }
 
         let browser_ctx = librefang_runtime::browser::BrowserManager::new(config.browser.clone());
