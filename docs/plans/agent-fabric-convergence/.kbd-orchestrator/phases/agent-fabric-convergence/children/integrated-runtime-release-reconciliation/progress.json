@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 673,
-  "derivedRevision": 673,
+  "sourceRevision": 677,
+  "derivedRevision": 677,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 434
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 438
   },
   "conflictCount": 0,
   "phase": "integrated-runtime-release-reconciliation",
   "phaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-10-10T20:15:02.160615Z",
+  "last_updated": "2026-10-11T01:45:02.556856Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 4,
   "changes_completed": 3,
@@ -111,8 +111,8 @@
       "status": "IN_PROGRESS",
       "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
+      "tasks_done": 1,
+      "last_task_completed": "Publish all four installers and exact website metadata",
       "next_task_pending": "Build and operate integrated Mac ARM64 candidate and missing customer scenarios",
       "blockers": []
     }
