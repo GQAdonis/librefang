@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-platform-specific-release-dispatch",
+  "recordedAt": "2026-10-10T23:53:29.328Z",
+  "version": "2.2.31",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "dispatchedPlatforms": [
+    "darwin-arm64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "source": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "workflow": "the-boss-release.yml",
+  "runId": "38096491962",
+  "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38096491962",
+  "nativeRecordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-74194623/uar-sidecar-darwin-arm64.json",
+  "actualObservation": {
+    "platformSelection": "passed",
+    "prepareRelease": "passed",
+    "installer": "queued-at-initial-observation"
+  },
+  "publication": "pending",
+  "installedAcceptance": "pending",
+  "deliveryCredit": false,
+  "historyAndClocksReset": false
+}

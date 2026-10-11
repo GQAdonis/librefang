@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-11T00:05:13.904Z",
+  "kind": "actual-packaged-main-window-launcher-operation",
+  "status": "passed-launcher-scope",
+  "operationSession": 87022,
+  "owningProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-CMncPa",
+  "appSource": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "appVersion": "2.2.31",
+  "repairedMaintainedLauncherSha256": "1a5dffa5cd5a5eef2ab6a1ce4b4249a656040759387cdf01385e80821e79a726",
+  "operatedBoundCopySha256": "e348c971f429668dbe0e23deaa00f5dad40eae11752284042f4510456aa931e4",
+  "importsBoundToFrozenFullSource": true,
+  "observations": [
+    "exact packaged main renderer selected",
+    "main renderer ready",
+    "actual reusable-team scenario advanced from onboarding into UAR team authoring"
+  ],
+  "completeTeamQualification": "pending",
+  "newBuild": false,
+  "newCadenceDelivery": false,
+  "wholePortfolioQualificationChanged": false
+}

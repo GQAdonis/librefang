@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-completed-boundary-observation-index",
+  "recordedAt": "2026-10-11T00:04:46.273Z",
+  "version": "2.2.31",
+  "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+  "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "receipts": {
+    "bossfang": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-workflow-delegation-20261010/integrated-admission-v2-bossfang-afd84034-20cf-4e69-a95d-9876c3e164ee/operation.json",
+      "sha256": "8f1ae9b189f42b62136830620fa670ff6dfb75163c8ff65b53ee53aef3f0ffbc",
+      "status": "success",
+      "checks": [
+        "actual-compiled-authenticated-embedded-dashboard",
+        "visible-canvas-bound-target-authoring-and-native-persistence",
+        "visible-ordinary-run-admission-to-original-bound-uar",
+        "native-workflow-step-delegation-task-thread-root-run-correlations",
+        "actual-native-message-output-visible-and-settled-by-ordinary-engine",
+        "visible-original-pending-approval-exact-prepared-write",
+        "canonical-durable-host-human-approval-before-exact-disposable-effect",
+        "visible-original-authoritative-denial-canonical-durable-history-without-effect",
+        "visible-two-step-confirmed-cancel-forwarded-to-original-native-run",
+        "native-cancellation-request-acknowledgment-terminal-cleanup-settled",
+        "pending-approval-cancelled-canonical-history-and-ordinary-engine-without-effect",
+        "work-global-selection-and-original-uar-pid-start-port-preserved",
+        "actual-persisted-host-mcp-kind-exact-admission-and-original-run-correlation"
+      ],
+      "startedAt": "2026-10-10T23:47:43.095Z",
+      "finishedAt": "2026-10-10T23:48:53.414Z"
+    },
+    "nativeRead": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-native-read-20261010/integrated-admission-v2-native-read-d3d52f88-5d98-446e-bebb-e88633489083/operation.json",
+      "sha256": "cdae9af029f02aec13f38ad804dae93ad5393b2cb43678377920549618e4e0e7",
+      "status": "success",
+      "checks": [
+        "actual-proxy-runtime-native-file-read-exact-approval-and-consumption",
+        "real-pending-approval-detach-attach-same-execution-without-repeat-effect",
+        "actual-semantic-stream-cancellation-persisted-paused-and-fresh-recovery"
+      ],
+      "startedAt": "2026-10-10T23:49:16.449Z",
+      "finishedAt": "2026-10-10T23:50:06.907Z"
+    },
+    "localInstallation": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-local-installation-20261010/integrated-local-mac-2.2.31-f1254765-f01f-4bd6-9708-389c17960c3b/installation.json",
+      "sha256": "f4d3b01aeb7766d14868ff0ba1f5ae22da6d49c2077817c307bec662056b9cb6",
+      "status": "passed",
+      "checks": [],
+      "signature": "passed",
+      "gatekeeper": "passed",
+      "startedAt": "2026-10-10T23:50:02.820Z",
+      "finishedAt": "2026-10-10T23:50:15.057Z"
+    }
+  },
+  "publicInstallerAcceptance": "pending",
+  "windowsOperation": "pending",
+  "wholePortfolioQualificationChanged": false,
+  "successfulDeliveries": 15,
+  "newDelivery": false
+}

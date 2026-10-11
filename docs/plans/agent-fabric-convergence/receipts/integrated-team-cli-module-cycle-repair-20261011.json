@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-11T00:04:10.497Z",
+  "operationSession": 40187,
+  "owningProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-v45weY",
+  "mainRendererReady": true,
+  "mainAppInfoPassed": true,
+  "reason": "CLI top-level await operate and generated scenario imports same incompletely evaluated module",
+  "repair": "separate CLI entrypoint imports completed scenario/operate module before awaiting operation",
+  "entrypoint": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/run-integrated-reusable-team-20261011.mjs",
+  "ownedParentPid": 737,
+  "ownedAppGroup": 1665,
+  "sourceAndBuildUnchanged": true,
+  "cadenceCountersUnchanged": true
+}
