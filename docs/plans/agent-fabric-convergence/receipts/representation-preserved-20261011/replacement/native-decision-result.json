@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-11T13:51:33.241Z",
+  "input": {
+    "workspaceId": "2bb3a1f4-abc7-4e64-aed5-4f408576ba8a",
+    "instanceId": "a4d8e2b1-13c6-4cbc-ad88-0615c473db6f",
+    "runId": "2a47bc48-4548-454a-98aa-488df8f58df7",
+    "approvalId": "ff622d80-3e48-48cb-bb48-6dd5f6cf2c36",
+    "issuerId": "2ce52207-8e8c-48a5-90bc-d7d3a0169fad",
+    "challengeId": "ff622d80-3e48-48cb-bb48-6dd5f6cf2c36",
+    "eventId": "ff622d80-3e48-48cb-bb48-6dd5f6cf2c36",
+    "cursor": 13,
+    "approved": true
+  },
+  "result": {
+    "ok": true,
+    "data": {
+      "resolved": true
+    }
+  }
+}

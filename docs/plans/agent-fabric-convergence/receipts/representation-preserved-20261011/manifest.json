@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "kind": "immutable-representation-evidence-preservation",
+  "recordedAt": "2026-10-11T14:01:23.093Z",
+  "disposition": "excluded-from-accepted-core-milestone; representation qualification unresolved",
+  "newReads": 0,
+  "newApprovals": 0,
+  "entries": [
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/operation.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/operation.json",
+      "bytes": 5277,
+      "sha256": "cabfd2248ca3ea147ede460946b6c3a9e2587e6f10bb18677e9ddcfef38c3dc4"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/evidence.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/evidence.json",
+      "bytes": 6002,
+      "sha256": "458fbde5204aff6f204d89cb198bf7ac1841846460103293933db524056e9e37"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/launch.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/launch.json",
+      "bytes": 1809,
+      "sha256": "0eff5ce0c7a9abc9cf203f0c01fc6738da5deb388daf9d4912d30fd0122b45e9"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/representation-state.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/representation-state.json",
+      "bytes": 10963,
+      "sha256": "44c2d60c24ea539073adac283f14a50e1eda8b601c782da6b8540cc89b022737"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/native-decision-result.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/native-decision-result.json",
+      "bytes": 602,
+      "sha256": "6adf0347fa21ff784f494335949f301c744ad10f114ea4d596630bc85ff9bd0d"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/representation-human-approval.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/representation-human-approval.json",
+      "bytes": 1176,
+      "sha256": "5fddd5e3649e913796792f8199e69eb779e7dcfc6c40a0e525c6d9580b72fdaa"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/approval-observation.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/approval-observation.json",
+      "bytes": 2423,
+      "sha256": "0c344336eaf2bac7aea1b7b525eef11b3eebbc4456168aead3c2bcc5e1ff59aa"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/interruption-record.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/interruption-record.json",
+      "bytes": 589,
+      "sha256": "ee8ecb6b24311a221e8439a52cc68eae8bce231691c19ab61fed1a3176ff6996"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/workspace/representation-synthetic.txt",
+      "copy": "receipts/representation-preserved-20261011/interrupted/workspace/representation-synthetic.txt",
+      "bytes": 137,
+      "sha256": "c588f806e6a802ce150738453592aeb11b9014cf0024fedeaf174ff5b90c148f"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/operation.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/operation.json",
+      "bytes": 5425,
+      "sha256": "c987df47cee533168e224923afbba7c52e5b0577d77314ffaad0384ac8a55265"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/evidence.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/evidence.json",
+      "bytes": 8873,
+      "sha256": "17161e4a7d15c1445762e9e92be29e59678d7c10e4a824ac0420553593b2e33b"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/launch.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/launch.json",
+      "bytes": 1831,
+      "sha256": "762ceb557115c80d1c750e3ef4db4a54c4435e6762f097927edae2faa61096e2"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/representation-state.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/representation-state.json",
+      "bytes": 11089,
+      "sha256": "3c0c3fa2d2ad418c86a6f849f5f62e9af33cd2b0cf87200681d41d8be6ed3c0d"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/native-decision-result.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/native-decision-result.json",
+      "bytes": 602,
+      "sha256": "a174e1bf905d7c416dd0ce4327674da3411e5800b8d37304f89ea5ef9c42a88e"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/representation-human-approval.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/representation-human-approval.json",
+      "bytes": 1202,
+      "sha256": "6c17c6698d8edcead1283fd12969b4de76a037e6bb47e4f1d63e46c391494a66"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/approval-observation.json",
+      "copy": "receipts/representation-preserved-20261011/replacement/approval-observation.json",
+      "bytes": 2483,
+      "sha256": "9f7b0345af96da6503fb8f2f70e6b89987c6ad368684ce605549da9a7ee67ad8"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-after-operator-quit-20261011/integrated-synthetic-representation-9d22c9a5-7d4b-46b7-91d6-39c722463345/workspace/representation-synthetic.txt",
+      "copy": "receipts/representation-preserved-20261011/replacement/workspace/representation-synthetic.txt",
+      "bytes": 137,
+      "sha256": "86eb5f42e378c9b53bfb2a26fe4c10bf63c5acf85d3686f345c41ad2688ed590"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/recovery-command.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/recovery-command.json",
+      "bytes": 2,
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "original": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-representation-fresh-20261011/integrated-synthetic-representation-305ba002-e6f3-4992-961d-38928b765c7f/recovery-native-error.json",
+      "copy": "receipts/representation-preserved-20261011/interrupted/recovery-native-error.json",
+      "bytes": 65,
+      "sha256": "2726e615402ba1fa70f6f722553135a9013c3c2b2a639ae838fe3c18141eb052"
+    }
+  ]
+}

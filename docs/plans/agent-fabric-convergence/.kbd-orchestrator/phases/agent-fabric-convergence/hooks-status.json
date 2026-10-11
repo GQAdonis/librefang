@@ -1,11 +1,11 @@
 {
-  "totalRuns": 38,
+  "totalRuns": 39,
   "failedRuns": 1,
   "lastRun": {
-    "ts": "2026-10-10T14:25:05.254Z",
+    "ts": "2026-10-11T14:05:28.304Z",
     "kind": "child",
-    "edge": "before",
-    "name": "integrated-runtime-release-reconciliation",
+    "edge": "after",
+    "name": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
     "hookId": "delivery-cadence-kbd-reconcile",
     "layer": "project",
     "mode": "augment",

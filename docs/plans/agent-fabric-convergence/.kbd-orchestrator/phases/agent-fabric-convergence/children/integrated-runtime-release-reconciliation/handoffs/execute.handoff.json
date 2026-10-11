@@ -1,0 +1,14 @@
+{
+  "stage": "execute",
+  "completedAt": "2026-10-11T14:05:22.909Z",
+  "outputs": [
+    "execution.md",
+    "plan.md",
+    "review/core-closeout/findings.json",
+    "../../../../../receipts/core-customer-milestone-closed-2.2.32-20261011.json"
+  ],
+  "nextStage": "reflect",
+  "summaryForNext": "Accepted core 2.2.32 complete under operator revision13; four OpenSpec changes verified/archived. Both platform acceptance receipts preserved; representation excluded and unresolved. No new delivery.",
+  "skipped": false,
+  "skipReason": null
+}

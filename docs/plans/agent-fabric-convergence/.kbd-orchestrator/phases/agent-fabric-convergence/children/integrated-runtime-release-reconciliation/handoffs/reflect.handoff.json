@@ -1,0 +1,12 @@
+{
+  "stage": "reflect",
+  "completedAt": "2026-10-11T14:05:24.919Z",
+  "outputs": [
+    "reflection.md",
+    "review/core-closeout/findings.json"
+  ],
+  "nextStage": null,
+  "summaryForNext": "Core customer release 2.2.32 accepted on Mac ARM64 and Windows x64. Representation qualification separately unresolved; preserve 61/61 code,43/61 portfolio,17 deliveries. No next operation is started.",
+  "skipped": false,
+  "skipReason": null
+}

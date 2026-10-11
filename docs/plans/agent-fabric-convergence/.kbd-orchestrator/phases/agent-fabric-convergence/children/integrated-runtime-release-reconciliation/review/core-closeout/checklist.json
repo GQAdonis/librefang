@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-11T14:02:39.444Z",
+  "scope": "Completed documentation boundary; no new runtime gate",
+  "checks": [
+    {
+      "name": "19 preserved copies match original hashes",
+      "passed": true
+    },
+    {
+      "name": "acceptance unchanged",
+      "passed": true
+    }
+  ]
+}
