@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-installer-workflow-dispatch",
+  "status": "dispatched",
+  "version": "2.2.26",
+  "platform": "darwin-arm64",
+  "source": "5b317b64c65928492f913fc41946d55ee099b472",
+  "uarSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "workflow": "the-boss-release.yml",
+  "runId": 38010625261,
+  "runUrl": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38010625261",
+  "createdAt": "2026-10-10T00:48:29Z",
+  "inputs": {
+    "release_version": "2.2.26",
+    "release_profile": "uar-enabled",
+    "platforms": "darwin-arm64",
+    "replace_published_platforms": "false",
+    "uar_darwin_arm64_record_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.26-1522f179/uar-sidecar-darwin-arm64.json"
+  },
+  "verified": "GitHub run headSha and completed platform-selection/native-import job match the frozen inputs",
+  "publication": "pending",
+  "website": "pending",
+  "installedAcceptance": "pending",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false
+}

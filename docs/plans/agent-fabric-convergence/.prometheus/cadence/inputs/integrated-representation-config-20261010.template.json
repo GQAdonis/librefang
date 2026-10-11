@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "candidate": {
+    "version": "2.2.31",
+    "boss": null,
+    "uar": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+    "mini": null,
+    "full": null
+  },
+  "gateway": {
+    "credentialEnv": "LITER_LLM_MASTER_KEY",
+    "endpoint": "http://localhost:4000"
+  },
+  "holdForOperator": true,
+  "operatorWaitMs": 600000
+}

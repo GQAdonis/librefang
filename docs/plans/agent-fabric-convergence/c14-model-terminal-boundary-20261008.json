@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-packaged-boundary-and-source-reconciliation",
+  "recordedAt": "2026-10-08T06:51:24.411Z",
+  "iteration": {
+    "id": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "index": 7,
+    "originalStartedAt": "2026-10-07T23:24:33.943Z",
+    "candidateId": "702160e3-74d0-417d-9dfd-fa5c1feeb238",
+    "contentManifestDigest": "30ad7b26181351bcf42189d558df5e9f5f0f0ad3b9522f3bc05a3f29aec34bdc"
+  },
+  "sources": [
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "revision": "49ffa8e008b6c46b67729416654c2778cf2b6216",
+      "fingerprint": "32b146cc45b5252d76c08f47e9e548282ea55e1e12be8532e4da3cd679221a6e",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system",
+          "name": "crates/prometheus-skill-system",
+          "initialized": false,
+          "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/frontend/packages/prometheus-entity-management",
+          "name": "frontend/packages/prometheus-entity-management",
+          "initialized": false,
+          "revision": "959839a88e65704014bab0bdd055df17fb210298",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/models.dev",
+          "name": "models.dev",
+          "initialized": false,
+          "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/liter-llm",
+          "name": "vendor/git/liter-llm",
+          "initialized": false,
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/rust-mcp-filesystem",
+          "name": "vendor/git/rust-mcp-filesystem",
+          "initialized": false,
+          "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+          "workingTree": "unobserved"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow",
+      "revision": "7d52678926839ee6a9adaf698d017c9e86f7cbc7",
+      "fingerprint": "001aaf9800221be3c0cf45fe7baadf42ab75170d9fc1005e5491c5b6f2d402df",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/resources/prometheus-skills-mini",
+          "revision": "4ec4838d3ed6a5e610a2b2f6313b832373aa4abb",
+          "fingerprint": "08b16726eff93b0bee35804ad65374fecec65c12dbe41978efff9792b34d6c27",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/resources/prometheus-skills-mini/tools/liter-llm",
+              "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+              "fingerprint": "27ec014093b2dc1a8e03ee178148e0a5daf82cb547f2e80480b5f953600c7949",
+              "name": "tools/liter-llm"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+              "fingerprint": "ae2e3eb0ddf545672e75e282e152e1c3a3a194304136d0196dc6b0851b974e9c",
+              "name": "tools/prometheus-knowledge"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/resources/prometheus-skills-mini/tools/surreal-memory-server",
+              "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+              "fingerprint": "1f4abae6200428466b26904ea2e783911c857b0e501d44e1ed6f5ce7013d6b74",
+              "name": "tools/surreal-memory-server"
+            }
+          ],
+          "name": "resources/prometheus-skills-mini"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-workflow-delegation",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "fingerprint": "309b888b36499e141b5bff1cff82dead06be4fb6ee2e2ddcec5e8e28e0f631b8"
+    }
+  ],
+  "build": {
+    "status": "success",
+    "startedAt": "2026-10-08T06:32:27.591Z",
+    "finishedAt": "2026-10-08T06:39:05.038Z",
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-mac-arm64-build-20261008-r6.json",
+      "sha256": "26a5ccb16d750ceaace83b19450660e99a88b398be73e18b644356135cdc2c96"
+    }
+  },
+  "launch": {
+    "status": "success",
+    "startedAt": "2026-10-08T06:39:12.626Z",
+    "finishedAt": "2026-10-08T06:39:17.618Z",
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-mac-functional-launch-20261008-r6.json",
+      "sha256": "a305ff1bcf032d73d5e63bc465d0047866e037d5615a73efdd612c8d46cc6fd5"
+    }
+  },
+  "featureOperation": {
+    "status": "failed",
+    "startedAt": "2026-10-08T06:39:24.861Z",
+    "finishedAt": "2026-10-08T06:42:17.266Z",
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-c14-bossfang-workflow-operation-20261008-r6.json",
+      "sha256": "8f148d650e863460892be5c38f93873863aba715481697bd5198eba35bcd85e1"
+    },
+    "failureCode": "C14W_REAL_PENDING_EFFECT_UNAVAILABLE",
+    "observed": "Original native run remained active until bounded workflow operation cancelled it. Existing cancellation settled. Primary stall cause remains unresolved."
+  },
+  "artifact": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/dist/The-Boss-2.2.15-mac-arm64.dmg",
+    "bytes": 699619727,
+    "sha256": "dcc406c501b4e957d303d1b815ad1bd40e3ed3299eee242393ea76d557398abf",
+    "published": false
+  },
+  "cadenceReconciliation": {
+    "id": "c15-reviewed-model-policy-bridge-20261008",
+    "status": "recorded",
+    "commandReceipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-reviewed-model-policy-reconcile-20261008-702160-45d313.json",
+      "sha256": "ae9dddb9934cf545b7a42760dcb0019a9a105b04b51483f6193fe3de391937e3"
+    },
+    "proof": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/c15-reviewed-model-policy-reconcile-proof-20261008-702160-45d313-3e15a9c7-e5d3-44a2-957a-bbda110bd0e9.json",
+      "sha256": "023b63706fce8c74807d24b380e7e98a53a8515bc5737a73683e849e67ba1f5e"
+    },
+    "firstWorkAt": "2026-10-08T02:17:47.912Z",
+    "promotion": "not performed"
+  },
+  "accounting": {
+    "successfulDeliveries": 6,
+    "publicationDue": true,
+    "newCanonicalTaskCredit": 0,
+    "newDeliveryCredit": 0
+  },
+  "checksRun": "Actual production packaging, packaged launch and bounded ordinary workflow operation. No test suites or verification builds.",
+  "limitations": [
+    "Delegation approval/function still failing; do not claim C14 completion.",
+    "Native Windows installed acceptance and customer publication pending.",
+    "The original continuous clock, failed attempts, historical sources and publication debt are retained."
+  ]
+}

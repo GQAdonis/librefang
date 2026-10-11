@@ -1,0 +1,11 @@
+Ordinary UAR follow-up after restart attempted to reconnect to a finished run and returned HTTP 404. Admit fresh user input only from an exact persisted successful source turn or a tool-free paused source turn. Keep unresolved effect/approval blockers, selected instance/catalog/model binding and validated retained history. Never replay the cancelled input or blindly retry a missing run.
+
+A real durable standalone file-read approval was also rejected because the UI conflated effect admission ownership with decision routing. Consume UAR's trusted decisionOwner projection separately from unchanged admissionOwner; retain exact issuer, challenge, run, workspace, event/cursor and authenticated-owner checks. Genuine paired-host challenges remain unavailable without their host decision record. Existing controls and translations are reused; no new endpoint or migration.
+
+Coordinator instructions give newly delegated work fresh command/task identities while retries preserve identity. The actual required reviewed-skill core operation passed in the packaged 2.2.27 application; broad cross-harness and private-claim qualification remain separate.
+
+Current corrective inputs: The Boss 2.2.29 at 824fa5ed40999830196b6c5125faf2ebcf6a8ce4; UAR 308aea46ff26e7f61340281bb51f67ebe5351569 from PR #367. Previous installers and receipts remain immutable.
+
+Actual operation: local 2.2.28 installer build and isolated installation passed. Retained UAR follow-up, semantic cancellation and managed restart passed; post-cancellation follow-up demonstrated the remaining 404 fixed here. Alternate selected-instance discovery and real BossFang delegation passed after correcting its fixture gateway path. Gateway outage, typed settings restoration and recovered inference all passed; the original generic launcher summary failure is retained separately. The synthetic approval reached the native challenge but was cancelled without approval/effect, motivating this ownership repair.
+
+All production corrections are committed and pushed. The completed combined native packaging build is running, followed by pnpm build:mac:arm64 and affected-only operation. Final installed Mac/Windows acceptance is pending. No unit, per-edit or standalone verification builds ran; unrelated local files are excluded.

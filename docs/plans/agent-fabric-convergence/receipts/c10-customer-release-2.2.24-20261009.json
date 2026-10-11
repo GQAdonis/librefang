@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-milestone-publication-closeout",
+  "recordedAt": "2026-10-09T13:44:28.154Z",
+  "disposition": "implemented-built-operated-committed-pushed-and-published",
+  "version": "2.2.24",
+  "sourceRefs": {
+    "boss": "e4addba828f4b0f67caef1bdd49925f1f9c767f2",
+    "uar": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89"
+  },
+  "mergedPRs": [
+    {
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/365",
+      "mergeCommit": "52e97ffdceec1b6d718c220cd47ac8ba0f606228"
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/pull/61",
+      "mergeCommit": "91f665d3a078cf1a4cf8f7e3b9d3e13b6aaa07e8"
+    }
+  ],
+  "operation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/c10-customer-github-operation-20261009.json",
+    "sha256": "001d3f35c4bc1d707f647490ab7b932850b72faf48eab0b245ca1e2ddbcb7619"
+  },
+  "issueUrl": "https://github.com/Prometheus-AGS/the-boss/issues/63",
+  "localBuild": {
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-retry-local-dmg-receipt-r3.json",
+      "sha256": "7ca8406701a1a6ec7cc0f2b64a8e06e60659eaa54a865d8488d3ecf9fbc0612a"
+    },
+    "launch": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-retry-baseline-launch-checkpoint-20261009.json",
+      "sha256": "feee6bbee2fe3247e15dd130409a0db21cd604713c20e3f8a520cea133dd7b30"
+    },
+    "artifactPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.24-mac-arm64.dmg",
+    "size": 702396979,
+    "sha256": "da7be8b37311cad1b1bd982c6b7c610342e99cc4f245b67e9118d23f17b1475e",
+    "signing": "Developer ID signed; local notarization disabled",
+    "featureOperation": "Actual exact-draft issue creation, owned process interruption and GET-only same-effect recovery passed"
+  },
+  "packagedPayload": {
+    "miniSkills": 107,
+    "runtimeFiles": 3646,
+    "miniRevision": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+    "literLlmRevision": "a6047386cc9fae4258b4a8577f6a016022095586",
+    "uarSkillSystemRevision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+    "nativeSource": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
+    "nativeReceipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-native-6b-publication-four-platforms.json",
+      "sha256": "3f8a94e7c5cba8a41f6c943afc76a1d6a87b8860d630b93fba30b3cd342ba1b5"
+    }
+  },
+  "publicRelease": {
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.24",
+    "installerRun": 37931458976,
+    "status": "success",
+    "artifacts": [
+      {
+        "name": "The-Boss-2.2.24-win-x64-setup.exe",
+        "size": 531360417,
+        "sha256": "9a0f66165648784ebeceb719eac9c802dc96242c3499864fc6682bd1740ee0e6",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-win-x64-setup.exe",
+        "signing": "unsigned",
+        "profile": "uar-enabled",
+        "platform": "win32",
+        "arch": "x64",
+        "source": "e4addba828f4b0f67caef1bdd49925f1f9c767f2"
+      },
+      {
+        "name": "The-Boss-2.2.24-mac-x64.dmg",
+        "size": 747213672,
+        "sha256": "d0dd4048a17f95a8362b82869e6b62a50a14d1e0f14add83fecd063f8a7f530c",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-mac-x64.dmg",
+        "signing": "Developer ID (notarized)",
+        "profile": "uar-enabled",
+        "platform": "darwin",
+        "arch": "x64",
+        "source": "e4addba828f4b0f67caef1bdd49925f1f9c767f2"
+      },
+      {
+        "name": "The-Boss-2.2.24-mac-arm64.dmg",
+        "size": 711257315,
+        "sha256": "3a0454710a8aba0b5cfd1e44b3cd8958d8a67dbb40b1c044200bdb42dabbc4f9",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-mac-arm64.dmg",
+        "signing": "Developer ID (notarized)",
+        "profile": "uar-enabled",
+        "platform": "darwin",
+        "arch": "arm64",
+        "source": "e4addba828f4b0f67caef1bdd49925f1f9c767f2"
+      },
+      {
+        "name": "The-Boss-2.2.24-win-arm64-setup.exe",
+        "size": 494716479,
+        "sha256": "b3200a1a589de723917e8e0df51eff8b8b4ebbde7598a3fe6b2534d430abbbe6",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-win-arm64-setup.exe",
+        "signing": "unsigned",
+        "profile": "uar-enabled",
+        "platform": "win32",
+        "arch": "arm64",
+        "source": "e4addba828f4b0f67caef1bdd49925f1f9c767f2"
+      }
+    ],
+    "manifest": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-published-release-manifest.json",
+      "sha256": "db081aa8f18adf5b5a3974abb43b0a1fb32cef44a50bd88f095598f5d6171c23"
+    },
+    "metadataReceipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-published-release-metadata-20261009.json",
+      "sha256": "45b75cc99c7a9ba932e09b53535496fc5a7710dbe2b539c13a0bf093b6f986e8"
+    },
+    "metadataCommit": "c893318b2f83226268b15aeeb0af798b9c4be76f",
+    "publishers": [
+      {
+        "platform": "win32-x64",
+        "bossPublisherRun": 37934543935,
+        "bossMetadataCommit": "d2e8d9b813996a602262903e24cccbb4eb546eec",
+        "landingRun": 37934640993,
+        "landingCommit": "fb449e4fb37bc6be6eb14fc90c7746f1f7ac649e",
+        "status": "success",
+        "byteVerification": "Publisher and landing jobs streamed full installer bytes and validated size and SHA-256"
+      },
+      {
+        "platform": "darwin-x64",
+        "bossPublisherRun": 37935889111,
+        "bossMetadataCommit": "4f402348ad7b38e513d75a943a9e1d7c34ca0052",
+        "landingRun": 37935987225,
+        "landingCommit": "61cef05ea51a6dc21758f9b57dc063aaa39d5783",
+        "status": "success",
+        "byteVerification": "Publisher and landing jobs streamed full installer bytes and validated size and SHA-256"
+      },
+      {
+        "platform": "darwin-arm64",
+        "bossPublisherRun": 37936302077,
+        "bossMetadataCommit": "5b9e4ad2b17737b09342f3c5868ce4f83710d8a5",
+        "landingRun": 37936411497,
+        "landingCommit": "36613bee2fa0aec429ed6835eafba652e16e7a67",
+        "status": "success",
+        "byteVerification": "Publisher and landing jobs streamed full installer bytes and validated size and SHA-256"
+      },
+      {
+        "platform": "win32-arm64",
+        "bossPublisherRun": 37937636872,
+        "bossMetadataCommit": "c893318b2f83226268b15aeeb0af798b9c4be76f",
+        "landingRun": 37937738484,
+        "landingCommit": "089913f0a92eeac2c42600f3d674b6a22817ed01",
+        "status": "success",
+        "byteVerification": "Publisher and landing jobs streamed full installer bytes and validated size and SHA-256"
+      }
+    ]
+  },
+  "website": {
+    "url": "https://the-boss.know-me.tools",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "landingCommit": "089913f0a92eeac2c42600f3d674b6a22817ed01",
+    "nativeUiOutcome": "Your website was updated",
+    "uiObservedAt": "2026-10-09T13:44:28.154Z",
+    "liveEvidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-site-final-four-platforms-20261009.json",
+      "sha256": "600f21b3d56baf6d6ff592d0f31884c8dc9d773b33103bfce9e817b22250d331"
+    },
+    "liveObservedAt": "2026-10-09T13:37:30.453Z",
+    "scripts": [
+      {
+        "url": "https://the-boss.know-me.tools/assets/index-Bc-r9KN1.js",
+        "status": 200,
+        "sha256": "2e2d70f6aa531f5ea945969d6dd24cfc0f298bb01eff5c4e02693a797b155d5f",
+        "installerUrls": [
+          "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-mac-arm64.dmg",
+          "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-mac-x64.dmg",
+          "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-win-x64-setup.exe",
+          "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.24/The-Boss-2.2.24-win-arm64-setup.exe"
+        ]
+      }
+    ]
+  },
+  "installedAcceptance": {
+    "darwin-arm64": {
+      "status": "pending",
+      "note": "Owned local packaged feature operation passed; operator installation of public installer is not yet accepted"
+    },
+    "darwin-x64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    },
+    "win32-x64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    },
+    "win32-arm64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    }
+  },
+  "canonicalKbd": {
+    "revision": 597,
+    "completedTasks": 42,
+    "totalTasks": 61,
+    "duplicateCancelledTasks": 1,
+    "unfinishedTasks": 18,
+    "completedChanges": 13,
+    "totalChanges": 20,
+    "parentPhase": "agent-fabric-convergence",
+    "parentStatus": "open",
+    "nextCanonicalTask": "C10.2",
+    "wholeTaskCredit": {
+      "tasks": [],
+      "changes": [],
+      "phases": []
+    },
+    "deferred": "Non-GitHub connectors, wider standing-policy/implementation admission and non-desktop matrices remain open"
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "successfulDeliveries": 15,
+    "iteration": {
+      "iterationId": "f9798578-e90d-4ccc-9c24-49128f41a96b",
+      "startedAt": "2026-10-09T06:08:37.669Z",
+      "finishedAt": "2026-10-09T12:40:22.383Z",
+      "elapsedMs": 23504714,
+      "iterationMinutes": 120,
+      "successfulDeliveryNumber": 15,
+      "publicationDebt": "preserved unresolved historical C14 obligation; not relabeled as current C10 source"
+    },
+    "publicationDue": true,
+    "pendingObligationIds": [
+      "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "4077df19-c67c-4059-9665-55988c70e012"
+    ],
+    "ledgerStatus": "pending; preserved without synthetic acknowledgements",
+    "reason": "Existing releases were directly dispatched before a Cadence publication consumer. Current supported commands require a genuinely dispatched attempt correlation; no truthful retroactive adoption path exists. Actual external publication is evidenced separately; historical C14 scope is not substituted with C10.",
+    "timingCoverage": "incomplete; no velocity increase claimed"
+  },
+  "verification": {
+    "boundary": "Completed customer production increment and actual installer/publication boundary",
+    "productionBuild": "pnpm build:mac:arm64",
+    "testSuitesRun": [],
+    "releaseArtifactConsistency": "Four immutable platform records, committed release manifest and deployed installer URLs agree; no repeated full downloads or verification builds",
+    "adversarialAssessment": "One bounded fresh-context source/receipt and Cadence adoption assessment completed; initial source mismatch concern retracted against actual frozen workflow source",
+    "sycophancyCorrectionSkill": "Unavailable; no unsupported productivity or whole-phase completion claim"
+  },
+  "trustBoundaries": [
+    "Host-authenticated revision-bound fresh approval of exact artifact/payload/target; old rejection and approval remain immutable",
+    "GitHub credential stored through protected main-process IPC; no token in receipts or URLs",
+    "Only independently identified owned application/native process groups were interrupted",
+    "Issue creation grants no implementation authority"
+  ],
+  "limitations": [
+    "Public Windows installers are unsigned.",
+    "All four operator-installed acceptance checks remain pending.",
+    "Canonical parent phase and both Cadence publication ledger obligations remain open."
+  ]
+}

@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 1,
+  "kind": "c14-2-cumulative-production-receipt",
+  "recordedAt": "2026-10-08T00:02:45.291Z",
+  "creationTaskRef": "C14.2",
+  "mode": "completed-delivery-accounting",
+  "canonicalTaskChanged": false,
+  "canonicalCompletion": "ready-for-supported-kbd-completion",
+  "canonical": {
+    "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+    "taskId": "1.2",
+    "taskText": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs. Verify with a linked contract/source receipt and the applicable acceptance scenarios in design.md; record exact revisions and outcomes. Initiative task: C14.2.",
+    "sources": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/tasks.md",
+        "sha256": "8a5d3716c9876172949f14c6349858c38385a9844f26554d8d7aad4eee9f177d"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+        "sha256": "42079bb1bf7f04ef0da3e9b0b38750a92df5910e5ac6b306fd9a9df575816dcb"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/proposal.md",
+        "sha256": "53c3a6cd496126a5707d09e340d15eb483af7e7201337b2beb5c60b16f1c65a0"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/specs/studio-administration-and-isolated-service-consoles/spec.md",
+        "sha256": "48f9155255542aaafacd316f5f719c858348c99e32d0cece16ac112dbff51c3f"
+      }
+    ],
+    "applicableDesignClauses": [
+      "Two clients decide one challenge consistently.",
+      "Unsupported controls and private data stay hidden.",
+      "REC-023: Rendered action reaches its bound authority with current identity; the rendering host cannot mint authority."
+    ],
+    "scopeBoundary": "Map the approval and supported lifecycle-control portions to C14.2. Console origin/account/fallback clauses belong to C14.3, shared BossFang delegation to C14.4, and whole administration inventory to C14.1; these do not become new C14.2 prerequisites."
+  },
+  "primaryPassedReceipt": {
+    "operation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+    "operationSha256": "27becd4c52f698c67f8bd5e9a1e9364637b578fcc4123473e0b7e4d333ce844e",
+    "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+    "evidenceSha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91",
+    "status": "success",
+    "complete": true,
+    "sourceRefs": {
+      "boss": "3994c6062b024019e13f97e2416819edbf5180f3",
+      "uar": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+      "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourcePinSha256": "cea1f22a1e5add6c6e059fc8d7042600151fba1715e8fd9ba1279df428193ab9",
+      "appAsarSha256": "20e67cfb73a043296d265ddc08e324b9a93606148b39182f4ca7e3366b819fa8",
+      "sidecarSha256": "5f83402c3b2ba571db87725634992c7b3126944f4cf0546f2da25d9f3e95eec9",
+      "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+      "scenarioFiles": {
+        "operate-approval-lifecycle.mjs": "c56043e0a7e9aaa1d30949b6dabcc6c6ccefdac982ff8909ae9a467f6aef1338",
+        "approval-lifecycle-operation/scenario.mjs": "d713d6016c1be3ae3bd229bd5a60c2693998a26411e3cae66b52395ee61e43da",
+        "approval-lifecycle-operation/io.mjs": "4d4a63101723e46ebd848ee6d720fac844bf8d00819fafa8b7b6a208f206c662",
+        "approval-lifecycle-operation/clients.mjs": "0e48e470af95568664351c5c337da0723c6dc33a6d40e8a0b2c4aecff99e6775",
+        "approval-lifecycle-operation/setup.mjs": "2445f502abb0559a3381743b11f612e4565be66c5eb04b5756232e8a5c4fcbc8",
+        "cadence/uar-team-operation-tools.mjs": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+      }
+    },
+    "evidenceLevel": "real-packaged-two-renderer-approval-lifecycle",
+    "normalProfile": true,
+    "experimentalOptIn": false,
+    "checks": [
+      "two-distinct-packaged-renderer-clients",
+      "same-canonical-pending-issuer-challenge-on-both-clients",
+      "local-detach-preserves-executor-and-output-cursor",
+      "one-authenticated-decision-shared-by-both-clients",
+      "stale-opposite-decision-refused",
+      "reattach-retains-cursor",
+      "actual-effect-checked-separately-from-decision",
+      "explicit-executor-stop-uses-cancellation-without-human-decision",
+      "runtime-restart-and-renderer-reopen-retain-decision",
+      "reopen-does-not-replay-effects-or-invent-denial"
+    ],
+    "clientScope": "two distinct packaged renderer windows sharing one authenticated application owner",
+    "reopenScope": "both renderer reloads and UAR runtime restart; no application-process relaunch",
+    "credentialValueRecorded": false
+  },
+  "mapping": [
+    {
+      "id": "correlated-issuer-and-decision",
+      "requirement": "Separate canonical issuer challenge from authenticated authoritative decision and effect",
+      "status": "passed",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "checks": [
+        "same-canonical-pending-issuer-challenge-on-both-clients",
+        "one-authenticated-decision-shared-by-both-clients",
+        "stale-opposite-decision-refused",
+        "actual-effect-checked-separately-from-decision"
+      ],
+      "notes": "Both clients saw one challenge; filesystem effect was actually checked against the winning decision. Projected effectState is null in this receipt and is not claimed as a populated stronger effect inventory."
+    },
+    {
+      "id": "two-client-consistency",
+      "requirement": "Two clients decide one challenge consistently",
+      "status": "passed",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "checks": [
+        "two-distinct-packaged-renderer-clients",
+        "one-authenticated-decision-shared-by-both-clients",
+        "stale-opposite-decision-refused"
+      ],
+      "notes": "Two separate renderer windows share one authenticated application owner; not two independent app processes or authenticated accounts."
+    },
+    {
+      "id": "detach",
+      "requirement": "Detach stops local observation and preserves executor/cursor; reattach resumes",
+      "status": "passed",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "checks": [
+        "local-detach-preserves-executor-and-output-cursor",
+        "reattach-retains-cursor"
+      ],
+      "notes": "No runtime cancellation is inferred from local detach."
+    },
+    {
+      "id": "cancel-and-executor-stop",
+      "requirement": "Explicit Stop executor reaches existing authoritative attempt cancellation, with no invented human approval decision",
+      "status": "passed",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "checks": [
+        "explicit-executor-stop-uses-cancellation-without-human-decision"
+      ],
+      "notes": "Visible Stop executor uses prometheus.uar.teams.cancel_attempt; native record becomes cancelled with decision null and cancelled file remains absent. Stop here is executor cancellation, not stopping the UAR service process."
+    },
+    {
+      "id": "durable-read-after-reopen",
+      "requirement": "Reread the same decision/cancellation after runtime restart and renderer reopen without replaying effects",
+      "status": "passed",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "checks": [
+        "runtime-restart-and-renderer-reopen-retain-decision",
+        "reopen-does-not-replay-effects-or-invent-denial"
+      ],
+      "notes": "Renderer reload and actual UAR restart; full application-process relaunch is outside this receipt."
+    },
+    {
+      "id": "drain",
+      "requirement": "Distinct supported Drain reaches owning durable instance authority",
+      "status": "passed",
+      "source": "src/renderer/pages/settings/PrometheusSettings/UarDurableInstancesPanel.tsx",
+      "nativeContract": "POST /api/uar/agent-instances/v1/{instanceId}/drain with commandId via prometheus.uar.durable.instance_action",
+      "notes": "Authored operation creates/activates a real fixed-starter on_demand durable instance, clicks Drain, requires retained completed command and dormant lifecycle with same UAR PID/start/port/generation and Work service selection. Active-idle Drain only; no in-flight inference claim.",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/evidence.json",
+      "checks": [
+        "actual-selected-runtime-create-and-activate",
+        "visible-distinct-drain-to-dormant",
+        "drain-completed-command-retained",
+        "uar-process-remained-alive-with-same-pid-start-and-generation"
+      ]
+    },
+    {
+      "id": "supported-control-visibility-and-authority",
+      "requirement": "Only advertised authorized controls are rendered; independent inspection does not mutate the globally selected runtime",
+      "status": "passed",
+      "notes": "Panel filters existing six verbs using instances capability plus per-operation availability. Actual second memory-backed external runtime exercises durability refusal and selected-administration ownership fence; no unsupported mutation or external process restart is attempted.",
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/evidence.json",
+      "checks": [
+        "supported-controls-displayed-from-advertised-methods",
+        "independent-admin-detail-action-fence-with-work-selection-and-native-state-preserved",
+        "real-unattested-memory-profile-declares-durable-unsupported",
+        "loaded-unsupported-profile-hides-all-six-durable-verbs-without-invoking-them",
+        "managed-runtime-selection-restored-with-drained-instance-retained"
+      ]
+    }
+  ],
+  "controls": {
+    "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-controls",
+    "sourceHead": "54d62ba18446179edd470cb642af2028823b7123",
+    "nativePayloadSource": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+    "sourceStatus": "complete",
+    "buildStatus": "success",
+    "featureOperationStatus": "success",
+    "operation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/operation.json",
+    "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/evidence.json",
+    "artifactHashes": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-controls/dist/The-Boss-2.2.14-mac-arm64.dmg",
+      "version": "2.2.14",
+      "platform": "darwin",
+      "architecture": "arm64",
+      "source": "54d62ba18446179edd470cb642af2028823b7123",
+      "bytes": 699108318,
+      "sha256": "bade697424444ae91d2f722f17c9aeb25eab75ab3ff6fdb8ff449a50bd8f2a69",
+      "signingStatus": "Developer ID signed; local build not notarized",
+      "published": false,
+      "buildReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-profile-inventory-build-20261007.json",
+      "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-profile-inventory-launch-20261007.json",
+      "operation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/operation.json",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-controls-6af01713-5a7b-4173-baa8-fdcd4a40ac7f/evidence.json"
+    },
+    "expectedNormalProfile": true,
+    "expectedExperimentalOptIn": false,
+    "sourceFiles": [
+      {
+        "path": "src/renderer/pages/settings/PrometheusSettings/UarDurableInstancesPanel.tsx",
+        "sha256": "b383f7924d0003ba4bd27bdf621420ae1a38876612cd8cc2055e8feb01e59830"
+      },
+      {
+        "path": "src/main/ai/runtime/uar/UarDurableAdministrationAdapter.ts",
+        "sha256": "e7959925f604f69772f3e5533e30480f2428b635f849bacbca0b8c388f0b55b4"
+      },
+      {
+        "path": "src/shared/types/uarDurableAdministration.ts",
+        "sha256": "bee1f4aa9f864cacd03812b892d84b186a076c6055d726ce5166ba2c319b4e6d"
+      },
+      {
+        "path": "src/renderer/components/uarTeams/UarTeamExecutionPanel.tsx",
+        "sha256": "efb4837b2a6ca937e94a1c594a0fda81e462731b75d45bcee6974e3657494830"
+      },
+      {
+        "path": "src/renderer/hooks/useUarTeamLiveOutput.ts",
+        "sha256": "ad6d615994fe041d53c79ac5dd0d4a685b99366971d6215a8682b8d55f3f35c8"
+      },
+      {
+        "path": "src/renderer/components/uarTeams/UarTeamApprovalRecord.tsx",
+        "sha256": "4d3907aa7c22b7532b99691005d1ea68139abe90eaa2a317aeaa837da2e0a0c5"
+      },
+      {
+        "path": "scripts/operate-uar-lifecycle-controls.mjs",
+        "sha256": "10185f73031dfc59e342528cd781ddca7b803fac34aeceb91ea13b2ce3d967f2"
+      },
+      {
+        "path": "scripts/uar-lifecycle-controls-operation/scenario.mjs",
+        "sha256": "8f662a96f8d4f147e31f5746e0635541610dfecc0bd2b73d7a5a945ef3347be3"
+      },
+      {
+        "path": "scripts/uar-lifecycle-controls-operation/clients.mjs",
+        "sha256": "1ef34eeb90c89547fb5d1e4c52d5187a041984f8280a5364d8c3f572e00bdd3e"
+      },
+      {
+        "path": "scripts/uar-lifecycle-controls-operation/README.md",
+        "sha256": "c578abff0d933da7bbb2ad07f333b840b506a10c4a5e870eb8e7a949f5827640"
+      },
+      {
+        "path": "openspec/changes/afc-c14-supported-lifecycle-controls/scope.md",
+        "sha256": "a0ddd687c3e74d04b464fe72e9250b8e1adce2ae3f568b4c9eace95f116358b5"
+      }
+    ],
+    "effectScope": {
+      "newDurableInstance": "one disposable fixed-starter on_demand instance",
+      "nativeDrain": "one visible operation on the owned managed selected runtime",
+      "secondRuntime": "owned disposable external local runtime with real unattested memory backend",
+      "turnsSubmitted": 0,
+      "teamTasksSubmitted": 0,
+      "approvalDecisionsSubmitted": 0,
+      "unsupportedMutationsInvoked": 0,
+      "externalProcessRestartsInvoked": 0
+    },
+    "securityBoundary": "Existing trusted main-process workspace/capability/identity routing and renderer action fence; credentials remain private. This accounting adds no security code.",
+    "operationSha256": "5ef1cf40d7e97ae6465453e9001d7fba20650d7c5ea305106ca08da332caa8d3",
+    "evidenceSha256": "146ccb3fb17f8b8aacc628a74c90ad78321cc910cddf58d42489289cf3a0e7a4",
+    "actualSourceRefs": {
+      "boss": "54d62ba18446179edd470cb642af2028823b7123",
+      "uar": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+      "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourcePinSha256": "cea1f22a1e5add6c6e059fc8d7042600151fba1715e8fd9ba1279df428193ab9",
+      "payloadMarkerSha256": "6ca2454e446f21d122ee30e1799f8e51885ce5a7d0dd5002d669a6ada28e4133",
+      "payloadManifestSha256": "f35f244cbfe0c02d513efefb856447de9469f16e4a7b56c7580b793ca6ac916e",
+      "appAsarSha256": "b9abfed028bf420a09d2ffea59fa8fdfa7c0a7d92204f68121ffaa3d0329fa02",
+      "sidecarSha256": "ad7ced0a9ba36c19d2448cdc73790025d3f7c0ca34db5ceed59e35e9e6f51ad3",
+      "surrealBinary": "/Users/gqadonis/.prometheus/bin/surreal-3.3.0",
+      "surrealSha256": "db59b4e90b6c8bd481e0f1c6ce83461803d1fd4a51839906779a93d579dd132d",
+      "launcher": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+      "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+      "scenarioFiles": {
+        "operate-uar-lifecycle-controls.mjs": "10185f73031dfc59e342528cd781ddca7b803fac34aeceb91ea13b2ce3d967f2",
+        "uar-lifecycle-controls-operation/io.mjs": "2f781110ae9584b5a70d37a94802771c5086ac31a39f0f76b88e85a1925608d3",
+        "uar-lifecycle-controls-operation/clients.mjs": "1ef34eeb90c89547fb5d1e4c52d5187a041984f8280a5364d8c3f572e00bdd3e",
+        "uar-lifecycle-controls-operation/scenario.mjs": "8f662a96f8d4f147e31f5746e0635541610dfecc0bd2b73d7a5a945ef3347be3",
+        "uar-administration-operation/clients.mjs": "8edb9fa1c8ad50396926c4f7b24328e76dae5ad0b55deba59150aecb30aa03e5",
+        "uar-administration-operation/io.mjs": "1d6968d6bc5b946ec2b923b4e4da4f551e6f9736adab51a1c0fb7a80749d38cc",
+        "approval-lifecycle-operation/setup.mjs": "2445f502abb0559a3381743b11f612e4565be66c5eb04b5756232e8a5c4fcbc8",
+        "approval-lifecycle-operation/io.mjs": "4d4a63101723e46ebd848ee6d720fac844bf8d00819fafa8b7b6a208f206c662",
+        "approval-lifecycle-operation/clients.mjs": "0e48e470af95568664351c5c337da0723c6dc33a6d40e8a0b2c4aecff99e6775",
+        "cadence/uar-team-cooperation-host.mjs": "6a3b42b01c01f394f0d7fb2b7df0d8c0fed8bea0364d507bf5925db03fc71d27",
+        "cadence/uar-team-operation-tools.mjs": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb",
+        "uar-payload-integrity.cjs": "7eacadb12da8c996316613f67830ba77499bf3f1f089c755b2081ffef6176057"
+      }
+    },
+    "checks": [
+      "actual-selected-runtime-create-and-activate",
+      "visible-distinct-drain-to-dormant",
+      "drain-completed-command-retained",
+      "uar-process-remained-alive-with-same-pid-start-and-generation",
+      "supported-controls-displayed-from-advertised-methods",
+      "independent-admin-detail-action-fence-with-work-selection-and-native-state-preserved",
+      "real-unattested-memory-profile-declares-durable-unsupported",
+      "loaded-unsupported-profile-hides-all-six-durable-verbs-without-invoking-them",
+      "managed-runtime-selection-restored-with-drained-instance-retained"
+    ],
+    "limitations": [
+      "Drain is exercised on an active, idle on_demand instance; no in-flight inference is submitted.",
+      "Prior two-client approval, stale-decision, detach/reattach and cancellation/Stop effects retain only their recorded source boundaries.",
+      "The external local memory profile exercises durability refusal and the existing selected-administration fence; no remote federation is exercised.",
+      "Native Windows installed acceptance remains pending; this is a bounded Mac packaged operation."
+    ]
+  },
+  "historicalReceipts": [
+    {
+      "file": "first-packaged-operation.json",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-controls/openspec/changes/afc-c14-approval-lifecycle/evidence/first-packaged-operation.json",
+      "sha256": "a580ee7539b165d7f3190702277ca6638f2e21ded948c26df17bea94ecad829f",
+      "complete": false,
+      "boss": "4db1b4dd5c7f9e842f84f8f7be481ac47814dca4",
+      "uar": "a464c1e7790ba8b29294d3e1a7fb350736f5a4b6",
+      "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "checks": [
+        "two-distinct-packaged-renderer-clients",
+        "same-canonical-pending-issuer-challenge-on-both-clients",
+        "local-detach-preserves-executor-and-output-cursor",
+        "one-authenticated-decision-shared-by-both-clients",
+        "stale-opposite-decision-refused",
+        "reattach-retains-cursor",
+        "actual-effect-checked-separately-from-decision"
+      ],
+      "failureCode": "C142_EXECUTOR_CANCELLATION_NOT_OBSERVED",
+      "failureStage": "executor-stop",
+      "credit": "only listed passing checks at this original source/artifact boundary; no retroactive success or source relabeling"
+    },
+    {
+      "file": "corrective-scope-refusal.json",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-controls/openspec/changes/afc-c14-approval-lifecycle/evidence/corrective-scope-refusal.json",
+      "sha256": "3f202c80ce8b375eac267229acf935c222aed9f42d54516560663bf91f04085a",
+      "complete": false,
+      "boss": "4cae06d65ec05cc156274cf6ba53e68f3fe3c472",
+      "uar": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+      "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "checks": [],
+      "failureCode": "C142_EFFECT_OUTSIDE_EXACT_OPERATION_SCOPE",
+      "failureStage": "new-pending-write-and-visible-stop",
+      "credit": "only listed passing checks at this original source/artifact boundary; no retroactive success or source relabeling"
+    },
+    {
+      "file": "corrective-cancellation-operation.json",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-lifecycle-controls/openspec/changes/afc-c14-approval-lifecycle/evidence/corrective-cancellation-operation.json",
+      "sha256": "555b2d7af4aacc67533d92e831d0e36d4e9b78b23717578da52fc3a8394841b5",
+      "complete": true,
+      "boss": "4cae06d65ec05cc156274cf6ba53e68f3fe3c472",
+      "uar": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+      "bossDiffSha256": "4e01253fb9f504415fbb73bcab3318b3b6a3e94538481343cd7fd0cc94d98554",
+      "checks": [
+        "new-pending-write-visible-stop-durable-cancellation-without-decision",
+        "restart-retains-durable-cancellation",
+        "first-decision-unchanged",
+        "no-new-attempt-or-file-effect-after-restart"
+      ],
+      "failureCode": null,
+      "failureStage": "runtime-restart-and-persistence",
+      "credit": "only listed passing checks at this original source/artifact boundary; no retroactive success or source relabeling"
+    }
+  ],
+  "completionAdoption": {
+    "when": "After the current complete CONTROLS package and actual authored feature-operation pass.",
+    "requiredReceiptFields": [
+      "Actual Boss source/diff, UAR source, ASAR/native/payload hashes and launcher/scenario hashes.",
+      "Actual operation status success and evidence complete true, expected supported Drain/unsupported profile/ownership checks, successful cleanup.",
+      "Separate scope/limitations retaining prior receipt boundaries."
+    ],
+    "minimalAction": "Attach the passing controls operation/evidence with exact hashes to this cumulative mapping; complete canonical C14.2 task1.2 for the evidenced local Mac supported scope without rerunning already passing approval/detach/cancellation or adding new runtime features.",
+    "notPrerequisites": [
+      "New team-drain endpoint: team attempts support cancellation; Drain belongs to the existing durable-instance API.",
+      "New stop-service endpoint: executor Stop already uses authoritative cancellation; managed service supervision is a separate operation.",
+      "New workflow runner, runtime-wide lag/inventory, authoring, C10 connectors, all of C15, C14.3 MiniApp, or C14.4 BossFang completion.",
+      "A new broad suite/review, native Windows installer operation, or public publication gate solely to credit this bounded cumulative functional receipt."
+    ],
+    "canonicalCheckboxAuthority": "Root/operator owns ledger and task update; this file leaves them unchanged and makes no current completion claim.",
+    "actual": "Current controls built, launched and fully operated; earlier approval receipts retained at their original exact boundaries. No passing earlier feature gate rerun."
+  },
+  "independentUnclaimedAcceptance": {
+    "nativeWindowsInstalled": "pending-independent-actual-receipt",
+    "intelMacInstalled": "not-established-here",
+    "publicInstallerPublication": "pending-independent-release-workflow-receipts",
+    "fullApplicationProcessRelaunch": "not-established-by-primary-receipt",
+    "inFlightModelDrain": "not-established-by-active-idle-controls-procedure",
+    "remoteFederation": "not-established-by-local-external-memory-profile",
+    "consoleOriginAccountCredentialFallback": "separate-C14.3-acceptance"
+  },
+  "readOnlyActions": {
+    "tests": false,
+    "reviews": false,
+    "builds": true,
+    "operations": true,
+    "codeEdits": false,
+    "pinChanges": false,
+    "ledgerChanges": "next-supported-command"
+  },
+  "status": "success",
+  "complete": true,
+  "failedAttemptsPreserved": [
+    "c14-controls-d8955b6f-82e0-413e-bc66-c1802671d919",
+    "c14-controls-eb84cff0-1304-45d4-8f57-e83ba49a015d"
+  ]
+}

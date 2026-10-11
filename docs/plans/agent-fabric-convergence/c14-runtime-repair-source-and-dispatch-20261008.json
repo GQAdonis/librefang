@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-production-repair-source",
+  "recordedAt": "2026-10-08T03:15:23.603Z",
+  "scope": [
+    "C14.3",
+    "C14.4"
+  ],
+  "sources": {
+    "uar": "ac2ad891be89fdac36e69083ca03da6402bb8ca9",
+    "bossfang": "dab625b6802c3ad03f3a00b365647c698cf3036b",
+    "driver": "eedb5c6346126b6a6b40b4158a57f12c23f0138d"
+  },
+  "repairs": [
+    "UAR retains and emits actual RootApprovalChannel root identity; scoped grant unchanged.",
+    "BossFang retains one original-task SSE stream, publishes event cursor/output/pending state, establishes approval/terminal authority via receipts, and retains original root identity.",
+    "Driver reads existing local workflow projection, avoiding duplicate remote observation."
+  ],
+  "productionWiring": "complete",
+  "nativePackaging": "running-not-success",
+  "macApplicationBuild": "pending-corrected-native-payloads",
+  "functionalOperation": "pending-corrected-package",
+  "taskCompletionCredited": false,
+  "publicationDebtPreserved": true,
+  "cadenceStartedAt": "2026-10-07T23:24:33.943Z",
+  "jobs": {
+    "bossfang": 37721585260,
+    "uarMacArm64": 37721579927,
+    "uarWindowsX64": 37721582098,
+    "uarMacIntel": 37721583894,
+    "uarWindowsArm64": 37721585975
+  },
+  "testsRun": false
+}

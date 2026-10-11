@@ -1,6 +1,6 @@
 # Customer delivery order — approved 2026-10-05
 
-This is plan revision 8 of the existing Agent Fabric Convergence initiative. It changes delivery ordering, not completed implementation history. The machine-readable [coverage map](customer-delivery-map.json) owns the selected delivery scopes, prerequisites and deferred dispositions.
+Current authority is the **Revision 10 recovery addendum** below; the original Revision 8 order and Revision 9 repair remain preserved history. The machine-readable [coverage map](customer-delivery-map.json) owns the selected delivery scopes, prerequisites and deferred dispositions.
 
 ## Accounting and scope
 
@@ -98,3 +98,22 @@ Apps automatically shows the actual orange BossFang mascot and embeds its actual
 User-invoked diagnostics separately report listening, authenticated, compatible, and delegation operational; include bounded real model use in disposable workspace, correlated completion and cancellation. Missing models/credentials have actionable configuration links. Four target pinned executables include embedded functional dashboard manifests: Mac ARM64/x64 and Windows x64/ARM64. Preserve no Linux installer publication.
 
 Repository implementation ownership: UAR scoped change bossfang-scoped-delegation-grants; BossFang scoped selected-instance connection change; The Boss scoped accessibility/settings change. Root coordinates native payload manifests, importer and release pipeline. Three independent implementation writers; one build writer and one publisher. No intermediate checks or tests; complete all production wiring then pnpm build:mac:arm64, packaged Teams plus BossFang operation and failure/recovery scenarios. Native Windows installed acceptance remains separately pending.
+
+## Revision 10 — six-hour convergence recovery, 2026-10-05
+
+The [parent Revision 10](.kbd-orchestrator/phases/agent-fabric-convergence/plan.md) installs the approved [recovery child plan](.kbd-orchestrator/phases/agent-fabric-convergence/children/six-hour-convergence-recovery/plan.md). It preserves Revision 9's combined unfinished Teams plus urgent BossFang repair. Earlier ordering holds placing BossFang after authoring are superseded. Existing delivery IDs remain coverage selectors, not new counted tasks. Parent baseline remains **33 COMPLETE + 1 SKIPPED /61**, **11/20 changes**; all original unchecked criteria and partial implementation remain.
+
+| Recovery increment | Retained delivery IDs / scope | 120-minute delivery boundary |
+|---|---|---|
+| **1 / success 7 — full publication** | `teams-in-work` + `shared-bossfang-uar` + `bossfang-miniapp`: R1 truthful approval facts/consumer, R2 authoritative original-instance observation/terminal replay, R3 freeze/build/publish. | New local Mac ARM64 build and packaged operation of both journeys; full Mac ARM64/x64 + Windows x64/ARM64, GitHub assets/metadata and https://the-boss.know-me.tools. |
+| **2 / success 8 — local-only** | `reusable-mixed-teams` coding authoring subset: create/configure/deploy/launch/revise a named coding team, preserving existing-run pinned definitions. Reuse isolated written work after source-ancestry reconciliation. | New local Mac ARM64 DMG, actual authoring operation and coherent source commit. Finish outstanding increment-1 publication; no new full dispatch/site update. |
+| **3 / success 9 — full publication** | Carry unfinished increment 2 first; `reusable-mixed-teams` product/design configuration with scoped role/model/skill handoff, novice guidance and visible effective bindings. | Local build and actual new-path operation; commit/push and full four-platform GitHub/site publication including increment 2. |
+
+Exact R1/R2 file claims, protected facts/original-run boundaries, R3 frozen inputs and retained C14/C15/C16/C18 criteria are mapped in the parent addendum and JSON map. Repairs run under existing owners; R1/R2 may be concurrent, R3 follows completed integration. No new product scope, endpoint, approval authority, dependency/model policy or duplicate ledger is introduced. Preserve native/external ownership and the sole Boss-owned UAR supervisor.
+
+Reserve roughly 30–45 minutes of each whole increment for build/operation; observed cost controls scope admission. Finish failed/overrun work before moving on; six hours targets three useful increments, not the full convergence backlog. Keep `iterationMinutes:120`, `reviewEvery:0`, at most three implementers and one build writer/publisher. Preserve the six-success, nextCount-7/every-two anchor: failed attempts consume no publication slot. Every completed delivery builds/operates locally; successful slots 7/9 publish all four Mac/Windows targets and the site, no Linux. Installed acceptance stays independent.
+
+Child Execute installs these instructions only and stops for separately requested `/kbd-reflect six-hour-convergence-recovery`. After Reflect and parent restoration, resume `/kbd-execute agent-fabric-convergence` with **C14.1**. Retain iteration 8's 07:58:36Z start, child interval, checkpoint failure and attempts; record child return and use supported failed-attempt/corrective-iteration commands without erasing elapsed time. Legacy C09.4 publication debt requires immutable receipts or supported explicit replacement proving source/scope coverage. Keep one in-flight/one pending release; isolated authorized work-ahead after local success is not a second active iteration and cannot promote over failure. Existing automatic-publisher capability blockage uses the already authorized manual/release route with actual receipts, never dispatch credit.
+
+### Observed frozen-profile correction (Execute)
+The supported configure command refuses changes while failed iteration8 remains active. Live timing, local build and success7/9 publication policy already match this revision. Keep that effective policy and frozen history; defer only the reviewed explanatory profile request until after Reflect, child return and failed-attempt finalization. The rejection is recorded in the child cadence-configure.receipt.json; no successful reconfiguration is claimed.

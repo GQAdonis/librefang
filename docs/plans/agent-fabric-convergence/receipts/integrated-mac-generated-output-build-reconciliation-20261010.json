@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-generated-skill-output-reconciliation",
+  "recordedAt": "2026-10-10T23:46:35.734Z",
+  "candidateId": "e8d1035b-80b2-48d2-aab7-d1004e1d221d",
+  "builtBossSource": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "originalAttemptId": "68d8524b-ff47-4380-91ac-894ece9cb2e7",
+  "originalStatus": "failed",
+  "actualChildExitCode": 0,
+  "originalReason": "Source changed during checkpoint",
+  "generated": {
+    "path": "resources/skills/delivery-cadence/references/frozen-source-reconciliation.md",
+    "sha256": "b59c6ae2ed7cc09d07e42a8e6110690156d148d45f8e6f7de912772db12d5d17",
+    "size": 6832,
+    "preserved": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/generated-skill-output-build-68d8524b-20261010.md",
+    "source": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/skills/delivery-cadence/references/frozen-source-reconciliation.md",
+    "packaged": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/prometheus-skills-mini/skills/delivery-cadence/references/frozen-source-reconciliation.md",
+    "manifest": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/prometheus-skills-mini/release-manifest.json",
+      "sha256": "4c27933193df1d362efe126fdb96186eeee617592ec3575f9b152badb4ead17f",
+      "revision": "6c63c0acec67444e30f65461836e7a943316e242"
+    }
+  },
+  "producers": [
+    {
+      "path": "scripts/before-pack.js",
+      "sha256": "6c6fda534eff02cdd64190ee626263b7b3acc46555c06c5053176d094f1cc924"
+    },
+    {
+      "path": "scripts/package-prometheus.js",
+      "sha256": "78435e8e380a90fd09a94f65251c14658079adb8ab7abf42131e10e363a5cb77"
+    }
+  ],
+  "restoration": "Only tracked generated documentation restored from original frozen Git blob; built artifact and generated packaged document remain unchanged.",
+  "buildSuccess": "Actual pnpm child exit 0; mounted installer and signature validation completed. Original Cadence failed receipt remains immutable.",
+  "notarization": "Local validation skipped, not publicly notarized",
+  "deliveryCredit": false
+}

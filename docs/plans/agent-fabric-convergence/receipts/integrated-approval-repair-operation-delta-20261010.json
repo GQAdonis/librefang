@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-repaired-candidate-observed-operation-delta",
+  "recordedAt": "2026-10-10T22:11:15.206Z",
+  "releaseVersion": "2.2.31",
+  "candidateId": "ff779b7f-2c19-4f0f-83d5-34611e942b2f",
+  "builtSource": "58eb4058b96bebef61ab502ea48fc062c7982371",
+  "operations": [
+    {
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-approval-repair-2.2.31-workflow-delegation-20261010/integrated-admission-v2-bossfang-e23a17ec-4a4a-4fda-8a35-afd4aff3a347/ordinary-workflow-evidence.json",
+      "complete": false,
+      "startedAt": "2026-10-10T22:06:32.336Z",
+      "finishedAt": "2026-10-10T22:08:28.468Z",
+      "failure": {
+        "stage": "ordinary-workflow-real-pending-approved-effect",
+        "code": "C14W_CANONICAL_HOST_DECISION_UNSETTLED",
+        "errorType": "Error"
+      },
+      "checks": [
+        "actual-compiled-authenticated-embedded-dashboard",
+        "visible-canvas-bound-target-authoring-and-native-persistence",
+        "work-global-selection-and-original-uar-pid-start-port-preserved"
+      ]
+    },
+    {
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-approval-repair-2.2.31-native-read-20261010/integrated-admission-v2-native-read-66bc1dc8-1c8e-4539-b1d3-58a8f6b1f1e0/evidence.json",
+      "complete": false,
+      "startedAt": "2026-10-10T22:09:43.244Z",
+      "finishedAt": "2026-10-10T22:10:17.287Z",
+      "failure": {
+        "stage": "actual-runtime-native-file-read-approval",
+        "code": "ADMISSION_V2_NATIVE_FILE_APPROVAL_SCOPE_MISMATCH"
+      },
+      "checks": []
+    }
+  ],
+  "interpretation": {
+    "bossfang": "Authenticated dashboard and ordinary workflow reach original pending host approval; actual approve POST still fails before authoritative settlement. Diagnosis pending.",
+    "nativeRead": "Actual runtime-native call reaches approval instead of former host-preparation409. Display payload mismatch prevents remaining scope; diagnosis pending."
+  },
+  "counts": {
+    "historicalCode": "61/61",
+    "historicalChanges": "20/20",
+    "portfolioTerminal": "43/61",
+    "successfulDeliveries": 15
+  },
+  "qualificationCredited": false,
+  "productionBuildRepeated": false
+}

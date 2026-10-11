@@ -39,6 +39,9 @@ impl UarRunClient {
         workspace_id: &str,
         accept_receipt_on_error_status: bool,
     ) -> Result<WireReceipt, UarRunClientError> {
+        if method == Method::POST {
+            super::binding::require_tool_admission_v2(&transport.binding)?;
+        }
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))
@@ -101,6 +104,9 @@ impl UarRunClient {
         uncertain_on_transport: bool,
         workspace_id: &str,
     ) -> Result<T, UarRunClientError> {
+        if method == Method::POST {
+            super::binding::require_tool_admission_v2(&transport.binding)?;
+        }
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))

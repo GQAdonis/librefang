@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-06T00:20:08.871Z",
+  "status": "complete",
+  "phaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
+  "canonicalRevision": 551,
+  "parentRestored": {
+    "phaseId": "agent-fabric-convergence",
+    "taskId": "C14.1",
+    "nextCommand": "/kbd-execute agent-fabric-convergence"
+  },
+  "archivePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/archive/2026-10-05-afc-six-hour-delivery-recovery",
+  "priorPublication": {
+    "repository": "GQAdonis/librefang",
+    "branch": "codex/agent-fabric-convergence-c08",
+    "verifiedRemoteCommit": "3c9f1b242ea655b1eb69892d36964233d9134bed",
+    "transport": "gh Git Database API"
+  },
+  "cadence": {
+    "activeIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "iterationStatus": "implementing",
+    "childStack": [],
+    "childOutcome": "success",
+    "successfulDeliveries": 6,
+    "nextPublicationDelivery": 5,
+    "publicationDue": true,
+    "continuousClockStartedAt": "2026-10-05T07:58:36.181Z",
+    "failedCheckpointsRetained": 25,
+    "publicationCount": 1
+  },
+  "hooks": {
+    "totalRuns": 37,
+    "failedRuns": 1,
+    "lastRun": {
+      "ts": "2026-10-06T00:18:27.508Z",
+      "kind": "child",
+      "edge": "after",
+      "name": "six-hour-convergence-recovery",
+      "hookId": "delivery-cadence-kbd-reconcile",
+      "layer": "project",
+      "mode": "augment",
+      "status": 0
+    },
+    "lastFailure": {
+      "ts": "2026-10-05T23:09:03.443Z",
+      "kind": "child",
+      "edge": "before",
+      "name": "six-hour-convergence-recovery",
+      "hookId": "delivery-cadence-kbd-reconcile",
+      "layer": "project",
+      "mode": "augment",
+      "status": 1,
+      "stderrSnippet": "node:internal/modules/cjs/loader:1573   throw err;   ^  Error: Cannot find module '/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-kbd-adapter.mjs'     at Module._r",
+      "logPath": ".kbd-orchestrator/phases/agent-fabric-convergence/hooks.log.jsonl"
+    }
+  },
+  "karpathy": {
+    "status": "degraded",
+    "sessionLogAppended": true,
+    "reason": "Optional pk exited 1"
+  },
+  "productTasksAdded": 0,
+  "productBuilds": 0,
+  "productTests": 0,
+  "securityHardening": "none",
+  "remaining": "R1 Teams protected approval inspection contract; R2 BossFang terminal/output reconciliation; R3 completed combined increment build/operate/publish.",
+  "parentTasks": {
+    "complete": 33,
+    "skipped": 0,
+    "total": 61,
+    "cancelled": 1,
+    "cancelledIds": [
+      "C09.3"
+    ],
+    "accountingNote": "33 canonical completions; C09.3 is cancelled (reported as skipped in the legacy task mirror), not a product completion."
+  },
+  "parentChanges": {
+    "complete": 11,
+    "total": 20
+  }
+}

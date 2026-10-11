@@ -1,0 +1,15 @@
+{
+  "outcome": "success",
+  "completion": {
+    "tasks": [],
+    "changes": [],
+    "phases": []
+  },
+  "artifacts": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-completed-boundary-observation-index-20261011.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-reusable-team-core-passed-20261011.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-mac-actual-build-external-receipt-20261010.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-callback-repair-operation-config-binding-20261010.json",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-integrated-coverage-2.2.31-20261010.md"
+  ]
+}

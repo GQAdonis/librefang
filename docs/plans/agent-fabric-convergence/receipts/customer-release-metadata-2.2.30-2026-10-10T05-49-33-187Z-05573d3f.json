@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-final-release-metadata-reconciliation",
+  "operationId": "05573d3f-5189-491e-beb7-fc4a45f0a426",
+  "startedAt": "2026-10-10T05:49:33.187Z",
+  "status": "passed",
+  "repository": "Prometheus-AGS/the-boss",
+  "version": "2.2.30",
+  "profile": "uar-enabled",
+  "installerSource": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+  "installers": [
+    {
+      "key": "darwin-arm64",
+      "name": "The-Boss-2.2.30-mac-arm64.dmg",
+      "platform": "darwin",
+      "arch": "arm64",
+      "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "profile": "uar-enabled",
+      "size": 711998188,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-arm64.dmg",
+      "sha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+      "signing": "Developer ID (notarized)",
+      "publicAssetId": 626956771,
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-mac-installation-2.2.30-20261010.json",
+        "sha256": "009669c0815bb06f55097286b60a9995b1a3dbd82a1ba2d2f36d78d2e7a3e11a"
+      },
+      "signingEvidence": "Existing public package signature/Gatekeeper/stapler checks",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance"
+    },
+    {
+      "key": "darwin-x64",
+      "name": "The-Boss-2.2.30-mac-x64.dmg",
+      "platform": "darwin",
+      "arch": "x64",
+      "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "profile": "uar-enabled",
+      "size": 747847553,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-x64.dmg",
+      "sha256": "08dca082b2d1ee7c59c2d784e90347fbe1c78f94149a6c6c9a4d8ca30418a7d5",
+      "signing": "Developer ID (notarized)",
+      "publicAssetId": 627122093,
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-darwin-x64-2.2.30-20261010.json",
+        "sha256": "19233394b29e39b0323b292aaa664031d2b4ca52f5ac7b09fd9cc50b21d519a2"
+      },
+      "signingEvidence": "Retained immutable manifest and successful native Intel packaging evidence; no direct local signature examination or Intel launch",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance"
+    },
+    {
+      "key": "win32-x64",
+      "name": "The-Boss-2.2.30-win-x64-setup.exe",
+      "platform": "win32",
+      "arch": "x64",
+      "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "profile": "uar-enabled",
+      "size": 531673845,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-x64-setup.exe",
+      "sha256": "c3b4bec60df77b4a13e89562e380282b50aff21ab6176471bba288bad90cec6f",
+      "signing": "unsigned",
+      "publicAssetId": 627058882,
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-win32-x64-2.2.30-20261010.json",
+        "sha256": "b8981c78c67ab01f61cc3c4eef3757501fa8ffbeb456d2bef678ebdabafcf775"
+      },
+      "signingEvidence": "Retained fully hashed NSIS setup certificate-table evidence; bootstrap does not identify application payload architecture",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance"
+    },
+    {
+      "key": "win32-arm64",
+      "name": "The-Boss-2.2.30-win-arm64-setup.exe",
+      "platform": "win32",
+      "arch": "arm64",
+      "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "profile": "uar-enabled",
+      "size": 494915696,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-arm64-setup.exe",
+      "sha256": "62ad26e49dadc5f3979802d68ab4eb82234855d284bd8fb906a2ac3a159405fc",
+      "signing": "unsigned",
+      "publicAssetId": 627073591,
+      "byteVerificationReceipt": {
+        "path": "receipts/customer-public-win32-arm64-2.2.30-20261010.json",
+        "sha256": "4106643d80a58d091e351607556fcf2c70afd572f7dc62633aba691f3e9a5fb0"
+      },
+      "signingEvidence": "Retained fully hashed NSIS setup certificate-table evidence; bootstrap does not identify application payload architecture",
+      "installedAcceptance": "pending-final-candidate-operator-acceptance"
+    }
+  ],
+  "installedAcceptance": "pending-final-candidate-operator-acceptance",
+  "nativeOperation": "not-exercised-by-this-helper",
+  "installerDownloads": "not-repeated",
+  "newCadenceDelivery": false,
+  "cadenceCountersMutated": false,
+  "qualificationLedgerMutated": false,
+  "verifier": {
+    "runtime": "Node.js",
+    "version": "v24.21.0",
+    "script": ".prometheus/cadence/inputs/verify-customer-release-metadata-2.2.30-20261010.mjs",
+    "sha256": "f2369026d0051ff92a02966bf8b41f49d604d429c3dbfae345d31388ac9ffa41"
+  },
+  "metadataCommit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+  "checkedInFiles": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "commit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+      "path": "release-manifest.json",
+      "blob": "cd25f316f8fb3a047f0bd8f030fd57a4d6553126",
+      "bytes": 2205,
+      "sha256": "00f4f1c5586c992f18a1a676d68a9f4e8987a75ecab694f768beec646614183e"
+    },
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "commit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+      "path": "RELEASES.md",
+      "blob": "8350a2a6bef0bcf92b871aac79d6a3921be7002a",
+      "bytes": 38845,
+      "sha256": "d8b953e7af55d8deb707a9beeaac68065879ecd709eb2fcfb5195ecfaa2799e2"
+    }
+  ],
+  "metadataPublishedAt": "2026-10-10T05:45:43.659Z",
+  "githubRelease": {
+    "id": 408603047,
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.30",
+    "tag": "v2.2.30"
+  },
+  "releaseEntry": {
+    "version": "2.2.30",
+    "sha256": "0ff7ce70ebeb9875e95e63670770342ec47bd1d41f9d8a80dd3809368f6c7fe5",
+    "rows": 4,
+    "sizeFormat": "Existing generator: bytes / 1048576, one decimal, MB label"
+  },
+  "liveWebsiteReceipt": {
+    "path": "receipts/customer-release-all-four-2.2.30-live-website-2026-10-10T05-49-25-359Z-d8459430.json",
+    "sha256": "26c5136429132f82fc6d89fca30a8bfd0a72401f2ccad4d85fbbdd981e11ceef",
+    "landingSource": "326e1f19da9af19d484f5a419fe1ca1f0c4bb1d8",
+    "deployedBundle": {
+      "url": "https://the-boss.know-me.tools/assets/index-BzLm9yNP.js",
+      "startedAt": "2026-10-10T05:49:26.544Z",
+      "httpStatus": 200,
+      "completedAt": "2026-10-10T05:49:26.707Z",
+      "bytes": 344718,
+      "sha256": "1c1265393e6451c2a5f4e257d8d31ba69efc52bc917c9d1cda7d5283f6acb284"
+    },
+    "verifiedAt": "2026-10-10T05:49:28.142Z",
+    "applicability": "Exact final four installer URLs/checksums/sizes/signing; deployment not repeated by this helper"
+  },
+  "finishedAt": "2026-10-10T05:49:34.895Z",
+  "verification": "Pinned checked-in manifest and newest RELEASES.md rows agree with all four retained full-byte receipts, current GitHub assets and the retained final all-four live-site receipt",
+  "limitations": "Metadata and applicability reconciliation only. Does not repeat full downloads, deploy the website, establish native Intel/Windows ARM64 operation or supply final Mac/Windows installed acceptance."
+}

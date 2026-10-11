@@ -5,7 +5,7 @@
 use rusqlite::Connection;
 
 /// Current schema version.
-const SCHEMA_VERSION: u32 = 61;
+const SCHEMA_VERSION: u32 = 62;
 
 /// Run all migrations to bring the database up to date.
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -306,6 +306,9 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     // silent and permanent. Other open PRs also want 61; whichever merges
     // first keeps it and the rest renumber to 62, 63, … on rebase.
     run_step!(61, migrate_v61);
+
+    // v62: persist the workflow engine's terminal cancelled state.
+    run_step!(62, migrate_v62);
 
     // Audit-trail consistency (#3538): user_version must match the count
     // of distinct rows in `migrations`. Drift means an earlier migration
@@ -1526,6 +1529,63 @@ fn migrate_v61(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
          VALUES (61, datetime('now'), 'Add sessions.parent_session_id for sub-agent run lineage (#7752)')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v62: admit the workflow engine's cancelled state without changing run data.
+///
+/// v37's CHECK omitted this terminal state, so cancel_run's upsert failed and
+/// left a cancelled run pending on disk. The caller's transaction preserves the
+/// original table if any part of this rebuild fails. Keep all v37/v49/v56 columns,
+/// their values and the existing indexes; cancellation is not a failed run.
+fn migrate_v62(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Preserve v56's handling of historical DBs stamped past v37 without its table.
+    if try_table_exists(conn, "workflow_runs")? {
+        conn.execute_batch(
+            "CREATE TABLE workflow_runs_new (
+                id                   TEXT PRIMARY KEY,
+                workflow_id          TEXT NOT NULL,
+                workflow_name        TEXT NOT NULL DEFAULT '',
+                state                TEXT NOT NULL CHECK (state IN ('pending','running','paused','completed','failed','cancelled')),
+                input                TEXT NOT NULL DEFAULT '',
+                output               TEXT,
+                error                TEXT,
+                resume_token         TEXT,
+                pause_reason         TEXT,
+                paused_at            TEXT,
+                paused_step_index    INTEGER,
+                paused_variables     TEXT,
+                paused_current_input TEXT,
+                step_results         TEXT NOT NULL DEFAULT '[]',
+                started_at           TEXT NOT NULL,
+                completed_at         TEXT,
+                created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+                owner_agent_id       TEXT DEFAULT NULL,
+                total_steps          INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO workflow_runs_new (
+                id, workflow_id, workflow_name, state, input, output, error,
+                resume_token, pause_reason, paused_at, paused_step_index,
+                paused_variables, paused_current_input, step_results,
+                started_at, completed_at, created_at, owner_agent_id, total_steps
+            ) SELECT
+                id, workflow_id, workflow_name, state, input, output, error,
+                resume_token, pause_reason, paused_at, paused_step_index,
+                paused_variables, paused_current_input, step_results,
+                started_at, completed_at, created_at, owner_agent_id, total_steps
+              FROM workflow_runs;
+            DROP TABLE workflow_runs;
+            ALTER TABLE workflow_runs_new RENAME TO workflow_runs;
+            CREATE INDEX idx_workflow_runs_state ON workflow_runs(state);
+            CREATE INDEX idx_workflow_runs_workflow_id ON workflow_runs(workflow_id);
+            CREATE INDEX idx_workflow_runs_started_at ON workflow_runs(started_at DESC);",
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (62, datetime('now'), 'Allow cancelled state in workflow_runs persistence')",
         [],
     )?;
     Ok(())

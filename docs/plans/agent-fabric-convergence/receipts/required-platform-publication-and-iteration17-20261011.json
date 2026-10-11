@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "kind": "required-customer-platform-publication-and-delivery-update",
+  "recordedAt": "2026-10-11T00:47:13.564Z",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64",
+    "linux"
+  ],
+  "operatorAuthority": "Only ARM for Mac and Windows for Intel matter; latest conversation scope revision.",
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "runStartedAt": "2026-10-06T17:07:34.783Z",
+    "successfulDeliveries": 17,
+    "iterationId": "b9a060a3-fad7-4a91-8bda-870dd4a7165e",
+    "finishedAt": "2026-10-11T00:46:25.708Z",
+    "completion": {
+      "tasks": [],
+      "changes": [],
+      "phases": []
+    },
+    "publicationDue": true,
+    "clocksReset": false
+  },
+  "localDelivery": {
+    "version": "2.2.32",
+    "status": "built-and-operated",
+    "receipt": "receipts/integrated-actionable-v1-reporting-passed-2.2.32-20261011.json"
+  },
+  "publicMac": {
+    "version": "2.2.31",
+    "source": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "installer": {
+      "name": "The-Boss-2.2.31-mac-arm64.dmg",
+      "size": 717484146,
+      "sha256": "b3705f4c1cb0f279e610f431b2872588bbee60a94329c5d52b0cde25cbbcd353",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.31/The-Boss-2.2.31-mac-arm64.dmg",
+      "signing": "Developer ID (notarized)",
+      "profile": "uar-enabled"
+    },
+    "producerRun": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38096491962",
+    "metadataCommit": {
+      "url": "https://github.com/Prometheus-AGS/the-boss/commit/01a2904c130463aa9c7a9042842df8e219aa21f5",
+      "oid": "01a2904c130463aa9c7a9042842df8e219aa21f5"
+    },
+    "fullPublicBytesVerified": true,
+    "landingSourceCommit": "e9ad8d5d25d0eb64ccac329f79392b105c746cb2",
+    "deploymentStatus": "pending",
+    "liveObservation": [
+      {
+        "status": 200,
+        "url": "https://the-boss.know-me.tools/assets/index-BzLm9yNP.js",
+        "currentMacPresent": false,
+        "version": "2.2.30",
+        "observedAt": "2026-10-11T00:46:28.165Z"
+      }
+    ]
+  },
+  "observedPublicationFailure": {
+    "run": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38099079636",
+    "error": "Publication branch version 2.2.30 cannot backfill release 2.2.31",
+    "recovery": "Existing exact build-source generator and compare-and-swap main metadata commit; draft release made public; existing landing platform generator verified public bytes and produced source update."
+  },
+  "windows": {
+    "required": true,
+    "uarSource": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "bossfangSource": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+    "correctedProducer": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "run": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38099004997",
+    "status": "in-progress",
+    "profile": "thin LTO,16 codegen units"
+  },
+  "accounting": {
+    "historicalCodeCompletion": "61/61 tasks,20/20 changes",
+    "portfolioQualification": "43/61 terminal items",
+    "newCanonicalTaskCredit": 0,
+    "installedAcceptance": "pending exact final candidate",
+    "publicationDebtCleared": false
+  }
+}

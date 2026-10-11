@@ -1,0 +1,13 @@
+{
+  "image": "ghcr.io/prometheus-ags/the-boss-liter-llm",
+  "digest": "sha256:13e253bffa0192ea3f0fae0719a6b6fc64cbfc75575cb50ede1287e9ef5f68b0",
+  "source": {
+    "repository": "GQAdonis/liter-llm",
+    "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+  },
+  "recipeSource": {
+    "repository": "Prometheus-AGS/prometheus-skills-mini",
+    "revision": "951ed6005e0e8742ad589eb504ee6e27dbeb55ac"
+  },
+  "workflowRun": "38060700409"
+}

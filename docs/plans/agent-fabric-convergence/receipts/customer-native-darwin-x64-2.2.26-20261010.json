@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-release-full-byte-and-payload-verification",
+  "status": "passed",
+  "startedAt": "2026-10-10T01:26:25.730Z",
+  "finishedAt": "2026-10-10T01:26:46.963Z",
+  "platform": "darwin-x64",
+  "source": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+  "features": [
+    "server-full",
+    "tract-embeddings"
+  ],
+  "runId": 38004045703,
+  "tag": "boss-sidecar-darwin-x64-v1.0.0-2.2.26-1522f179",
+  "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.26-1522f179/uar-sidecar-darwin-x64.json",
+  "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.26-1522f179/uar-sidecar-darwin-x64.tar.gz",
+  "size": 133964483,
+  "sha256": "9c54ec3f3f37b2b9e5b2e2fcfac23890328a7b427ed9f9e325fb5e7b0a155e08",
+  "recordSha256": "9a1f5d2bcff042cb10f18fb5b7ec67cd3ccf542d92eeb69ff1d02d552736d072",
+  "archiveHttpStatus": 200,
+  "archiveContentLength": "133964483",
+  "payloadManifestSha256": "ba2cede666feb84003e7e217163380067a9e82e5b2579e4ae16039dc08cb6000",
+  "integrityCheckerSha256": "7eacadb12da8c996316613f67830ba77499bf3f1f089c755b2081ffef6176057",
+  "integrityCheckerSource": "scripts/uar-payload-integrity.cjs",
+  "checkedFiles": [
+    {
+      "path": "libcrc_fast-83ccf4684c30d646.dylib",
+      "size": 1248056,
+      "sha256": "e8d5e7e07629d022379d59d88a99767cc77f5538c3f2ced608aaa9b44225a122"
+    },
+    {
+      "path": "libsevenz_rust2-1192d4db71fe5529.dylib",
+      "size": 4152,
+      "sha256": "0495161b3e8c1bb0027d4cb95cf39dde59f2a491c8be7537cc3bced3901b67c9"
+    },
+    {
+      "path": "LICENSE",
+      "size": 1071,
+      "sha256": "c80a50b8f2630936009ad9cd516ff1ac603a92f78386906afbac044452c5d2a7"
+    },
+    {
+      "path": "policies/default.cedar",
+      "size": 272,
+      "sha256": "533be695da370d80c039259788fff40b757be1b44e2b833a72ef3039e1a5b7d4"
+    },
+    {
+      "path": "policies/skill-mutation.cedar",
+      "size": 2339,
+      "sha256": "6feacc9af1090ad2f1d6871e15e76d56c185d6302e329cc603ff40958346ae9e"
+    },
+    {
+      "path": "policies/tool-approval.cedar",
+      "size": 1200,
+      "sha256": "f6c7844b10c6cabd594f05e94af314eb176e23a7fce908a35ddb9382afbf80f6"
+    },
+    {
+      "path": "uar-models/bg-small-en-v1.5.onnx",
+      "size": 34014426,
+      "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+    },
+    {
+      "path": "uar-models/config.json",
+      "size": 650,
+      "sha256": "f2c87ea17fdfa286f48d6e1506f2cdc838d303420dc55606190e67e5acd9e186"
+    },
+    {
+      "path": "uar-models/MODEL-NOTICE.txt",
+      "size": 331,
+      "sha256": "99d87511d89807668120d86f3bce9f3d138d8da2428cf66c0c82e39d26b1ad22"
+    },
+    {
+      "path": "uar-models/special_tokens_map.json",
+      "size": 125,
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+    },
+    {
+      "path": "uar-models/tokenizer_config.json",
+      "size": 366,
+      "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    {
+      "path": "uar-models/tokenizer.json",
+      "size": 711396,
+      "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+    },
+    {
+      "path": "uar-sidecar",
+      "size": 328712656,
+      "sha256": "6c6804e84377e31597690cd8cc9cb13f3088235b5a36f20eae4afeeba34cd899"
+    }
+  ],
+  "executableMachine": "x86_64 (Mach-O CPU 0x01000007)",
+  "applicationInstaller": false,
+  "nativeExecution": "pending",
+  "priorDriverFailure": {
+    "beforeArchiveDownload": true,
+    "reason": "Windows-derived feature assertion omitted Intel tract-embeddings; actual deploy.yml and published record agree",
+    "preservedDriver": "verify-public-payload-attempt1.mjs"
+  },
+  "signing": "not-assessed",
+  "sourcePinsEdited": false,
+  "workflowDispatched": false,
+  "qualificationCompleted": false
+}

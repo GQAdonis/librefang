@@ -159,3 +159,20 @@ clocks, read credentials out of main memory or add an authentication bypass.
 
 The procedure returns success only when both the launcher confirms the scenario and the full named behavior is observed.
 Otherwise it writes a bounded `C14_*` failure code and a blocked outcome: missing package/source pin, unsupported native launcher, missing gateway credential/configuration, unavailable normal qualification/coding/tools, refused scope, failed inference, absent actual repository change, missing provenance, unresolved approval, failed reopening or incomplete cancellation are not feature acceptance.
+
+## Failed-only BossFang correction
+
+If Teams already passed and only BossFang failed, pass the exact prior Teams
+`evidence.json` to `--retry-bossfang-from`. The runner checks that evidence
+against its original combined receipt, the current UAR source and unchanged
+Teams scenario inputs. It refuses the shortcut when the intervening Boss commits
+change files outside the BossFang service and integration source pin. Otherwise
+it creates a new disposable application profile and runs only the BossFang
+operation. Its ordinary coding-team setup configures the gateway provider in
+that new profile; the selected model must then appear uniquely in the ordinary
+UAR model catalog and in `bossfang.models` before the diagnostic begins.
+
+The new receipt records the earlier Teams result with its original package
+hash and timestamp. It reports only BossFang acceptance for the new package;
+`sameSessionCombinedAcceptance` remains false. This mode does not claim a new
+Teams run or turn two distinct application sessions into combined evidence.

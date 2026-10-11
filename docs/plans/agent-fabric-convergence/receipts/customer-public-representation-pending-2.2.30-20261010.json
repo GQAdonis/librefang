@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-customer-synthetic-representation-approval-pending",
+  "recordedAt": "2026-10-10T04:25:02.301Z",
+  "version": "2.2.30",
+  "platform": "darwin-arm64",
+  "status": "pending-human-operation",
+  "actualAttemptStatus": "failed",
+  "actualEvidenceStatus": "approval-outcome-unresolved",
+  "complete": false,
+  "sources": {
+    "boss": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "appAsarSha256": "393784aba6f24128618640f64238d6f6ee6da6f77190172e513230ee54cab7ba",
+    "sidecarSha256": "ff7d25c8e615b9e06f63dc25c0f7cf4f48a363adf872cb4a4ca2296448bb09c4",
+    "installerSha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+    "installedVersion": "2.2.30",
+    "operationDriverRevision": "8119fd7c83248cdf0d0cde4496cb33c569761a71",
+    "selectedScenarioSha256": "9766ab51f69552e1fe0b1edb5015276b9b09d750f490feab7a4a2a1e462cb9fa",
+    "installationReceiptSha256": "a6ff46927827fe26f936371e1654b341e626069d9194d9cbb9b9519b1cf352f5"
+  },
+  "startedAt": "2026-10-10T04:17:54.813Z",
+  "finishedAt": "2026-10-10T04:23:29.758Z",
+  "checks": [
+    {
+      "name": "isolated-gateway-and-native-model-prepared-through-typed-settings",
+      "passed": true
+    },
+    {
+      "name": "selected-native-model-observed-context-capacity-applied",
+      "passed": true
+    },
+    {
+      "name": "synthetic-role-and-exact-private-grant-applied",
+      "passed": true
+    }
+  ],
+  "approval": {
+    "approvalId": "26dac146-27c0-4243-9674-4852e397309c",
+    "issuerId": "836bba3d-48f8-4286-bf19-a12dc5cfa339",
+    "challengeId": "26dac146-27c0-4243-9674-4852e397309c",
+    "commandId": "39343c0f-f580-4e05-8573-68d9acb00a1b",
+    "runId": "55a12a14-2490-41ba-80df-5c9103e18aa2",
+    "toolName": "file_read",
+    "decisionOwner": "uar-runtime",
+    "argumentsSha256": "0cca36280aa6448aeb5febc378e1717c8603064d7ab4ec1e8315c599b765b138",
+    "fileSha256": "8ecce4f08a57569dd1870687091ea5ca5e3c3cd70a0585da298473bde306c05a",
+    "deadline": "2026-10-10T04:23:28.875Z"
+  },
+  "operatorDecisionSubmitted": false,
+  "replaySubmitted": false,
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/executive-representation-public-dbd1d56c-784f-4af8-9592-664f1da9080e/evidence.json",
+    "sha256": "8fe96d52775a82159efaa82380d6623e34f812a2af0de33b0319870b1f2b715d"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/executive-representation-public-dbd1d56c-784f-4af8-9592-664f1da9080e/operation.json",
+    "sha256": "4d9753e5c26dc73a74612bcbeb86890924653421b22adae568cb19c50b650a8f"
+  },
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "limits": [
+    "Actual public2.2.30 native approval binding was reached; the exact challenge expired without an operator decision.",
+    "The driver reports approval-outcome-unresolved, not represented-read success or demonstrated expiry/refusal behavior.",
+    "No approved read/disclosure, audience/workspace refusal, grant expiry/revocation/offboarding or organizational authority is certified by this attempt.",
+    "A late operator response cannot authorize this expired challenge. Retry only with a fresh exact challenge when the operator is present; no automatic replay."
+  ]
+}

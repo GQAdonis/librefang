@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-provider-source-applicability-preparation",
+  "recordedAt": "2026-10-10T15:18:29.775Z",
+  "baseline": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+  "integratedSource": "faaa9052f2c8781193bc6d25cf618a91c3a8d0cb",
+  "entries": [
+    {
+      "path": "src/main/ai/runtime/pi",
+      "before": "e0cb5c067504a64fbfc7ce8b2aac2c969d180b43",
+      "after": "e0cb5c067504a64fbfc7ce8b2aac2c969d180b43",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/runtime/claudeCode",
+      "before": "d12ee2041a46cad2fe0c2d591cdc3411627154d3",
+      "after": "d12ee2041a46cad2fe0c2d591cdc3411627154d3",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/runtime/registerDrivers.ts",
+      "before": "e2c97735b9375c17ab4120dfb76cd187f0223865",
+      "after": "e2c97735b9375c17ab4120dfb76cd187f0223865",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/agentSession",
+      "before": "f4b6351f704379833179cc70bd12956e4e04d316",
+      "after": "f4b6351f704379833179cc70bd12956e4e04d316",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/streamManager",
+      "before": "1dfb5b9d48af101e2ece7e2f4be71830fc02217d",
+      "after": "1dfb5b9d48af101e2ece7e2f4be71830fc02217d",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/provider",
+      "before": "28d359625b45ff8a8052bd367456479ca1cf330c",
+      "after": "28d359625b45ff8a8052bd367456479ca1cf330c",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/services/oauth",
+      "before": "749d7f21c6443f6886a98fadbca35fdd62dbd811",
+      "after": "749d7f21c6443f6886a98fadbca35fdd62dbd811",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/data/services/AgentSessionService.ts",
+      "before": "8121a10c6d2b037ed60a3b6b7c6c83387de6e362",
+      "after": "8121a10c6d2b037ed60a3b6b7c6c83387de6e362",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/data/services/AgentSessionMessageService.ts",
+      "before": "f63a7d12f7a0fb352f916a0057680b227c434c41",
+      "after": "f63a7d12f7a0fb352f916a0057680b227c434c41",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/data/api/handlers/agentSessions.ts",
+      "before": "e1fc69d225dbc2969b9dc62bf2c7836b7983c724",
+      "after": "e1fc69d225dbc2969b9dc62bf2c7836b7983c724",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/data/api/handlers/agentSessionMessages.ts",
+      "before": "eee8e85d61684ee04e3bc034b377c686abf88815",
+      "after": "eee8e85d61684ee04e3bc034b377c686abf88815",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/toolApproval",
+      "before": "4f43eb045ba485d524896dda56b2b8404c574304",
+      "after": "4f43eb045ba485d524896dda56b2b8404c574304",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/ai/tools/adapters/claudeCode",
+      "before": "b86973d9cf44b5243373a239b797482ad87b9135",
+      "after": "b86973d9cf44b5243373a239b797482ad87b9135",
+      "unchanged": true
+    },
+    {
+      "path": "src/main/core/lifecycle",
+      "before": "62436da54e73984bc8c98196fd98674a863be5f1",
+      "after": "62436da54e73984bc8c98196fd98674a863be5f1",
+      "unchanged": true
+    },
+    {
+      "path": "src/renderer/hooks/agent",
+      "before": "e35b658960fe92f16c517fc0b3753ddece31db04",
+      "after": "e35b658960fe92f16c517fc0b3753ddece31db04",
+      "unchanged": true
+    },
+    {
+      "path": "src/renderer/services/aiTransport",
+      "before": "4f69b101fb0d62e83d6a67923869cc6c1ef6edd6",
+      "after": "4f69b101fb0d62e83d6a67923869cc6c1ef6edd6",
+      "unchanged": true
+    },
+    {
+      "path": "src/preload",
+      "before": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+      "after": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+      "unchanged": true
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "before": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+      "after": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+      "unchanged": true
+    }
+  ],
+  "operationRun": false,
+  "disposition": "Source-only parity informs which existing operations remain applicable; no packaged or account acceptance inferred."
+}

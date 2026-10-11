@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-iteration17-package-invocation-repairs",
+  "recordedAt": "2026-10-11T00:32:39.011Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "originalRunStartedAt": "2026-10-06T17:07:34.783Z",
+  "successfulDeliveriesUnchanged": 16,
+  "iterationId": "b9a060a3-fad7-4a91-8bda-870dd4a7165e",
+  "continuousIterationStartedAt": "2026-10-11T00:24:48.936Z",
+  "failedAttempts": [
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "c90e77b8-7fa0-4ce4-9e0c-0b6cc5dcc232",
+      "status": "failed",
+      "startedAt": "2026-10-11T00:30:00.644Z",
+      "finishedAt": "2026-10-11T00:30:06.705Z",
+      "exitCode": 1,
+      "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/attempts/c90e77b8-7fa0-4ce4-9e0c-0b6cc5dcc232/output.log"
+    },
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "ad26cf28-ef93-4e24-b015-242a596c2162",
+      "status": "failed",
+      "startedAt": "2026-10-11T00:30:45.335Z",
+      "finishedAt": "2026-10-11T00:30:56.267Z",
+      "exitCode": 1,
+      "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/attempts/ad26cf28-ef93-4e24-b015-242a596c2162/output.log"
+    }
+  ],
+  "repairs": [
+    {
+      "problem": "Required local UAR source environment binding omitted from the build invocation.",
+      "resolution": "Restored THE_BOSS_LOCAL_UAR_SOURCE_DIR to the frozen74194623 checkout; no source change."
+    },
+    {
+      "problem": "Version2.2.32 package metadata lacked its required current release-history entry.",
+      "resolution": "Added matching bilingual builder notes and generated history using existing syncReleaseHistory; committed source05c1d8413e7f6850bf96ffc13931e3a277e504fd."
+    }
+  ],
+  "currentCandidate": "79a11159-22c3-4c06-9260-0758b9c99dd3",
+  "platforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "limitations": [
+    "Build is running; no successful operation, qualification or delivery credit is asserted.",
+    "Deferred architectures do not gate customer publication."
+  ]
+}

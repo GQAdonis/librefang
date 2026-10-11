@@ -1,0 +1,278 @@
+{
+  "observedAt": "2026-10-05T23:51:42.821Z",
+  "profileRevision": 7,
+  "successfulDeliveries": 6,
+  "publicationSchedule": {
+    "nextCount": 7,
+    "lastInterval": -1,
+    "policyDigest": "565c809a2bf04be8d8ac4a490c36da5ac9dd1c54a7f298a160f5aefd7cbd2ef0"
+  },
+  "activeIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "activeIteration": {
+    "id": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "index": 8,
+    "status": "checkpoint-failed",
+    "startedAt": "2026-10-05T07:58:36.181Z"
+  },
+  "childChain": [
+    {
+      "id": "f6abf9b3-907e-4efd-8d03-172307527271",
+      "phaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
+      "parentPhaseId": "agent-fabric-convergence",
+      "parentChildId": null,
+      "enteredAt": "2026-10-05T23:11:10.352Z",
+      "status": "active",
+      "outcome": null,
+      "reason": "Operator stopped product execution after iteration 8 delivered no completed tasks and requested architectural and delivery recovery assessment.",
+      "owner": "boss-core-lead",
+      "authority": "Operator instructions on 2026-10-05: assess, analyze, plan, execute, reflect sequentially, stopping after each for review.",
+      "scope": {
+        "tasks": [],
+        "changes": [],
+        "phases": [
+          "agent-fabric-convergence::six-hour-convergence-recovery"
+        ],
+        "outcomes": [
+          "Evidence-backed architecture and delivery recovery with explicit operator approval at every stage"
+        ],
+        "deliveryClass": "unclassified",
+        "owners": []
+      },
+      "returnCriteria": [
+        "operator-reviewed-recovery-executed-and-reflected"
+      ],
+      "featureOperation": {
+        "id": "c14-work-team",
+        "outcome": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile",
+        "procedure": "Build the complete Mac ARM64 application, launch it, operate Work coding-team handoff and durable reopening, then open the authenticated BossFang dashboard, configure ports, perform real selected-UAR delegation/cancellation and persist settings without supervising UAR.",
+        "checkpointId": "c14-work-operation",
+        "promisedCapability": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile; operate accessible BossFang dashboard/settings with scoped shared-UAR delegation and independent lifecycle",
+        "creationTaskRef": "C14.1",
+        "entrypoint": {
+          "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+          "args": [
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+            "--boss",
+            "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+            "--launcher",
+            "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+            "--output",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts"
+          ],
+          "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "sourcePaths": [
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/approvals.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-boundaries.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-controls.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-operation.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/combined-scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/controls.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/diagnostics.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/io.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/setup.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/alternate-uar.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/external-bossfang.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/grant-expiry.mjs"
+          ],
+          "buildProducedPaths": []
+        },
+        "target": {
+          "kind": "real",
+          "description": "Packaged The Boss on macOS with its normal UAR sidecar and configured inference"
+        },
+        "evidenceLevel": "real-service",
+        "expectedResult": "Team produces repository change and visible worker/reviewer artifacts, with supported cancellation and durable reopening; visible authenticated BossFang dashboard, applied managed ports, real scoped UAR inference and authoritative cancellation, unchanged UAR process when BossFang stops",
+        "prerequisites": [],
+        "isolatedResources": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-disposable-workspace"
+        ],
+        "externalEffects": [],
+        "authorityRefs": [
+          "operator-approved-teams-first-plan-20261005",
+          "bossfang-selected-uar-repair-approved-20261005"
+        ],
+        "limitations": [
+          "Native Windows operation and installed acceptance remain pending. All successful source/build/partial-operation receipts remain separate from whole-task completion."
+        ],
+        "contractVersion": 3
+      },
+      "inheritedFeatureOperation": true,
+      "parentFeatureOperation": {
+        "id": "c14-work-team",
+        "outcome": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile",
+        "procedure": "Build the complete Mac ARM64 application, launch it, operate Work coding-team handoff and durable reopening, then open the authenticated BossFang dashboard, configure ports, perform real selected-UAR delegation/cancellation and persist settings without supervising UAR.",
+        "checkpointId": "c14-work-operation",
+        "promisedCapability": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile; operate accessible BossFang dashboard/settings with scoped shared-UAR delegation and independent lifecycle",
+        "creationTaskRef": "C14.1",
+        "entrypoint": {
+          "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+          "args": [
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+            "--boss",
+            "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+            "--launcher",
+            "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+            "--output",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts"
+          ],
+          "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "sourcePaths": [
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/approvals.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-boundaries.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-controls.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-operation.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/bossfang-scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/combined-scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/controls.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/diagnostics.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/io.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/scenario.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/setup.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/alternate-uar.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/external-bossfang.mjs",
+            "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/grant-expiry.mjs"
+          ],
+          "buildProducedPaths": []
+        },
+        "target": {
+          "kind": "real",
+          "description": "Packaged The Boss on macOS with its normal UAR sidecar and configured inference"
+        },
+        "evidenceLevel": "real-service",
+        "expectedResult": "Team produces repository change and visible worker/reviewer artifacts, with supported cancellation and durable reopening; visible authenticated BossFang dashboard, applied managed ports, real scoped UAR inference and authoritative cancellation, unchanged UAR process when BossFang stops",
+        "prerequisites": [],
+        "isolatedResources": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-disposable-workspace"
+        ],
+        "externalEffects": [],
+        "authorityRefs": [
+          "operator-approved-teams-first-plan-20261005",
+          "bossfang-selected-uar-repair-approved-20261005"
+        ],
+        "limitations": [
+          "Native Windows operation and installed acceptance remain pending. All successful source/build/partial-operation receipts remain separate from whole-task completion."
+        ],
+        "contractVersion": 3
+      },
+      "sourceRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+          "revision": "49ae6fc5bd0770009c3be77f58053dbbab470986",
+          "fingerprint": "e398aeafc3112733916c5beace1bbc3d92d44702dcf3c65a2e73934fb3146157",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini",
+              "revision": "ce893fb89bb20c250ff222a6d12c2e0f4820eef0",
+              "fingerprint": "133b16f1db22e6e9d998e906e41eae0b02f89da9f7c95fe667f4f412be51e131",
+              "submoduleRefs": [
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/liter-llm",
+                  "name": "tools/liter-llm",
+                  "initialized": false,
+                  "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+                  "name": "tools/prometheus-knowledge",
+                  "initialized": false,
+                  "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/surreal-memory-server",
+                  "name": "tools/surreal-memory-server",
+                  "initialized": false,
+                  "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+                  "workingTree": "unobserved"
+                }
+              ],
+              "name": "resources/prometheus-skills-mini"
+            }
+          ]
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "revision": "32e19a6c696e0078c5efcc8dc2f2dfba5c285668",
+          "fingerprint": "9fc62f4d67fe75612581ec285da641376586fca4f950ad2ab318a68e6a9e26e5"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/bossfang-selected-uar-release",
+          "revision": "bafa21e8d469a41104c07c7281a4e3f97cb16009",
+          "fingerprint": "49d55d90cc91b4d17fbcff0131269e14f8a4df45ea5446d4b99eae7bc4602143"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+          "revision": "82b673968593ed4a5a51a236e48c8bb1722c66e9",
+          "fingerprint": "2488dfeadfff25321dbdcd673964f84d31577977cc7db5557e0c22ff89435f37",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/crates/prometheus-skill-system",
+              "name": "crates/prometheus-skill-system",
+              "initialized": false,
+              "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/frontend/packages/prometheus-entity-management",
+              "name": "frontend/packages/prometheus-entity-management",
+              "initialized": false,
+              "revision": "959839a88e65704014bab0bdd055df17fb210298",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/models.dev",
+              "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+              "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+              "name": "models.dev"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+              "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+              "name": "vendor/git/liter-llm"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/rust-mcp-filesystem",
+              "name": "vendor/git/rust-mcp-filesystem",
+              "initialized": false,
+              "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+              "workingTree": "unobserved"
+            }
+          ]
+        }
+      ],
+      "requiresApproval": true,
+      "approvalEvidence": null,
+      "entryRevision": 518,
+      "completion": {
+        "tasks": [],
+        "changes": [],
+        "phases": []
+      }
+    }
+  ],
+  "obligations": [
+    {
+      "id": "3aa9f8fd-78d2-462f-9584-4f934cabd914",
+      "disposition": "pending",
+      "candidateId": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7",
+      "requiredEffects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ]
+    }
+  ],
+  "iterationsDigest": "cfca1d844adb30b4e8c85131e9cdece15553e10a7f91cea7ec45015bbb0c1db3",
+  "obligationsDigest": "e95abfb7f116fb38bbe765644bc3dc2c24044ff03e17e9eb278ae4e6e18641ad",
+  "historicalChildrenDigest": "94e69080c992bcec0847bcc40cf44667eda3501a86e50b318eac606ddc201e93",
+  "workAheadDigest": "051000c0d1bdba7831a3d2cfc6cd41e196f1e87538e85bb09ae6a7d376b50659"
+}

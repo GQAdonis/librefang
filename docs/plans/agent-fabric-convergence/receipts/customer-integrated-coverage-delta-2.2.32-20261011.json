@@ -1,0 +1,486 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-integrated-requirement-applicability-delta",
+  "recordedAt": "2026-10-11T00:55:51.418Z",
+  "version": "2.2.32",
+  "boundary": "Completed delivery 17; evidence/source inspection only",
+  "candidate": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+    "appAsarSha256": "8a760df9ced70053b54df0ac7659d195f88e124f4f771eee790881575c61cffa",
+    "uarSha256": "2cf4fdb84a71eb864996b9a092559bdaae353201f82a966e82de1ad26ef577e1",
+    "bossfangSha256": "20b060d6b44695169531e35c72d52e54a72dad374fa2a45931aed182bea7a720",
+    "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+    "contentManifestDigest": "d05c060884390a24f115a4f90d6780215a9e435e2bd1cddc920f8e9cb9ff1a67"
+  },
+  "scope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64",
+      "linux"
+    ],
+    "authority": "Existing customer platform revision and parent mandate; no scope amendment performed"
+  },
+  "inspection": {
+    "operationRun": false,
+    "buildRun": false,
+    "testRun": false,
+    "uiRun": false,
+    "networkResearch": false,
+    "externalEffect": false,
+    "sourceComparison": "Exact Git objects; current worktree content not used as release identity",
+    "receiptBytes": "Referenced retained operation/evidence bytes read and SHA-256 identity checked; no runtime gate rerun"
+  },
+  "evidence": {
+    "coverage": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-integrated-coverage-2.2.31-20261010.md",
+      "sha256": "3d78282b75088734556b8f85ef8da9d394b86ae291addd8321162ee1563e0532"
+    },
+    "completedRepair": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-actionable-v1-reporting-passed-2.2.32-20261011.json",
+      "sha256": "b41ec980665a98af096b4fe9bac569549c92981b4455b7f993581018305e7544"
+    },
+    "actualV1Operation": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/operation.json",
+      "sha256": "af313a9ca50d9c01ed3a6ad1fdcb6d672e609e2ec40d02a6015e708a76dc1165"
+    },
+    "actualV1Evidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/evidence.json",
+      "sha256": "19728a43b44b57b9d18bbf634e593a59c81f6b5f17cb0f2d43807e22f4c2297f"
+    },
+    "ownedV1Cleanup": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/owned-runtime-operation.json",
+      "sha256": "41b85a74632b8335a81ae699ee1f8d2789d71f53699bfc897d61dc0dd9211bb3"
+    },
+    "bossfang31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-workflow-delegation-20261010/integrated-admission-v2-bossfang-afd84034-20cf-4e69-a95d-9876c3e164ee/operation.json",
+      "sha256": "8f1ae9b189f42b62136830620fa670ff6dfb75163c8ff65b53ee53aef3f0ffbc"
+    },
+    "nativeRead31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-native-read-20261010/integrated-admission-v2-native-read-d3d52f88-5d98-446e-bebb-e88633489083/operation.json",
+      "sha256": "cdae9af029f02aec13f38ad804dae93ad5393b2cb43678377920549618e4e0e7"
+    },
+    "teamCore31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-reusable-team-core-passed-20261011.json",
+      "sha256": "835fe4ef5b9bbb956cb2a4f70cb25e597b7b495de9789a6b71216cf3b62c2c01"
+    },
+    "teamOperation31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-reusable-team-entrypoint-20261011/c15-a8ca0e94-f452-41be-8ab6-b0b5db77850e/integrated-team-operation.json",
+      "sha256": "17ed168460043fbeed122be0a7d0e0f8e563fb50a78a16aff3536f309c01278b"
+    },
+    "teamEvidence31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-reusable-team-entrypoint-20261011/c15-a8ca0e94-f452-41be-8ab6-b0b5db77850e/evidence.json",
+      "sha256": "419e9b5264871243a532d7f58b9c3f43af4ee66e50c237a4d9b2512e9712d791"
+    },
+    "representation31": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-representation-main-window-20261011/integrated-synthetic-representation-7891d8b1-59e3-454c-81e6-2b729a0c9208/evidence.json",
+      "sha256": "7c0d923a74b438ffc16387779dc8be8f9e7b4d4e41ff1d8829cffa9ff8f4860d"
+    },
+    "iteration16": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-iteration16-finalized-and-pending-qualification-20261011.json",
+      "sha256": "8c9884983566e99b0967ea914e08be7a1a74abe9b7a6cc3d9aed8b883209e313"
+    },
+    "publicMac31Site": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/mac-arm64-live-site-2.2.31-20261011.json",
+      "sha256": "c1a70ae3cc4c1c74d373757fe6bc4b2090844e223805d804e3b2c3ebcc1b6c39"
+    }
+  },
+  "applicability": {
+    "baseline": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "current": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "changedPaths": [
+      "electron-builder.yml",
+      "package.json",
+      "resources/cherry-studio/release-history.json",
+      "resources/skills/delivery-cadence/references/frozen-source-reconciliation.md",
+      "scripts/build-integration-tools.cjs",
+      "scripts/integration-source.cjs",
+      "scripts/operations/operate-integrated-admission-v2.mjs",
+      "src/main/services/prometheus/PrometheusIntegrationService.ts"
+    ],
+    "productionException": {
+      "path": "src/main/services/prometheus/PrometheusIntegrationService.ts",
+      "contract": "testUarInstance catches only UarAdmissionCompatibilityError and returns the already-recorded instance inventory; catalog/execution admission is unchanged",
+      "diffSha256": "3a23a08327c0f2fd0664a3999fa3d7dd92ef72aec38d5e67259482a0681e1148",
+      "closedBy": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/operation.json"
+    },
+    "unchangedContractObjects": [
+      {
+        "path": "src/main/ai",
+        "before": "f09eb6f797840f9c7d6dd0bf1b64b72756c9e560",
+        "after": "f09eb6f797840f9c7d6dd0bf1b64b72756c9e560",
+        "unchanged": true
+      },
+      {
+        "path": "src/main/data",
+        "before": "646b44327efd36cd24ea86c5309486b13f60c9d8",
+        "after": "646b44327efd36cd24ea86c5309486b13f60c9d8",
+        "unchanged": true
+      },
+      {
+        "path": "src/main/core/lifecycle",
+        "before": "62436da54e73984bc8c98196fd98674a863be5f1",
+        "after": "62436da54e73984bc8c98196fd98674a863be5f1",
+        "unchanged": true
+      },
+      {
+        "path": "src/renderer",
+        "before": "08a2266f7f6e36580d7c092d720613481db1c54e",
+        "after": "08a2266f7f6e36580d7c092d720613481db1c54e",
+        "unchanged": true
+      },
+      {
+        "path": "src/preload",
+        "before": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+        "after": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+        "unchanged": true
+      },
+      {
+        "path": "src/shared",
+        "before": "56c0d955a25beef7b6e6a424691d64cfdec6192f",
+        "after": "56c0d955a25beef7b6e6a424691d64cfdec6192f",
+        "unchanged": true
+      },
+      {
+        "path": "pnpm-lock.yaml",
+        "before": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+        "after": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+        "unchanged": true
+      },
+      {
+        "path": "scripts/package-prometheus.js",
+        "before": "ae409bca512a8848cc1a3d61c31e76de30beffc8",
+        "after": "ae409bca512a8848cc1a3d61c31e76de30beffc8",
+        "unchanged": true
+      },
+      {
+        "path": "scripts/operations/admission-v2-native.mjs",
+        "before": "010ed555d03a32e19bef0b6d0601f608734afd64",
+        "after": "010ed555d03a32e19bef0b6d0601f608734afd64",
+        "unchanged": true
+      },
+      {
+        "path": "scripts/operations/admission-v2-bossfang.mjs",
+        "before": "e746e33d1d6bfa3b24ddd1e74d219d4b949c3f55",
+        "after": "e746e33d1d6bfa3b24ddd1e74d219d4b949c3f55",
+        "unchanged": true
+      },
+      {
+        "path": "scripts/operations/admission-v2-older-instance.mjs",
+        "before": "ffae47daee8a44ebeebc62ca82afdc43eeb205d2",
+        "after": "ffae47daee8a44ebeebc62ca82afdc43eeb205d2",
+        "unchanged": true
+      },
+      {
+        "path": "scripts/operate-reusable-team.mjs",
+        "before": "1c8fa2cf6da610b28cb9778703086e7c3c86b0f7",
+        "after": "1c8fa2cf6da610b28cb9778703086e7c3c86b0f7",
+        "unchanged": true
+      },
+      {
+        "path": "resources/prometheus-skills-mini",
+        "before": "6c63c0acec67444e30f65461836e7a943316e242",
+        "after": "6c63c0acec67444e30f65461836e7a943316e242",
+        "unchanged": true
+      }
+    ],
+    "nativeProviderExtension": {
+      "baseline": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "current": "46d68291aec8dfa57a41f0453af22050fd34a035",
+      "objects": [
+        {
+          "path": "src/main/ai/runtime/pi",
+          "before": "e0cb5c067504a64fbfc7ce8b2aac2c969d180b43",
+          "after": "e0cb5c067504a64fbfc7ce8b2aac2c969d180b43",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/runtime/claudeCode",
+          "before": "d12ee2041a46cad2fe0c2d591cdc3411627154d3",
+          "after": "d12ee2041a46cad2fe0c2d591cdc3411627154d3",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/runtime/registerDrivers.ts",
+          "before": "e2c97735b9375c17ab4120dfb76cd187f0223865",
+          "after": "e2c97735b9375c17ab4120dfb76cd187f0223865",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/agentSession",
+          "before": "f4b6351f704379833179cc70bd12956e4e04d316",
+          "after": "f4b6351f704379833179cc70bd12956e4e04d316",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/streamManager",
+          "before": "1dfb5b9d48af101e2ece7e2f4be71830fc02217d",
+          "after": "1dfb5b9d48af101e2ece7e2f4be71830fc02217d",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/provider",
+          "before": "28d359625b45ff8a8052bd367456479ca1cf330c",
+          "after": "28d359625b45ff8a8052bd367456479ca1cf330c",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/services/oauth",
+          "before": "749d7f21c6443f6886a98fadbca35fdd62dbd811",
+          "after": "749d7f21c6443f6886a98fadbca35fdd62dbd811",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/data/services/AgentSessionService.ts",
+          "before": "8121a10c6d2b037ed60a3b6b7c6c83387de6e362",
+          "after": "8121a10c6d2b037ed60a3b6b7c6c83387de6e362",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/data/services/AgentSessionMessageService.ts",
+          "before": "f63a7d12f7a0fb352f916a0057680b227c434c41",
+          "after": "f63a7d12f7a0fb352f916a0057680b227c434c41",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/data/api/handlers/agentSessions.ts",
+          "before": "e1fc69d225dbc2969b9dc62bf2c7836b7983c724",
+          "after": "e1fc69d225dbc2969b9dc62bf2c7836b7983c724",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/data/api/handlers/agentSessionMessages.ts",
+          "before": "eee8e85d61684ee04e3bc034b377c686abf88815",
+          "after": "eee8e85d61684ee04e3bc034b377c686abf88815",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/toolApproval",
+          "before": "4f43eb045ba485d524896dda56b2b8404c574304",
+          "after": "4f43eb045ba485d524896dda56b2b8404c574304",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/ai/tools/adapters/claudeCode",
+          "before": "b86973d9cf44b5243373a239b797482ad87b9135",
+          "after": "b86973d9cf44b5243373a239b797482ad87b9135",
+          "unchanged": true
+        },
+        {
+          "path": "src/main/core/lifecycle",
+          "before": "62436da54e73984bc8c98196fd98674a863be5f1",
+          "after": "62436da54e73984bc8c98196fd98674a863be5f1",
+          "unchanged": true
+        },
+        {
+          "path": "src/renderer/hooks/agent",
+          "before": "e35b658960fe92f16c517fc0b3753ddece31db04",
+          "after": "e35b658960fe92f16c517fc0b3753ddece31db04",
+          "unchanged": true
+        },
+        {
+          "path": "src/renderer/services/aiTransport",
+          "before": "4f69b101fb0d62e83d6a67923869cc6c1ef6edd6",
+          "after": "4f69b101fb0d62e83d6a67923869cc6c1ef6edd6",
+          "unchanged": true
+        },
+        {
+          "path": "src/preload",
+          "before": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+          "after": "b6ab7200a445cf4b6f8b307c89160bfe9282e9e9",
+          "unchanged": true
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "before": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+          "after": "18e2801da99837400797d4cb2c7ec51a1d71d9e1",
+          "unchanged": true
+        }
+      ],
+      "retainedReceipt": "customer-native-provider-applicability-2.2.30-20261010.md",
+      "limit": "Original 2.2.25 native Codex/Claude operations remain their original evidence. Source parity adds no inference, current entitlement/authentication, Windows or installed acceptance pass."
+    },
+    "packageBoundary": "2.2.31 and 2.2.32 ASAR and signed sidecar hashes differ. Same UAR/BossFang revisions and equal source contracts support requirement applicability only; no 2.2.31 operation is reassigned to 2.2.32 bytes.",
+    "packagingDelta": "Version/release history and reconciliation documentation changed; integration-source checkout now reuses the exact clean cached commit; BossFang Windows build selects thin LTO/16 codegen units. The latter has no Windows runtime pass in this receipt."
+  },
+  "requirements": [
+    {
+      "ids": [
+        "C04.1",
+        "C04.2",
+        "C04.3",
+        "C18.2"
+      ],
+      "requirement": "Replaceable service v1 compatibility",
+      "disposition": "affected-subset-passed-on-2.2.32",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/operation.json",
+      "qualified": "Actual owned v1 runtime reports actionable update/select diagnostic through instances.test; inventory/local configuration readable, v2-dependent catalog mutation and Work execution refused, catalog hashes unchanged, original selection restored, owned tree stopped.",
+      "limits": "No blanket remote-administration or Windows qualification; original 2.2.31 INTERNAL attempts remain failures."
+    },
+    {
+      "ids": [
+        "C05.1",
+        "C05.2",
+        "C05.3",
+        "C14.3",
+        "C14.4"
+      ],
+      "requirement": "Shared BossFang/UAR workflow",
+      "disposition": "retain-2.2.31-source-contract-applicability",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-workflow-delegation-20261010/integrated-admission-v2-bossfang-afd84034-20cf-4e69-a95d-9876c3e164ee/operation.json",
+      "qualified": "Compiled authenticated dashboard, bound delegation, original approved write, denied write without effect, durable pending cancellation, correlated host_mcp identity and selected UAR preservation.",
+      "limits": "Retained operation remains 2.2.31, not a rerun on 2.2.32; alternate cancellation and Windows are not inferred. Existing port/reopen passes are retained without repetition."
+    },
+    {
+      "ids": [
+        "C14.2",
+        "C06",
+        "C18.2"
+      ],
+      "requirement": "Ordinary Work native approval/read/reconnect/cancel",
+      "disposition": "retain-2.2.31-source-contract-applicability",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-native-read-20261010/integrated-admission-v2-native-read-d3d52f88-5d98-446e-bebb-e88633489083/operation.json",
+      "qualified": "Exact approved native file_read, same execution across renderer detach/attach without repeat effect, semantic stream cancellation, persisted pause and fresh same-session recovery.",
+      "limits": "Not runtime-process restart, lost acknowledgment, representation-grant validation, direct native subscriptions or Windows execution."
+    },
+    {
+      "ids": [
+        "C14.1",
+        "C14.2",
+        "C16.1",
+        "C16.2"
+      ],
+      "requirement": "Teams in Work",
+      "disposition": "retain-original-coding-and-integrated-core-subsets",
+      "qualified": "Original bounded coding edit/reviewer/artifact/reopen/Stop/workspace-isolation receipts keep original identities; integrated team authoring/execution applicability is bounded by retained 2.2.31 core.",
+      "limits": "No whole-task portfolio upgrade and no repeated passing coding edit required solely for release/date refresh."
+    },
+    {
+      "ids": [
+        "C15.1",
+        "C15.3",
+        "C16.1",
+        "C16.2",
+        "C16.3"
+      ],
+      "requirement": "Reusable mixed teams/reviewed skills/handoff",
+      "disposition": "retain-2.2.31-core-source-contract-applicability",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-reusable-team-entrypoint-20261011/c15-a8ca0e94-f452-41be-8ab6-b0b5db77850e/integrated-team-operation.json",
+      "qualified": "Immutable per-role model/skill definition and deployment, real product/designer/reviewer attempts and artifacts, pinned revision preservation, visible streaming and renderer reopen.",
+      "limits": "Broad C15/eight-harness/private forged-claim coverage remains deferred/unqualified; changed packaged Cadence documentation is not certified by this team-core operation."
+    },
+    {
+      "ids": [
+        "C04",
+        "C14.2",
+        "C18.2"
+      ],
+      "requirement": "Ordinary direct native Codex/Claude",
+      "disposition": "retain-original-2.2.25-operations-with-source-parity-through-2.2.32",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-native-provider-applicability-2.2.30-20261010.md",
+      "limits": "Current authentication, entitlement, Windows and final package acceptance remain separate. No gateway substitution or date-only rerun."
+    },
+    {
+      "ids": [
+        "C10.2",
+        "C10.3",
+        "C16.2"
+      ],
+      "requirement": "Feedback/GitHub",
+      "disposition": "retain-original-effect-provenance-no-new-external-write",
+      "qualified": "Issue #63 and original approved uncertain-effect recovery/upgrade evidence remain their original operations.",
+      "limits": "The generic github-feedback-operation recipe was the v1 refusal scope for delivery17 and supplies no new GitHub operation or credit."
+    },
+    {
+      "ids": [
+        "C17.1",
+        "C17.2",
+        "C17.3"
+      ],
+      "requirement": "Synthetic executive representation",
+      "disposition": "pending-fresh-human-operation",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-representation-main-window-20261011/integrated-synthetic-representation-7891d8b1-59e3-454c-81e6-2b729a0c9208/evidence.json",
+      "challenge": {
+        "approvalId": "6e788e88-3cbf-4f95-b0a3-2e1faa3fae83",
+        "challengeId": "6e788e88-3cbf-4f95-b0a3-2e1faa3fae83",
+        "deadline": "2026-10-11T00:19:07.256Z",
+        "status": "approval-outcome-unresolved",
+        "complete": false,
+        "humanReceiptPresent": false,
+        "lateReplayAuthorized": false
+      },
+      "remaining": "Fresh exact synthetic file_read challenge with human response and separate authoritative native decision before expiry, same-turn read/disclosure, existing workspace/audience/expiry/revocation/offboarding refusals without forbidden effects.",
+      "limits": "Role/grant preparation is not read success; no expiry-refusal behavior, person fidelity, organizational authority or whole-process representation reopen is inferred."
+    },
+    {
+      "ids": [
+        "C18.2",
+        "C06",
+        "C14"
+      ],
+      "requirement": "Desktop recovery/installed lifecycle",
+      "disposition": "retain-proven-subsets-preserve-affected-integrated-gaps",
+      "remaining": "Exact integrated pending-approval runtime restart/history and exact installed owned-child lifecycle remain unqualified by the supplied completed 2.2.31/32 operations. The existing renderer reconnect/cancel operation covers only its named subset; final installed acceptance must preserve borrowed external identities and supported rollback limits.",
+      "evidence": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-pending-approval-restart-recovery-2.2.30-20261010.json",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-graceful-quit-2.2.30-20261010.json",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-desktop-upgrade-rollback-limits-2.2.30-20261010.md"
+      ],
+      "limits": "2.2.30 restart/Quit evidence remains historical: integrated UAR 308aea46→74194623 and changed host admission/startup/approval paths do not inherit a new integrated package pass. No broad recovery matrix or destructive downgrade experiment added. In-place migrated-profile downgrade/reverse schema migration remains unsupported."
+    },
+    {
+      "ids": [
+        "C18.2",
+        "C18.3",
+        "afc-integrated-customer-qualification"
+      ],
+      "requirement": "Required-platform publication",
+      "disposition": "pending-final-2.2.32-two-platform-publication",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/mac-arm64-live-site-2.2.31-20261011.json",
+      "observed": "Public Mac ARM64 2.2.31 from Boss21b9c659, hash b3705f4c1cb0f279e610f431b2872588bbee60a94329c5d52b0cde25cbbcd353, is present in the recorded actual live bundle; Windows fallback remains2.2.30.",
+      "remaining": "Publish final exact2.2.32 Mac ARM64 and Windows x64 installers with actual source/bytes/signing metadata and matching live website. Independently bind publication to the supported Cadence obligation; this delta does not clear it.",
+      "limits": "Mac31 site publication does not publish Mac32 or Windows32 and supplies no installed acceptance; deferred architectures cannot block this customer milestone."
+    },
+    {
+      "ids": [
+        "C18.2",
+        "afc-integrated-customer-qualification"
+      ],
+      "requirement": "Final native installed operation/operator acceptance",
+      "disposition": "pending-exact-final-candidate",
+      "remaining": "Mac ARM64 and Windows x64 public final-candidate installation, required native operation and operator acceptance remain pending. Local Mac32 build/launch/actual-v1-refusal is an affected production pass, not final customer acceptance.",
+      "limits": "No substitution of local Mac31 install, older accepted releases, byte availability or source parity. No optional Intel/Windows ARM64 gate added."
+    }
+  ],
+  "accounting": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "observedAt": "2026-10-11T00:55:51.423Z",
+    "stateReceipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/state.json",
+      "sha256": "340bd2b9d7dc34ec21d46a4a2402b3178324bef45f159504f8aa42daf1c6f829",
+      "eventSequence": 1455
+    },
+    "successfulDeliveries": 17,
+    "activeIterationId": null,
+    "historicalCode": "61/61 tasks;20/20 changes",
+    "portfolioTerminal": "43/61",
+    "qualified": 42,
+    "historicalSkippedDuplicate": 1,
+    "newTaskCredit": [],
+    "newDeliveryCredit": 0,
+    "kbdMutated": false,
+    "cadenceMutated": false,
+    "qualificationLedgerMutated": false
+  },
+  "limitations": [
+    "Bounded source/evidence applicability receipt only; no product operation, test, build, publication or ledger change performed.",
+    "Passing source-contract applicability preserves original operations and package identities; final customer acceptance remains human-owned.",
+    "Scope is the existing customer requirement view, not whole portfolio completion."
+  ],
+  "securityHardeningAdded": "none; existing v1 OS containment and strict v2 admission are attributed to the completed operation, not this document"
+}

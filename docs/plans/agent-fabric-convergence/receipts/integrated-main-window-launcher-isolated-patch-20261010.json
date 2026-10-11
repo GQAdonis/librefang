@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "isolated-main-window-launcher-patch",
+  "recordedAt": "2026-10-11T00:02:55.979Z",
+  "observedFailureReceipt": "integrated-main-window-launcher-observed-repair-20261010.json",
+  "scope": "Main-window target selection only; readiness, timeout, cancellation and localhost authority unchanged.",
+  "frozenInputs": {
+    "full": "547a9bc93de61246bbe38567796d5fa2d0f616f0",
+    "mini": "6c63c0acec67444e30f65461836e7a943316e242"
+  },
+  "isolatedWorktrees": {
+    "full": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-main-window-full",
+    "mini": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-main-window-mini"
+  },
+  "branch": "codex/boss-launch-main-window-20261010",
+  "oldPredicate": "item.type === 'page' && item.webSocketDebuggerUrl && item.url !== 'about:blank'",
+  "newPredicate": "item.type === 'page' && item.webSocketDebuggerUrl && item.url.includes('/windows/main/index.html')",
+  "originalLauncherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+  "repairedLauncherSha256": "1a5dffa5cd5a5eef2ab6a1ce4b4249a656040759387cdf01385e80821e79a726",
+  "payloadCopies": "Same generated launcher bytes written to each source and Claude/Codex copy in both isolated worktrees.",
+  "operationStatus": "pending-root-actual-operation-evidence",
+  "rootOperationSession": 40187,
+  "committed": false,
+  "checksRun": [],
+  "frozenSourceModified": false,
+  "appLaunchedByPatchOwner": false,
+  "cadenceMutated": false
+}

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "confirmed-packaged-durable-turn-adapter-gap",
+  "sourceRefs": {
+    "boss": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "appAsarSha256": "2f83a209d73feebd9f4fd99200804c17bff1fc4e402102234a9145ce66a8ffc4",
+    "sidecarSha256": "e8282f646b850f644a3046396f9234766c6e69c8fdff9301072fc45c42279466",
+    "installerSha256": "3be06ee7815d6760d27fcb5aaf1d65a8a29fc174e2ea98bf7544c21066ce4053",
+    "installedVersion": "2.2.26",
+    "operationDriverRevision": "bcd026dc636969136610c967a3cb8b813ebccbec",
+    "selectedScenarioSha256": "92327a38436cff6291399202cd42c027dcb54d65d7d55361a448a58c77bacdd5",
+    "installationReceiptSha256": "b98269f6525738183ff03c89fc7c195eb99c65fd82c6adf8f530607df7cc0c43"
+  },
+  "evidence": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/synthetic-representation-2-2-26-8d9fccba-51aa-410f-8842-92847f62d4e1/evidence.json",
+  "evidenceSha256": "bf34be930e2382e75437d7e8e4e41fb6265556eee665b21842cd769bab420d7c",
+  "status": "failed",
+  "stage": "synthetic-role-and-applied-scoped-grant",
+  "code": "INTERNAL",
+  "diagnostic": {
+    "route": "prometheus.uar.durable.submit_turn",
+    "code": "INTERNAL",
+    "category": "host-adapter",
+    "redactedMessage": "UAR operation agent-instances.turn is unavailable"
+  },
+  "completedStages": [
+    {
+      "name": "isolated-gateway-and-native-model-prepared-through-typed-settings",
+      "passed": true
+    },
+    {
+      "name": "synthetic-role-and-exact-private-grant-applied",
+      "passed": true
+    }
+  ],
+  "repair": {
+    "bossSource": "5b317b64c65928492f913fc41946d55ee099b472",
+    "path": "src/main/ai/runtime/uar/UarAdministrationAdapter.ts",
+    "operation": "agent-instances.turn",
+    "method": "POST",
+    "auth": "owner",
+    "safety": "Existing workspace, generation and feature gates retained",
+    "build": "running",
+    "functionalOperation": "pending"
+  },
+  "qualificationCredit": false,
+  "newCadenceDelivery": false
+}

@@ -1,0 +1,6 @@
+{
+  "id": "integrated-native-payload-wait-20261010",
+  "kind": "resource-wait",
+  "actor": "lead-release",
+  "note": "Actual UAR and integration native packaging is running on GitHub; local application packaging awaits those immutable bytes. Desktop operation implementation continues independently."
+}

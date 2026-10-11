@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "task": "C16.1",
+  "status": "implemented-and-operated-on-mac-arm64",
+  "recordedAt": "2026-10-08T20:01:45.273Z",
+  "builtSource": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+  "driverRepair": "8478e6350c1944a55bbc4f160f8d2a253fe5865f",
+  "operation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/reopen-recovery-evidence.json",
+  "composedOutcome": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/composed-operation-outcome.json",
+  "adoptedReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/cadence-operation-receipt.json",
+  "miniMainInclusion": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/mini-main-inclusion-39b2c3a-20261008.json",
+  "build": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c16-frozen-build-39b2c3a-20261008.json",
+  "limits": [
+    "Original full procedure exited 1 after successful six-specialist inference; failed saved-team reopening only was recovered.",
+    "Native Windows operation and installed customer acceptance remain pending.",
+    "No claim of cost/strength automatic model-policy support or completion of C15.1.",
+    "No whole C16 phase certification or archive claimed."
+  ],
+  "result": "Six specialist roles plus coordinator authored and operated; immutable revisions, scoped outputs and evidence instructions, manual gateway models, artifacts and saved reopening retained."
+}

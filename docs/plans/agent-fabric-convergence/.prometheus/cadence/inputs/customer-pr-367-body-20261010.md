@@ -1,0 +1,14 @@
+Representation grant creation rejected its authenticated issuer by comparing a raw principal with an encoded storage-owner key. Keep those identities separate and attach private, scoped grant revisions to durable instances. Turns and effects revalidate current authority, including revocation and offboarding; portable definitions contain no credentials or grants.
+
+Correct three other defects demonstrated during actual customer operations:
+- Persisted native-tool settings were ignored at startup. Hydrate them from the initialized settings manager before registration, preserving defaults and disabled categories.
+- Team execution captured resilience settings at server startup despite next-turn application. Resolve current policy at admitted turn creation, preserving per-agent overrides and existing defaults.
+- Authenticated BossFang alternate-instance discovery received HTTP 401 on GET /api/uar/providers. ModelRead admits that exact read alias; separate provider-administration authentication, principal/workspace scopes, expiry and revocation remain enforced.
+
+The represented turn also failed with world_state_budget_exceeded: 11,553 required tokens against a resolved 8,192. Capacity lookup now retains explicit host, registry and endpoint precedence, then uses the captured underlying catalog model. Generic defaults and inference routing remain unchanged. Preserve the static capacity failure category for private diagnostics.
+
+A real 2.2.28 synthetic file-read approval exposed one further contract gap: native effect ownership is paired-host even for UAR's trusted standalone adapter, but the durable UI rejected it. Add decisionOwner separately, deriving native decision routing from the exact captured standalone runtime epoch. Preserve effect ownership and genuine host decision recording. The standalone safe display exposes only the validated read target for exact human review.
+
+The desktop counterparts are The Boss PRs #65 and #66. Current native source is 308aea46ff26e7f61340281bb51f67ebe5351569, pinned for The Boss 2.2.29 at 824fa5ed40999830196b6c5125faf2ebcf6a8ce4. Actual 2.2.28 local build and installation passed; scoped alternate-instance discovery and real delegation, plus gateway outage/restoration passed. The approval attempt was cancelled without approval or effect. The completed combined correction is pushed and its actual native packaging build is running. Affected 2.2.29 operation and candidate-specific installed acceptance remain pending. No intermediate suites or standalone verification builds ran.
+
+Security boundaries: authenticated principal versus storage owner, scoped model reads, workspace/instance ownership, private grant persistence and current authority at effects. Existing scheduling and portable definitions retain their roles. Unrelated pnpm-lock.yaml edits are excluded.

@@ -1,0 +1,13 @@
+{
+  "image": "ghcr.io/prometheus-ags/the-boss-surreal-memory",
+  "digest": "sha256:d1f0aa5f6327922d87231b78c633496bf22f0f58d5f69db0ba426787d9cbd111",
+  "source": {
+    "repository": "Prometheus-AGS/surreal-memory-server",
+    "revision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4"
+  },
+  "recipeSource": {
+    "repository": "Prometheus-AGS/surreal-memory-server",
+    "revision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4"
+  },
+  "workflowRun": "38060700409"
+}

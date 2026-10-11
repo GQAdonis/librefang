@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-bossfang-authenticated-alternate-uar-operation",
+  "recordedAt": "2026-10-10T03:13:17.855Z",
+  "version": "2.2.28",
+  "platform": "darwin-arm64",
+  "status": "passed",
+  "complete": true,
+  "passed": true,
+  "sources": {
+    "boss": "6de6477cdddb0886387dcb752913c43bf3ec3de2",
+    "uar": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4",
+    "appAsarSha256": "d931ccf8aef130192bec9de4ea9bf7c11dc478e191aef89449fce8ff55df4386",
+    "sidecarSha256": "50f8365ed86545502345687e0dac253cbc044752f227fa8766897e00dc8d60bb",
+    "installerSha256": "d4bd7a51715b2e6c53d0162a97a5094245fb77e549f33e34fafbbbb273d30a94",
+    "installedVersion": "2.2.28",
+    "operationDriverRevision": "b80984cae4bd14ca86e1e400b4a5b1c044cf223f",
+    "selectedScenarioSha256": "dc555450ed926432a7ca8d000fa909ff8a539277283b9aaf59ce681d451cb5c1",
+    "installationReceiptSha256": "474006412ec810ed6f138bfafb5d933228f7c05a0fa541dc7ecd968cf7104584"
+  },
+  "startedAt": "2026-10-10T03:09:32.295Z",
+  "finishedAt": "2026-10-10T03:10:19.957Z",
+  "checks": [
+    "external-scoped-credential-authenticated-discovery-and-identity",
+    "real-external-no-effect-inference-correlated-to-selected-instance-and-workspace"
+  ],
+  "correlation": {
+    "diagnosticId": "7fb08cec-ebb1-4768-afd6-703ccf665e11",
+    "instanceId": "customer-external-a1aabab1-b2ab-43f6-9d01-c4637b1ae279",
+    "workspaceId": "7c7c23c8-ab9a-4c4b-a045-5ef227b0af9b",
+    "taskId": "7fb08cec-ebb1-4768-afd6-703ccf665e11",
+    "status": "succeeded",
+    "startedAt": "2026-10-10T03:10:14.383Z",
+    "completedAt": "2026-10-10T03:10:18.548Z",
+    "hasError": false
+  },
+  "restrictedGrant": {
+    "instanceId": "customer-external-a1aabab1-b2ab-43f6-9d01-c4637b1ae279",
+    "workspaceIds": [
+      "7c7c23c8-ab9a-4c4b-a045-5ef227b0af9b"
+    ],
+    "operations": [
+      "discovery",
+      "model_read",
+      "model_completion",
+      "full_harness_delegation"
+    ],
+    "expiresInSeconds": 900,
+    "principalValueRecorded": false,
+    "credentialValueRecorded": false
+  },
+  "cleanup": {
+    "selectionRestored": true,
+    "primaryProcessUnchanged": true,
+    "secondaryAliveAfterBossFangSwitch": true,
+    "externalInventoryRemoved": true,
+    "grantRevoked": true,
+    "secondaryOwnedProcess": {
+      "ownedProcessStarted": true,
+      "processId": 43865,
+      "termination": "stdin-eof",
+      "exitCode": 0,
+      "signalCode": null,
+      "stopped": true
+    }
+  },
+  "boundaries": {
+    "hostLaunchTokenShared": false,
+    "secretsRecorded": false,
+    "repeatedPortRestartDashboardOperations": false,
+    "externalCancellationRequested": false
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/bossfang-alternate-selected-uar-a3839dbd-ac47-4023-92c6-19eb118b67d4/evidence.json",
+    "sha256": "90ddeff1f8886c3700d9d5e1bcc6a2bb761fd4718e4c2a96b80de67878cd7a07"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/bossfang-alternate-selected-uar-a3839dbd-ac47-4023-92c6-19eb118b67d4/operation.json",
+    "sha256": "e8848ed1238b0d8ff85248d4e43fb7e167fad33fc001cbdd3f4c13eb8d861f87"
+  },
+  "historicalFailurePreserved": "Earlier ff996 fixture failure remains separate and unchanged; corrected fixture only, same installed Boss6de/UAR66 source.",
+  "installedAcceptance": {
+    "darwinArm64": "pending for final corrected candidate",
+    "win32X64": "pending for final corrected candidate"
+  },
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "verification": {
+    "newBuildsRun": [],
+    "testSuitesRun": [],
+    "additionalOperationsByEvidenceAgent": []
+  },
+  "limits": [
+    "Pass is actual scoped discovery and real no-effect inference correlated to selected alternate instance/workspace.",
+    "Primary selection/process survived; alternate process stayed alive after BossFang switch and was later stopped only by its owning stdin EOF.",
+    "Cancellation was not requested in this alternate-instance operation; earlier managed workflow cancellation evidence remains its own receipt.",
+    "Operation is not operator acceptance or a newly finalized Cadence delivery."
+  ]
+}

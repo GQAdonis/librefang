@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "historical-publication-cli-operation",
+  "sourceRoot": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+  "disposableRoot": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-historical-operation-QVJnpY/state",
+  "cli": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+  "releaseId": "github:Prometheus-AGS/the-boss:408603047",
+  "results": [
+    {
+      "operation": "first-debt",
+      "exitCode": 0,
+      "refused": false
+    },
+    {
+      "operation": "first-debt-replay",
+      "exitCode": 0,
+      "refused": false
+    },
+    {
+      "operation": "second-debt-same-release",
+      "exitCode": 0,
+      "refused": false
+    },
+    {
+      "operation": "mismatched-source",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "operation": "missing-scope",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "operation": "conflicting-release",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "operation": "backwards-target",
+      "exitCode": 1,
+      "refused": true
+    },
+    {
+      "operation": "altered-evidence-hash",
+      "exitCode": 1,
+      "refused": true
+    }
+  ],
+  "successfulDeliveries": 15,
+  "sourceStateUnchanged": true,
+  "deliveryAndAcceptanceRecordsUnchanged": true,
+  "externalEffectsDispatched": false,
+  "recordedAt": "2026-10-10T14:47:30.270Z"
+}

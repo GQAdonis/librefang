@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "kind": "scope-coverage",
+  "status": "success",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "verifiedAt": "2026-10-10T14:45:26.849Z",
+  "evidenceRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+      "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+      "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+      "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+      "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+      "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+      "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+      "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+      "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+      "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+    }
+  ],
+  "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+  "contentManifestDigest": "78199275e55f42513e7b6743d2ce12559b930844e02c9ee0c0c1fbd5227cf5fe",
+  "candidateSourceRefs": [
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+      "revision": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "fingerprint": "144045312c1662103cee24273dd46707f7b1e74df9553366a4f811b27ab29e03",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini",
+          "revision": "e3fed05944e6b365ad74af30926b875e6857190f",
+          "fingerprint": "bd61c46c7270db96a34c2e82e76ea2fcb50c54a7c768accdafe6bb5bfde7c446",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/liter-llm",
+              "name": "tools/liter-llm",
+              "initialized": false,
+              "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+              "name": "tools/prometheus-knowledge",
+              "initialized": false,
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/surreal-memory-server",
+              "name": "tools/surreal-memory-server",
+              "initialized": false,
+              "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "resources/prometheus-skills-mini"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "revision": "2be479bd63a80c7fc3bd2699aac936c759a320be",
+      "fingerprint": "71db06a61288d8da4efb2b592ea18064910c5a9c4378024864b80bc7751f7ca0"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/bossfang-selected-uar-release",
+      "revision": "295ff50201fbb09a6e22390de85d9b374c3d9edd",
+      "fingerprint": "d8108776e232bdb96e92b0694a300f049dac28f93711ac76d27bd9a9b28776e5"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+      "revision": "035678b6290353a5988a5a96668d08a9781b1471",
+      "fingerprint": "73f2b81a755be572080d3195bfade43aeb2fc49bc7d1100d38caa7c57f50bd93",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/crates/prometheus-skill-system",
+          "name": "crates/prometheus-skill-system",
+          "initialized": false,
+          "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/frontend/packages/prometheus-entity-management",
+          "name": "frontend/packages/prometheus-entity-management",
+          "initialized": false,
+          "revision": "959839a88e65704014bab0bdd055df17fb210298",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/models.dev",
+          "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+          "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+          "name": "models.dev"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/liter-llm",
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+          "name": "vendor/git/liter-llm"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/rust-mcp-filesystem",
+          "name": "vendor/git/rust-mcp-filesystem",
+          "initialized": false,
+          "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+          "workingTree": "unobserved"
+        }
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "kind": "tasks",
+      "id": "C14.1",
+      "basis": "source-applicability",
+      "reason": "Retain actual normal Work coding preset, selected workspace/model, natural-language bounded README edit, worker/reviewer attempts and attributed artifacts. Later whole-process reopen plus cancellation/isolation receipts close the named partial checks. Exact paired-host execution/scope/package/renderer objects match2.2.26 at release2.2.30. Original administration receipt remains a bounded lifecycle subset; no complete remote administration or Windows acceptance claim.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    },
+    {
+      "kind": "tasks",
+      "id": "C14.2",
+      "basis": "source-applicability",
+      "reason": "Retain canonical issuer/challenge, authenticated one-decision/two-renderer stale-opposite refusal from original C14.2 and current Work authoritative approval/cancel/no-replay subset. Exact decision adapter/history/record objects match; additive optional decisionOwner preserves paired-host routing. Actual2.2.30 ordinary pending challenge history recovery is separate passing evidence, not represented-read or broad drain qualification.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    },
+    {
+      "kind": "tasks",
+      "id": "C14.3",
+      "basis": "source-applicability",
+      "reason": "Retain actual compiled authenticated embedded dashboard, visible configuration persistence and workflow controls from public2.2.25. Exact desktop BossFang/MiniApp objects and pinned native BossFang0899e499 match final release. This covers delivered Mac console; mandatory Windows installed/configuration acceptance is still pending and is not created by publication.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    },
+    {
+      "kind": "tasks",
+      "id": "C14.4",
+      "basis": "source-applicability",
+      "reason": "Retain actual shared selected-UAR workflow, original prepared write/approval/denial/cancellation, singular run correlations and preserved Work selection/PID; port/restart and same-profile app replacement retain settings. Desktop BossFang service/IPC/settings objects and binary source pin match. UAR paired-host team/effect contract remains applicable; no second supervisor or new grant authority inferred. Windows installed acceptance remains pending.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    },
+    {
+      "kind": "changes",
+      "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "basis": "source-applicability",
+      "reason": "Publication covers the frozen teams-in-work-and-shared-bossfang-repair customer delivery: actual selected normal-profile coding edit, worker/reviewer/artifact/approval journey, retained whole-process reopening, cancellation/isolation and shared BossFang/dashboard subset. Exact selected contract comparisons preserve applicability to2.2.30; whole-task/profile/Windows installed acceptance is not inferred.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    },
+    {
+      "kind": "outcomes",
+      "id": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile",
+      "basis": "source-applicability",
+      "reason": "Publication covers the frozen teams-in-work-and-shared-bossfang-repair customer delivery: actual selected normal-profile coding edit, worker/reviewer/artifact/approval journey, retained whole-process reopening, cancellation/isolation and shared BossFang/dashboard subset. Exact selected contract comparisons preserve applicability to2.2.30; whole-task/profile/Windows installed acceptance is not inferred.",
+      "evidenceRefs": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/historical-publication-2.2.30/source-applicability.json",
+          "sha256": "97079c876bbb75dd2fc1f21401ef2b77fd165d18f1686d7bed961d22f219d4e3"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-2.2.28-evidence-applicability-20261010.md",
+          "sha256": "2ee1e7643d56f21dd2cf340c74262878ae23866309726280c9902abc77d74245"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-core-proxy-repaired-2.2.26-20261010.json",
+          "sha256": "55d3f0ece161517652a8184769dd2fd6acf1f6b1095fb0f74c1f6bb6e1233357"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-retained-reopen-2.2.26-20261010.json",
+          "sha256": "5dbcca874b6f48cdd64e2a6e115e01e0cb2b6c964b430b65d0917b25888619ad"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-coding-cancellation-isolation-2.2.26-20261010.json",
+          "sha256": "4789bbd33d2c0f253f13c2816ed76838ecfbaf57a673378def126f2cb85b2348"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c142-5e4b9eca-fabd-46f5-90f6-0e884cfc7f15/evidence.json",
+          "sha256": "f6eebe3017f1a6dacbc7625ee48da1590f28ce24b5688154b986fcf9579f0d91"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-operation.json",
+          "sha256": "a8e17d82a47d00d9601438590b128968b7284c523d9401a6bfdbadebb68193bd"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-mac-2.2.25-bossfang-20261009-evidence.json",
+          "sha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-bossfang-settings-persistence-2.2.26-20261010.json",
+          "sha256": "93cb6d5e626a1ed1a3d702b2b9c8186aef89d818983898ae3bd47d5421fade8a"
+        }
+      ]
+    }
+  ],
+  "coverageBoundary": "Publication obligation for original bounded customer delivery; no completion or installed acceptance credit",
+  "wholeTaskCredit": false,
+  "wholePhaseCredit": false
+}

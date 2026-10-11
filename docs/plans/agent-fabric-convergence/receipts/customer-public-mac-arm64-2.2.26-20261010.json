@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-native-installer-download",
+  "platform": "darwin-arm64",
+  "version": "2.2.26",
+  "source": "5b317b64c65928492f913fc41946d55ee099b472",
+  "startedAt": "2026-10-10T01:22:36.762Z",
+  "finishedAt": "2026-10-10T01:23:04.855Z",
+  "status": "passed",
+  "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-mac-arm64.dmg",
+  "size": 711782548,
+  "sha256": "2b6ead9a492ed4862e97b8fb69455a73f0706cc10a2ac0c321838fc8659222cb",
+  "signing": "Developer ID (notarized)",
+  "signingEvidence": "immutable platform manifest plus successful signing/notarization installer workflow 38010625261",
+  "publicationWorkflow": 38012652171,
+  "website": "pending-live-deployment",
+  "installedAcceptance": "pending",
+  "newCadenceDelivery": false
+}

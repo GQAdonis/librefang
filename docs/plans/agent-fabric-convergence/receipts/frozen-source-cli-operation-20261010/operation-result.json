@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "kind": "authentic-frozen-source-cli-replay-and-incomplete-refusal",
+  "startedAt": "2026-10-10T20:54:53.195Z",
+  "finishedAt": "2026-10-10T20:54:55.557Z",
+  "disposableRoot": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-frozen-source-real-operation-KT0YRe",
+  "liveRootMutatedByThisOperation": false,
+  "applicationLaunched": false,
+  "buildPerformed": false,
+  "externalPublicationPerformed": false,
+  "commands": [
+    {
+      "name": "historical-replay-full",
+      "cli": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+      "input": "historical-replay-input.json",
+      "commandId": "c15-frozen-source-reconciliation-20261008",
+      "expectedExitCode": 0,
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+        "candidate",
+        "reconcile-frozen",
+        "--root",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-frozen-source-real-operation-KT0YRe",
+        "--input",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/frozen-source-cli-operation-20261010/historical-replay-input.json",
+        "--command-id",
+        "c15-frozen-source-reconciliation-20261008"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutSha256": "0e4a1f2c34b2e137edca396704207c24e034cdc106485478dc4f2de1c61211aa",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "historical-replay-mini",
+      "cli": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/skills/delivery-cadence/scripts/cadence.mjs",
+      "input": "historical-replay-input.json",
+      "commandId": "c15-frozen-source-reconciliation-20261008",
+      "expectedExitCode": 0,
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini/skills/delivery-cadence/scripts/cadence.mjs",
+        "candidate",
+        "reconcile-frozen",
+        "--root",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-frozen-source-real-operation-KT0YRe",
+        "--input",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/frozen-source-cli-operation-20261010/historical-replay-input.json",
+        "--command-id",
+        "c15-frozen-source-reconciliation-20261008"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "stdoutSha256": "0e4a1f2c34b2e137edca396704207c24e034cdc106485478dc4f2de1c61211aa",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "actual-incomplete-refusal",
+      "cli": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+      "input": "actual-incomplete-operation-input.json",
+      "commandId": "frozen-source-actual-incomplete-refusal-20261010-v1",
+      "expectedExitCode": 1,
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/cadence.mjs",
+        "candidate",
+        "reconcile-frozen",
+        "--root",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-frozen-source-real-operation-KT0YRe",
+        "--input",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/frozen-source-cli-operation-20261010/actual-incomplete-operation-input.json",
+        "--command-id",
+        "frozen-source-actual-incomplete-refusal-20261010-v1"
+      ],
+      "exitCode": 1,
+      "signal": null,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "7e539ece669ada79acf8762f15f75743aa2b3d5d9553c41248a6d7751ab2b1e2"
+    }
+  ],
+  "completedChecks": {
+    "historicalReplayMatchesKnownReceipt": true,
+    "fullMiniReplaySameReceipt": true,
+    "actualIncompleteProofRefused": true,
+    "disposableStateBytesUnchanged": true,
+    "eventsSeqUnchanged": true,
+    "runClockUnchanged": true,
+    "deliveriesUnchanged": true
+  },
+  "stateBeforeSha256": "ec435a87facb9e35b39415f9ed17dfb9df37f03f6a2a4ced084a73d1a2eb1a0d",
+  "stateAfterSha256": "ec435a87facb9e35b39415f9ed17dfb9df37f03f6a2a4ced084a73d1a2eb1a0d",
+  "originalRunStartedAt": "2026-10-06T17:07:34.783Z",
+  "successfulDeliveries": 15,
+  "beforeEventsSeq": 1359,
+  "afterEventsSeq": 1359,
+  "limitations": [
+    "Historical replay confirms durable command-ID idempotency, not a new positive reconciliation.",
+    "No passing Boss operation was created or claimed. Actual 2.2.31 proof remains incomplete.",
+    "New positive multi-source/driver and recursive dirty-snapshot paths remain pending exact authentic feature/artifact evidence.",
+    "Producer-bound generated-output admission remains pending exact authentic feature/artifact evidence."
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "id": "mac-arm64-build",
+  "reason": "Previous attempt exited before application compilation because the required local UAR source environment binding was omitted. Restore THE_BOSS_LOCAL_UAR_SOURCE_DIR to the same frozen 74194623 stage; preserve the failed attempt and candidate."
+}

@@ -1,0 +1,1242 @@
+{
+  "schemaVersion": 1,
+  "kind": "specialist-team-packaged-operation",
+  "creationTaskRef": "C16.1",
+  "complete": false,
+  "startedAt": "2026-10-08T19:38:50.950Z",
+  "sourceRefs": {
+    "boss": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+    "uar": "b0070b42e7d39d06dca83094cd7868920760cbed",
+    "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sourcePinSha256": "931688d595e15629c1c39bb1e23959cc41701b22bf6ae7060006ec15b5feb6a3",
+    "appAsarSha256": "fc729e323193e4934983579fc3201031caa2ef496c7875e89f74bd65d523497a",
+    "sidecarSha256": "16832a42f42972e0faa45c978fb90a44c25e937126a5b84c3b6d9161a02da445",
+    "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+    "selectedScenarioSha256": "b6016e27c377e0a6830085d6a8afcc98f21c180d824ec53c15460b2c967c9291",
+    "scenarioFiles": {
+      "operate-reusable-team.mjs": "72c68322a91ca00b2bb616249d1de38284a47387320ddd3adac458c5d1df46a0",
+      "reusable-team-operation/scenario.mjs": "1289649125273f728e5e6844ab9aa57b9b880d3dd376bef81dde1ad7326c6f56",
+      "reusable-team-operation/io.mjs": "ab924d06c1dbb9418b9043dea8905063f50184aec8fbde2df3f4e4e751e11a2d",
+      "reusable-team-operation/live-output.mjs": "34c81d4a3bcd5f651ceffbf6d7cd9c53838231a9fb3dff3ce30616f540e7d792",
+      "reusable-team-operation/attempt-diagnostics.mjs": "c5a7a6126dfaac215f466cacccb7f4051557bc95b68fbc0b60e365007e1112af",
+      "reusable-team-operation/approvals.mjs": "35036430337f91128955f310a723a60032e0bae76c83c4f3eac6c37cae3ecb84"
+    }
+  },
+  "operationDriverSources": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/scripts/operate-specialist-team-authoring.mjs",
+      "sha256": "c8ff18bdac9f02e7b7597e34e410a1f9112795daa85184b43edefdb102d20df8"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/scripts/specialist-team-operation/scenario.mjs",
+      "sha256": "b6016e27c377e0a6830085d6a8afcc98f21c180d824ec53c15460b2c967c9291"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-specialist-team-authoring/scripts/specialist-team-operation/contracts.mjs",
+      "sha256": "147e0ca81dc0265f7815b62fa78d4f63236e0bf4b6333ba7fbdb59ee02b0613a"
+    }
+  ],
+  "checks": [
+    "seven-specialist-editor-persists-delivery-fields-and-manual-models",
+    "each-delivery-field-changes-new-immutable-identity-and-preserves-prior-revisions-and-resources",
+    "all-six-specialists-have-real-successful-manual-model-attempts-and-correlated-artifacts"
+  ],
+  "teamMutationSurface": "visible Settings authoring and Work controls",
+  "normalProfile": true,
+  "experimentalOptIn": false,
+  "modelChoice": "explicit-manual-configured-gateway",
+  "requestedPolicyCompliance": "unknown",
+  "credentialValueRecorded": false,
+  "restartScope": "renderer reload; application process restart not claimed",
+  "nativeWindowsAcceptance": "pending",
+  "revisions": [
+    {
+      "revision": 1,
+      "definition": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:team",
+        "version": "1.0.0",
+        "digest": "sha256:d126d5d2d919e777c69950a80b0d8575b68ab0f3d28dd5627f91d72bab66b06d"
+      },
+      "package": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+        "version": "1.0.0",
+        "digest": "sha256:44f161365e5ec3231b91b459ab159b6b9c811f06edeacc7a9986dae823feb953"
+      }
+    },
+    {
+      "revision": 2,
+      "definition": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:team",
+        "version": "1.0.1",
+        "digest": "sha256:089260028933c6790defb75e3986dc299dff0e54213d6293f9e0d430bafe05ce"
+      },
+      "package": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+        "version": "1.0.1",
+        "digest": "sha256:8ffd56862aefbf8ad24ac6c5a5dd8e3c0a853ed984ab0f775600b3e52bff6c50"
+      }
+    },
+    {
+      "revision": 3,
+      "definition": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:team",
+        "version": "1.0.2",
+        "digest": "sha256:382ff71e270271cacb2c25267b8f620ffadafc4d8e412b6c63f26f88468709b3"
+      },
+      "package": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+        "version": "1.0.2",
+        "digest": "sha256:171e1770773adb434e3aeaed6390274c8ac7eb9bd7fed74897d7ea0cc8e05421"
+      }
+    },
+    {
+      "revision": 4,
+      "definition": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:team",
+        "version": "1.0.3",
+        "digest": "sha256:f0b3317c8e543660d1f3a32e357abf0deeb1e33c4d34a34bcb1423a7b767eea1"
+      },
+      "package": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+        "version": "1.0.3",
+        "digest": "sha256:1f1ad85cf13fe4afb55f06c01498e61df98b7dbf5638596f9161297cd365e217"
+      }
+    }
+  ],
+  "approvals": {
+    "instructionSha256": "08eefa9ac599d480f57bbb38066afa3ecf2757b9d1e81e8d0110afe74d3f8674",
+    "readOnly": true,
+    "approvals": [
+      {
+        "approvalId": "f3a375a3-5c23-4f72-9a38-79526328ca40",
+        "attemptId": "1efd6937-2ee0-45cf-805d-e89c4d2acae6",
+        "runId": "fdd63435-9df9-4572-a1c6-be068093c89f",
+        "toolCallId": "call_e12efc2452ba48b2a28c5d72fc4d6f2c",
+        "toolName": "team_delegate",
+        "argumentsSha256": "0b6ac9e1bd6589b4771568ec4fd68b57f6596d07dace8856aba5bf41f1fc2f2f",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:41:06.633Z",
+        "pendingClearedAt": "2026-10-08T19:41:10.203Z"
+      },
+      {
+        "approvalId": "eb31985f-cbea-4ce7-8f80-8e5220f75a00",
+        "attemptId": "92cf861c-0d6d-4052-ab10-a7682445c6fb",
+        "runId": "eabfc144-3f12-4db4-8ca0-d1c7875c1041",
+        "toolCallId": "call_7bcdba31e48f476692fc16d5e4ce004f",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:41:22.472Z",
+        "pendingClearedAt": "2026-10-08T19:41:25.906Z"
+      },
+      {
+        "approvalId": "a67b3b3d-6bc8-44ad-aa53-5f05dce32c68",
+        "attemptId": "061080df-4666-43ce-b83a-e6503902b912",
+        "runId": "74ee4409-0583-452c-85b1-4b325b9f816c",
+        "toolCallId": "call_149a337ab1e14187b34d1d1842f5554b",
+        "toolName": "team_delegate",
+        "argumentsSha256": "4d844c5835dbaf35201e7d21bc9f472dacc6c73f41af7ae7f519f0160ebf7653",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:41:42.064Z",
+        "pendingClearedAt": "2026-10-08T19:41:46.830Z"
+      },
+      {
+        "approvalId": "9d42757a-2b0e-4a80-a1bf-3a8dbab2d2bd",
+        "attemptId": "2db3f375-c644-4ed4-a130-2eab0dc83a46",
+        "runId": "a9e51160-d3ce-4064-9092-5a778aa1714a",
+        "toolCallId": "call_b35a9ca139cb499ab42ccaa7e08b1a61",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:42:00.167Z",
+        "pendingClearedAt": "2026-10-08T19:42:07.266Z"
+      },
+      {
+        "approvalId": "3dd58cb9-8ef0-479f-881c-384462d73afd",
+        "attemptId": "6886093c-48da-4a04-a936-fe1eed82dc9d",
+        "runId": "f8697344-b15f-441f-9402-96f21328a231",
+        "toolCallId": "call_e4726cf87e92498284099ff943e7213c",
+        "toolName": "team_delegate",
+        "argumentsSha256": "9b58bd1accd83dff7c293b95dc92e6dcf2eba0d0b263374566b03fa03744b30f",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:42:25.289Z",
+        "pendingClearedAt": "2026-10-08T19:42:32.233Z"
+      },
+      {
+        "approvalId": "4cd150ce-51ba-4a2a-afa4-9e62b010676a",
+        "attemptId": "9898395f-f7c8-4f47-a4ef-abbdf692dc63",
+        "runId": "bd891957-7d9e-476b-b040-d5a1b3c4eab3",
+        "toolCallId": "call_83ee22546b6548259137441c6d076a49",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:42:45.473Z",
+        "pendingClearedAt": "2026-10-08T19:42:55.167Z"
+      },
+      {
+        "approvalId": "c82bce39-4cbb-4c60-a4e2-5c354ff5ada5",
+        "attemptId": "4d1184f9-9cfa-4a08-8556-68a3d1e8992d",
+        "runId": "dbad4b82-a681-44ab-a19c-48a96d76ce7d",
+        "toolCallId": "call_3055987c5b054301ac2de04c5e65d475",
+        "toolName": "team_delegate",
+        "argumentsSha256": "7b65ee002da5a53bef63de1c759cc369db4ad1f7c2659b3da35f3bf91fbbc9f6",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:43:12.470Z",
+        "pendingClearedAt": "2026-10-08T19:43:20.288Z"
+      },
+      {
+        "approvalId": "a0f58081-f615-471a-83c1-535486f7923c",
+        "attemptId": "880b9a18-b206-4807-974c-3fb10a873367",
+        "runId": "66e455be-2bbf-477d-84f1-da76afed123f",
+        "toolCallId": "call_e56babda75e242378ec8c82843cdac45",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:43:39.666Z",
+        "pendingClearedAt": "2026-10-08T19:43:50.670Z"
+      },
+      {
+        "approvalId": "ac417055-9234-4430-9992-ee47dfe0cf41",
+        "attemptId": "b2b27fe4-ad7d-40bf-a9f4-39bddb7c5c44",
+        "runId": "3d29a0fd-41c0-4321-8237-475717f28e7b",
+        "toolCallId": "call_c0887c7aa33b4707b95c7fa2fbef93ea",
+        "toolName": "team_delegate",
+        "argumentsSha256": "bcdca39c3a757a69f5ea292e172c9345e96a73bfe840a22ce5c1f5fae4e8a965",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:44:07.994Z",
+        "pendingClearedAt": "2026-10-08T19:44:17.909Z"
+      },
+      {
+        "approvalId": "e641d5cd-7937-4ae9-ba6a-cf470e71f58e",
+        "attemptId": "be66253e-d29e-4194-ad2c-d06d601b61ac",
+        "runId": "4f57abd0-5163-42ca-b24c-e5d051588c51",
+        "toolCallId": "call_fb610615d4b34f349276c611cd92b8fe",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:44:32.883Z",
+        "pendingClearedAt": "2026-10-08T19:44:45.157Z"
+      },
+      {
+        "approvalId": "e8236deb-1d1c-4dbd-8515-daaa7d0517ff",
+        "attemptId": "e8a14301-ff69-4768-98b8-6cade0f9aa1e",
+        "runId": "eb23737d-61b1-4e13-8919-1770ac351840",
+        "toolCallId": "call_7e3dac81a85944099f71ed08d6e53ff7",
+        "toolName": "team_delegate",
+        "argumentsSha256": "7a3e720e23aadc5afc373ad714ce3e10d380ed9ea691442ec75e0095c3824fe6",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:45:02.228Z",
+        "pendingClearedAt": "2026-10-08T19:45:15.946Z"
+      },
+      {
+        "approvalId": "509e9fe5-27ab-469f-91ed-e8aa8cc0f2f6",
+        "attemptId": "b611a620-78d4-4c98-b1fa-6b9351b633cd",
+        "runId": "1d4e2329-7b25-4e15-92ca-983a8c6901ef",
+        "toolCallId": "call_450dee08d7e940b8b6c1b840190e40af",
+        "toolName": "filesystem__read",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "decision": "allow",
+        "clickedAt": "2026-10-08T19:45:34.344Z",
+        "pendingClearedAt": "2026-10-08T19:45:49.709Z"
+      }
+    ],
+    "requests": [
+      {
+        "approvalId": "f3a375a3-5c23-4f72-9a38-79526328ca40",
+        "attemptId": "1efd6937-2ee0-45cf-805d-e89c4d2acae6",
+        "runId": "fdd63435-9df9-4572-a1c6-be068093c89f",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "0b6ac9e1bd6589b4771568ec4fd68b57f6596d07dace8856aba5bf41f1fc2f2f",
+        "observedAt": "2026-10-08T19:41:04.989Z"
+      },
+      {
+        "approvalId": "eb31985f-cbea-4ce7-8f80-8e5220f75a00",
+        "attemptId": "92cf861c-0d6d-4052-ab10-a7682445c6fb",
+        "runId": "eabfc144-3f12-4db4-8ca0-d1c7875c1041",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:41:18.409Z"
+      },
+      {
+        "approvalId": "a67b3b3d-6bc8-44ad-aa53-5f05dce32c68",
+        "attemptId": "061080df-4666-43ce-b83a-e6503902b912",
+        "runId": "74ee4409-0583-452c-85b1-4b325b9f816c",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "4d844c5835dbaf35201e7d21bc9f472dacc6c73f41af7ae7f519f0160ebf7653",
+        "observedAt": "2026-10-08T19:41:40.236Z"
+      },
+      {
+        "approvalId": "9d42757a-2b0e-4a80-a1bf-3a8dbab2d2bd",
+        "attemptId": "2db3f375-c644-4ed4-a130-2eab0dc83a46",
+        "runId": "a9e51160-d3ce-4064-9092-5a778aa1714a",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:41:57.020Z"
+      },
+      {
+        "approvalId": "3dd58cb9-8ef0-479f-881c-384462d73afd",
+        "attemptId": "6886093c-48da-4a04-a936-fe1eed82dc9d",
+        "runId": "f8697344-b15f-441f-9402-96f21328a231",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "9b58bd1accd83dff7c293b95dc92e6dcf2eba0d0b263374566b03fa03744b30f",
+        "observedAt": "2026-10-08T19:42:22.689Z"
+      },
+      {
+        "approvalId": "4cd150ce-51ba-4a2a-afa4-9e62b010676a",
+        "attemptId": "9898395f-f7c8-4f47-a4ef-abbdf692dc63",
+        "runId": "bd891957-7d9e-476b-b040-d5a1b3c4eab3",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:42:41.506Z"
+      },
+      {
+        "approvalId": "c82bce39-4cbb-4c60-a4e2-5c354ff5ada5",
+        "attemptId": "4d1184f9-9cfa-4a08-8556-68a3d1e8992d",
+        "runId": "dbad4b82-a681-44ab-a19c-48a96d76ce7d",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "7b65ee002da5a53bef63de1c759cc369db4ad1f7c2659b3da35f3bf91fbbc9f6",
+        "observedAt": "2026-10-08T19:43:07.997Z"
+      },
+      {
+        "approvalId": "a0f58081-f615-471a-83c1-535486f7923c",
+        "attemptId": "880b9a18-b206-4807-974c-3fb10a873367",
+        "runId": "66e455be-2bbf-477d-84f1-da76afed123f",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:43:33.631Z"
+      },
+      {
+        "approvalId": "ac417055-9234-4430-9992-ee47dfe0cf41",
+        "attemptId": "b2b27fe4-ad7d-40bf-a9f4-39bddb7c5c44",
+        "runId": "3d29a0fd-41c0-4321-8237-475717f28e7b",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "bcdca39c3a757a69f5ea292e172c9345e96a73bfe840a22ce5c1f5fae4e8a965",
+        "observedAt": "2026-10-08T19:44:02.415Z"
+      },
+      {
+        "approvalId": "e641d5cd-7937-4ae9-ba6a-cf470e71f58e",
+        "attemptId": "be66253e-d29e-4194-ad2c-d06d601b61ac",
+        "runId": "4f57abd0-5163-42ca-b24c-e5d051588c51",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:44:27.586Z"
+      },
+      {
+        "approvalId": "e8236deb-1d1c-4dbd-8515-daaa7d0517ff",
+        "attemptId": "e8a14301-ff69-4768-98b8-6cade0f9aa1e",
+        "runId": "eb23737d-61b1-4e13-8919-1770ac351840",
+        "toolName": "team_delegate",
+        "admissionOwner": "uar-runtime",
+        "argumentsSha256": "7a3e720e23aadc5afc373ad714ce3e10d380ed9ea691442ec75e0095c3824fe6",
+        "observedAt": "2026-10-08T19:44:57.656Z"
+      },
+      {
+        "approvalId": "509e9fe5-27ab-469f-91ed-e8aa8cc0f2f6",
+        "attemptId": "b611a620-78d4-4c98-b1fa-6b9351b633cd",
+        "runId": "1d4e2329-7b25-4e15-92ca-983a8c6901ef",
+        "toolName": "filesystem__read",
+        "admissionOwner": "paired-host",
+        "argumentsSha256": "e7c76c9bdc625676a87df295045dd43a07ecdd2442381d826310dde46fefc953",
+        "observedAt": "2026-10-08T19:45:29.139Z"
+      }
+    ]
+  },
+  "executionBudget": {
+    "budget": {
+      "maxTokens": 77824,
+      "maxCostMicrounits": 10000000,
+      "currency": "USD",
+      "maxElapsedSeconds": 3060
+    },
+    "committed": {
+      "tokens": 0,
+      "costMicrounits": 0,
+      "elapsedSeconds": 0
+    },
+    "reserved": {
+      "tokens": 77824,
+      "costMicrounits": 9500000,
+      "elapsedSeconds": 3060
+    }
+  },
+  "attempts": [
+    {
+      "id": "92cf861c-0d6d-4052-ab10-a7682445c6fb",
+      "taskId": "product-assess",
+      "memberId": "5957c678-caa1-4699-bfba-6419c3dba71e",
+      "role": "product",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "98cc8200ddbebe77ae99d25f3b1a8ba9c7fcf9f1e2bd4814bab97fc0784b8085"
+    },
+    {
+      "id": "2db3f375-c644-4ed4-a130-2eab0dc83a46",
+      "taskId": "uiux-assess",
+      "memberId": "c3c9fa70-cfd7-4248-8af0-7ecdf203eec0",
+      "role": "ui-ux",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "187fc4698edf3b3978412956bba320748ab4a8ca22bd6611cee3c5e829489f4f"
+    },
+    {
+      "id": "9898395f-f7c8-4f47-a4ef-abbdf692dc63",
+      "taskId": "mobile-assess",
+      "memberId": "72aea694-877c-43b7-b292-cfaab7913830",
+      "role": "mobile",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "076acefedb3e76c866ee32a8d0fb99711157e4f5ab6ce6db64f72951296622d8"
+    },
+    {
+      "id": "880b9a18-b206-4807-974c-3fb10a873367",
+      "taskId": "security-assess",
+      "memberId": "62913624-6df7-44b0-a44b-951aa366b2cd",
+      "role": "security",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "490613f7fad8c57da40acb1552b16c15685ed528332f02f666eea0e087c9d2b7"
+    },
+    {
+      "id": "be66253e-d29e-4194-ad2c-d06d601b61ac",
+      "taskId": "documentation-assess",
+      "memberId": "13739962-a572-4d21-8faf-f57de2051b36",
+      "role": "documentation",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "d860099793479624a545455c8a5dca6684d7de5334845204b09a2d1aebef0192"
+    },
+    {
+      "id": "b611a620-78d4-4c98-b1fa-6b9351b633cd",
+      "taskId": "code-review-assess",
+      "memberId": "4e5df441-3eea-43d4-a1c3-042aab07db43",
+      "role": "code-review",
+      "effectiveModels": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ],
+      "outputSha256": "bb251e9b964af134e176fdac4a9a41f1e7945bbc5c5155316b4b9b6c04978e62"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact-92cf861c-0d6d-4052-ab10-a7682445c6fb",
+      "attemptId": "92cf861c-0d6d-4052-ab10-a7682445c6fb",
+      "contentSha256": "98cc8200ddbebe77ae99d25f3b1a8ba9c7fcf9f1e2bd4814bab97fc0784b8085"
+    },
+    {
+      "id": "artifact-2db3f375-c644-4ed4-a130-2eab0dc83a46",
+      "attemptId": "2db3f375-c644-4ed4-a130-2eab0dc83a46",
+      "contentSha256": "187fc4698edf3b3978412956bba320748ab4a8ca22bd6611cee3c5e829489f4f"
+    },
+    {
+      "id": "artifact-9898395f-f7c8-4f47-a4ef-abbdf692dc63",
+      "attemptId": "9898395f-f7c8-4f47-a4ef-abbdf692dc63",
+      "contentSha256": "076acefedb3e76c866ee32a8d0fb99711157e4f5ab6ce6db64f72951296622d8"
+    },
+    {
+      "id": "artifact-880b9a18-b206-4807-974c-3fb10a873367",
+      "attemptId": "880b9a18-b206-4807-974c-3fb10a873367",
+      "contentSha256": "490613f7fad8c57da40acb1552b16c15685ed528332f02f666eea0e087c9d2b7"
+    },
+    {
+      "id": "artifact-be66253e-d29e-4194-ad2c-d06d601b61ac",
+      "attemptId": "be66253e-d29e-4194-ad2c-d06d601b61ac",
+      "contentSha256": "d860099793479624a545455c8a5dca6684d7de5334845204b09a2d1aebef0192"
+    },
+    {
+      "id": "artifact-b611a620-78d4-4c98-b1fa-6b9351b633cd",
+      "attemptId": "b611a620-78d4-4c98-b1fa-6b9351b633cd",
+      "contentSha256": "bb251e9b964af134e176fdac4a9a41f1e7945bbc5c5155316b4b9b6c04978e62"
+    },
+    {
+      "id": "artifact-f3cf6d9e-8970-4d91-955e-3c8322d9eeae",
+      "attemptId": "f3cf6d9e-8970-4d91-955e-3c8322d9eeae",
+      "contentSha256": "acbb7685688f5a47da6fc37247c468ff7bb6f9bbdae550f4884b92064898a891"
+    }
+  ],
+  "accepted": {
+    "definition": {
+      "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:team",
+      "version": "1.0.3",
+      "digest": "sha256:f0b3317c8e543660d1f3a32e357abf0deeb1e33c4d34a34bcb1423a7b767eea1"
+    },
+    "package": {
+      "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+      "version": "1.0.3",
+      "digest": "sha256:1f1ad85cf13fe4afb55f06c01498e61df98b7dbf5638596f9161297cd365e217"
+    },
+    "binding": {
+      "id": "urn:boss:authored:binding:6321bd0a-7987-4074-a3e6-027aeda39186:4:1d8f6192-d51c-4a26-81f0-4794ddb363df:66c1a5ead28489aa",
+      "workspaceId": "1d8f6192-d51c-4a26-81f0-4794ddb363df",
+      "revision": 1,
+      "activationSupported": true,
+      "package": {
+        "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+        "version": "1.0.3",
+        "digest": "sha256:1f1ad85cf13fe4afb55f06c01498e61df98b7dbf5638596f9161297cd365e217"
+      },
+      "preflightDiagnostics": [
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/models/0",
+          "disposition": "exact",
+          "message": "The model role resolves through a declared preferred alias."
+        },
+        {
+          "field": "/modelRequirements",
+          "disposition": "exact",
+          "message": "Every selected configured model satisfies the authored capability requirements."
+        },
+        {
+          "field": "/promptDialect",
+          "disposition": "exact",
+          "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+        },
+        {
+          "field": "/contextStrategy",
+          "disposition": "optional-unsupported",
+          "message": "The authored context strategy has no ordinary-turn policy mapping."
+        },
+        {
+          "field": "/ragConfiguration",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        },
+        {
+          "field": "/apiHarness",
+          "disposition": "optional-unsupported",
+          "message": "The field is preserved without an enforcing runtime component."
+        }
+      ],
+      "posture": {
+        "profile": "urn:prometheus:uar:collaboration:0.1.0-draft.2",
+        "id": "urn:boss:authored:binding:6321bd0a-7987-4074-a3e6-027aeda39186:4:1d8f6192-d51c-4a26-81f0-4794ddb363df:66c1a5ead28489aa/effective",
+        "revision": 1,
+        "contentDigest": "sha256:3907f632295fcf46af03692b03d7c38b3445b6e72a043c09810d2b92cc0cc561",
+        "bindingRef": {
+          "id": "urn:boss:authored:binding:6321bd0a-7987-4074-a3e6-027aeda39186:4:1d8f6192-d51c-4a26-81f0-4794ddb363df:66c1a5ead28489aa",
+          "revision": 1,
+          "digest": "sha256:a051ba3299713028f50f5ccdbc6b1c3ccbeeb4a7d992eb76d9d3ba102b0fb9a3"
+        },
+        "package": {
+          "id": "urn:boss:authored:6321bd0a-7987-4074-a3e6-027aeda39186:package",
+          "version": "1.0.3",
+          "digest": "sha256:1f1ad85cf13fe4afb55f06c01498e61df98b7dbf5638596f9161297cd365e217"
+        },
+        "policyRevision": "boss-starter-v1",
+        "runtimeCapabilities": [
+          "approval_lifecycle_v1",
+          "collaboration_conversion_reports_v1",
+          "collaboration_definition_packages_v1",
+          "collaboration_definition_packages_v2",
+          "collaboration_deployment_bindings_v1",
+          "collaboration_deployment_bindings_v2",
+          "collaboration_representation_grant_refs_v1",
+          "collaboration_team_execution_v1",
+          "collaboration_team_planning_v1",
+          "durable_agent_instances_v1",
+          "full_harness_delegation_v1",
+          "host_history",
+          "local_scoped_observers_v1",
+          "reasoning_effort",
+          "run_scoped_credentials",
+          "run_scoped_mcp_servers",
+          "scoped_delegation_grants_v1",
+          "service_instance_placement_v1",
+          "session_principal",
+          "team_execution_continuations_v1",
+          "team_execution_host_workspace_v1",
+          "team_execution_peer_tools_v1",
+          "team_execution_shared_instructions_v1",
+          "working_directory"
+        ],
+        "admitted": true,
+        "createdAt": "2026-10-08T19:40:35.591695Z",
+        "resolvedModels": [],
+        "serviceBinding": {
+          "instanceId": "managed-local",
+          "profile": "uar.service-instance/1",
+          "workspaceLocation": "local",
+          "capabilities": [
+            "approval_lifecycle_v1",
+            "collaboration_conversion_reports_v1",
+            "collaboration_definition_packages_v1",
+            "collaboration_definition_packages_v2",
+            "collaboration_deployment_bindings_v1",
+            "collaboration_deployment_bindings_v2",
+            "collaboration_representation_grant_refs_v1",
+            "collaboration_team_execution_v1",
+            "collaboration_team_planning_v1",
+            "durable_agent_instances_v1",
+            "full_harness_delegation_v1",
+            "host_history",
+            "local_scoped_observers_v1",
+            "reasoning_effort",
+            "run_scoped_credentials",
+            "run_scoped_mcp_servers",
+            "scoped_delegation_grants_v1",
+            "service_instance_placement_v1",
+            "session_principal",
+            "team_execution_continuations_v1",
+            "team_execution_host_workspace_v1",
+            "team_execution_peer_tools_v1",
+            "team_execution_shared_instructions_v1",
+            "working_directory"
+          ],
+          "intent": "new",
+          "bindingId": "urn:boss:authored:binding:6321bd0a-7987-4074-a3e6-027aeda39186:4:1d8f6192-d51c-4a26-81f0-4794ddb363df:66c1a5ead28489aa",
+          "bindingRevision": 1
+        },
+        "diagnostics": [
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/models/0",
+            "disposition": "exact",
+            "reasonCode": "model.bound-exactly",
+            "message": "The model role resolves through a declared preferred alias."
+          },
+          {
+            "pointer": "/modelRequirements",
+            "disposition": "exact",
+            "reasonCode": "runtime.model-capabilities-enforced",
+            "message": "Every selected configured model satisfies the authored capability requirements."
+          },
+          {
+            "pointer": "/promptDialect",
+            "disposition": "exact",
+            "reasonCode": "runtime.prompt-dialect-enforced",
+            "message": "The bound model uses the authored dialect in ordinary prompt and request assembly."
+          },
+          {
+            "pointer": "/contextStrategy",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The authored context strategy has no ordinary-turn policy mapping."
+          },
+          {
+            "pointer": "/ragConfiguration",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          },
+          {
+            "pointer": "/apiHarness",
+            "disposition": "optional-unsupported",
+            "reasonCode": "runtime.component-unavailable",
+            "message": "The field is preserved without an enforcing runtime component."
+          }
+        ]
+      }
+    },
+    "teamInstanceId": "52ebcb9e-c3fb-4e04-8151-aefdb1687ee1"
+  },
+  "failureStage": "reopen-immutable-specialist-team",
+  "failureCode": "C15_VISIBLE_CONTROL_UNAVAILABLE",
+  "finishedAt": "2026-10-08T19:46:38.036Z"
+}

@@ -281,7 +281,7 @@ migration files and register them in `src/migrations/mod.rs`.
 
 **Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=3.3.0`, in workspace `Cargo.toml` — the three move together, since `=` on the client does not constrain the other two.
 Do NOT upgrade without moving the `surreal-memory` rev in step (currently `b7e2093`, which pins `=3.3.0` itself) — version drift breaks the build.
-UAR runs as a sidecar and no longer links surrealdb in-process.
+UAR is an independently owned remote service; its storage dependencies are not linked into BossFang.
 
 ### surreal-memory Integration (`librefang-memory` surreal backends)
 
@@ -299,9 +299,14 @@ SQLite fallback path (keep the SurrealDB path first).
 
 ### Universal Agent Runtime (`librefang-uar-spec`, `UarDriver`)
 
+BossFang never bundles, installs, spawns, stops or supervises UAR.
+The Boss owns its managed UAR lifecycle; BossFang borrows an authenticated configured instance through selected connection APIs.
+New admissions use the selected connection; admitted runs retain their original instance, workspace, endpoints and runtime epoch without migration or replay.
+Preserve this ownership boundary after every upstream merge.
+
 - `librefang-uar-spec` crate: AgentManifest ↔ UAR IR translation
-- `librefang-llm-drivers` feature `uar-driver`: wraps UAR's liter-llm for 142+ providers
-- When `uar-driver` is enabled, UAR gets `surreal-backend` to share our SurrealDB version
+- `UarDriver` uses the selected UAR's remote model/runtime transport.
+- Preserve the existing `uar-driver` feature chain for compatibility; its terminal `librefang-llm-drivers` feature is empty, with no `universal-agent-runtime` dependency or UAR storage-feature forwarding.
 
 After upstream merge: update `UarDriver` if `LlmDriver` trait signature changes;
 update `librefang-uar-spec/src/types.rs` if `AgentManifest` shape changes.

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T20:12:30.701Z",
+  "authority": "Operator message 2026-10-10: ONLY platforms that matter are ARM for Mac, Windows for Intel; all others later.",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "preserve": {
+    "successfulDeliveries": 15,
+    "iterationMinutes": 120,
+    "publicationEvery": 2,
+    "clocks": true,
+    "history": true
+  },
+  "cadenceConfiguration": "Apply through supported configure at the next admitted profile boundary; do not reset the active iteration or historical obligations. Deferred targets cannot block the customer build or release."
+}

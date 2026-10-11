@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T03:33:51.034Z",
+  "version": "2.2.29",
+  "platform": "darwin-arm64",
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "finalInstalledAcceptance": {
+    "darwinArm64": "pending for final identified customer candidate",
+    "win32X64": "pending for final identified customer candidate"
+  },
+  "evidenceAgentActivity": {
+    "builds": [],
+    "testSuites": [],
+    "applicationOperations": []
+  },
+  "kind": "customer-pending-approval-runtime-restart-partial-evidence",
+  "status": "partially-passed",
+  "rawOperationStatus": "failed",
+  "rawEvidenceStatus": "pending-qualification",
+  "complete": false,
+  "passed": false,
+  "sourceRefs": {
+    "boss": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "appAsarSha256": "82ecc095b2b6aa19369f4dcf953e3c6d5d4502c2af948e888610512319517fee",
+    "sidecarSha256": "1bf7d0f0ac5ceeb76fe29cfce3a787b8879eb8c50d8a0f5358f989279d33feaa",
+    "installerSha256": "5f5f951e2d5833ec1b5c2e6b10472e953db3f5162651a52360ee8b77d192ad34",
+    "installedVersion": "2.2.29",
+    "operationDriverRevision": "824fa5ed40999830196b6c5125faf2ebcf6a8ce4",
+    "selectedScenarioSha256": "b95e1699b0c12d968a4c407f9dd29ece32be45a52992b90f3642013fc7527b26",
+    "installationReceiptSha256": "2d7724b9b9ffdc160bd913c6b47edfc65a692732649803c0e80cb17d83e0532c"
+  },
+  "startedAt": "2026-10-10T03:27:53.341Z",
+  "finishedAt": "2026-10-10T03:28:48.362Z",
+  "checks": [
+    {
+      "name": "exact-real-pending-challenge-without-approved-effect",
+      "passed": true
+    },
+    {
+      "name": "owned-runtime-restarted-without-another-turn-or-decision",
+      "passed": true
+    },
+    {
+      "name": "same-command-retained-with-terminal-interruption-and-no-replay",
+      "passed": true,
+      "outcome": "confirmed-cancellation"
+    }
+  ],
+  "decisionSubmitted": false,
+  "retrySubmitted": false,
+  "transparentContinuationAsserted": false,
+  "before": {
+    "instanceId": "75e4c544-e485-45f1-afae-475c03148bda",
+    "commandId": "ce2717d1-a7dc-447f-9120-3029a44f1dfc",
+    "attemptId": "304be300-144e-40ea-a10f-b4f69942d085",
+    "runId": "591d9346-02b7-43bd-8ac6-4374c0cd0826",
+    "commandStatus": "running",
+    "approvalId": "569b88a9-757b-43f3-803e-ed77a162c30c",
+    "toolName": "file_read",
+    "admissionOwner": "paired-host",
+    "decisionOwner": "uar-runtime",
+    "argumentsSha256": "637f3dbd86eda3d611ede9bf2360d5f6c507553529e1a8d43d5f654b81791b25",
+    "successfulEffects": 0,
+    "effectStates": [
+      {
+        "toolName": "file_read",
+        "state": "awaiting_approval"
+      }
+    ]
+  },
+  "restart": {
+    "operationId": "615fd761-58da-46e3-8e25-f9526c1f7204",
+    "status": "succeeded",
+    "generationBefore": 2,
+    "generationAfter": 3,
+    "instanceId": "managed-local"
+  },
+  "after": {
+    "instanceId": "75e4c544-e485-45f1-afae-475c03148bda",
+    "commandId": "ce2717d1-a7dc-447f-9120-3029a44f1dfc",
+    "attemptId": "304be300-144e-40ea-a10f-b4f69942d085",
+    "runId": "591d9346-02b7-43bd-8ac6-4374c0cd0826",
+    "commandStatus": "cancelled",
+    "lifecycle": "dormant",
+    "recovery": "ready",
+    "activeRunId": null,
+    "activeCommandId": null
+  },
+  "interruptionOutcome": "confirmed-cancellation",
+  "afterRestartHistory": {
+    "available": false,
+    "approvalState": "unknown",
+    "successfulEffects": "unknown",
+    "route": "prometheus.uar.durable.run",
+    "code": "INTERNAL",
+    "httpStatus": 404,
+    "nativeCode": null,
+    "messageSha256": "956a5d6ecfcff3b91060e3fba752e85d7046360c320cc8f3ec910d4898c82f18",
+    "rawMessageIncluded": false
+  },
+  "cleanup": {
+    "grantRevoked": true,
+    "instanceDisabled": true,
+    "nativeSettingsRestoredForNextRestart": true
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.29/pending-approval-recovery-a638e26e-d2da-4052-852d-6477ac1fa3fe/evidence.json",
+    "sha256": "d96c18534b5bc09fcf249980a5bbcd153762511cd498b10aefed64f6a726df90"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.29/pending-approval-recovery-a638e26e-d2da-4052-852d-6477ac1fa3fe/operation.json",
+    "sha256": "5bfbe1234189f69609a5c4e2802e78752df98ba5350d3d7a53c3ea2269db9251"
+  },
+  "repairState": {
+    "scope": "Desktop durable.run reader history projection",
+    "status": "in progress; no operation of repaired reader yet",
+    "releaseMetadataVersion": "2.2.30",
+    "releaseMetadataCommit": "6870293028a0d9ba890f2e7ea634c71a92620de7",
+    "nativeChangePlanned": false
+  },
+  "limits": [
+    "Real undecided file_read challenge and owned runtime restart preserved the SAME command/attempt/run identity with confirmed cancellation and no submitted retry/decision.",
+    "After-restart historical approval/effect reader returned404; approvalState and successfulEffects remain unknown. No post-restart effect absence, history recovery or complete qualification inferred.",
+    "Existing native terminal cancellation is not transparent continuation or permission to replay an old turn.",
+    "No graceful product Quit or human approval certification is claimed."
+  ]
+}

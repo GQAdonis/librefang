@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T20:32:26.521Z",
+  "observedFailure": "Receipt recipe digest differs from frozen checkpoint",
+  "repair": "Use actual jobs.mjs digest, which canonicalizes object keys before SHA-256; original actual evidence/timing/source/command/artifacts unchanged.",
+  "ledgerMutationFromFailedAdoption": false
+}

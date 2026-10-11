@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "independent-required-platform-website-publication",
+  "observedAt": "2026-10-11T00:51:22.845Z",
+  "site": {
+    "url": "https://the-boss.know-me.tools/",
+    "status": 200,
+    "bundleURL": "https://the-boss.know-me.tools/assets/index-_3EHcEvV.js",
+    "bundleStatus": 200,
+    "bundleSHA256": "4d60fa7f39180ede1223f43ab2ba79e58f138a18fcc6e18d185dca0e91ffde03",
+    "landingCommit": "e9ad8d5d25d0eb64ccac329f79392b105c746cb2",
+    "publicationMethod": "Existing Lovable Publish changes control, followed by direct live bundle observation"
+  },
+  "platform": {
+    "id": "darwin-arm64",
+    "version": "2.2.31",
+    "source": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.31/The-Boss-2.2.31-mac-arm64.dmg",
+    "size": 717484146,
+    "sha256": "b3705f4c1cb0f279e610f431b2872588bbee60a94329c5d52b0cde25cbbcd353",
+    "signing": "Developer ID (notarized)",
+    "publicBytes": "verified by existing landing sync-release-platform production command"
+  },
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64",
+    "linux"
+  ],
+  "retainedWindowsFallback": {
+    "version": "2.2.30",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-x64-setup.exe",
+    "present": true
+  },
+  "publicationDebtCleared": false,
+  "newDeliveryCount": 0,
+  "newCanonicalTaskCredit": 0
+}

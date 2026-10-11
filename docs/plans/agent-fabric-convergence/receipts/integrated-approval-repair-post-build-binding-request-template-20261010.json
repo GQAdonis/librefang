@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "buildCompleted": false,
+  "boss": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+  "builtBossSource": null,
+  "operatedBossSource": null,
+  "expectedHashes": {
+    "appAsarSha256": null,
+    "uarSha256": null,
+    "bossfangSha256": null
+  },
+  "buildReceiptPath": null,
+  "buildReceiptSha256": null,
+  "readyInputPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-approval-repair-ready-input-20261010.json",
+  "bindingReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-approval-repair-operation-config-binding-20261010.json",
+  "allowScriptsOnlyDriverChanges": false,
+  "reconciliationAuthority": null
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "c14-completed-production-repair-packaging-dispatch",
+  "recordedAt": "2026-10-08T05:24:54.640Z",
+  "scope": [
+    "C14.3",
+    "C14.4"
+  ],
+  "sources": {
+    "boss": "b05a5db1f8e320b0a0e1f5e7d2447fd5da7dc1d5",
+    "bossfang": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+    "uar": "49ffa8e008b6c46b67729416654c2778cf2b6216"
+  },
+  "observedFailures": {
+    "capacity": {
+      "requiredTokens": 17483,
+      "modelBudget": 8192
+    },
+    "settlement": "SSE terminal closes before250ms monitor persists task terminal receipt",
+    "presentation": "native agui.error code lost in workflow projection"
+  },
+  "repairs": [
+    "Forward known alias model capacity and operate explicit capacity with provenance through existing provider administration",
+    "Refresh TaskReceipt from authoritative manager state before terminal SSE serialization",
+    "Preserve bounded safe native error code without messages or credentials"
+  ],
+  "nativeRuns": {
+    "bossfang": 37732079946,
+    "uar": {
+      "darwin-arm64": 37732142769,
+      "win32-x64": 37732145473,
+      "darwin-x64": 37732147967,
+      "win32-arm64": 37732150340
+    }
+  },
+  "buildsAndOperations": "pending corrected native artifacts",
+  "testSuitesRun": [],
+  "completionCredit": 0,
+  "publicationDebtPreserved": true,
+  "originalIterationClockPreserved": true,
+  "cadence": {
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "startedAt": "2026-10-07T23:24:33.943Z",
+    "successfulDeliveries": 6,
+    "publicationObligationId": "99a9d56d-7212-46da-98dd-de2854ff6420"
+  },
+  "functionalEvidence": {
+    "failedOperation": ".prometheus/cadence/artifacts/c14-bossfang-workflow-95718189-b68e-4bb9-ae70-5641c48cb8ee/operation.json",
+    "numericCause": ".prometheus/cadence/artifacts/c14-workflow-terminal-events-diagnostic-v2-20261008.json"
+  }
+}

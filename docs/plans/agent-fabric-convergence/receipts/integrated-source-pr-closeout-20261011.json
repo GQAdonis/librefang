@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-source-pr-integration",
+  "pullRequests": [
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "number": 369,
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/369",
+      "sourceHead": "74194623b17e5db127534b0f0469f8557794d4bc",
+      "mergeCommit": "3327bf99e48097479313c8a54e8e58d1de9e9ccb",
+      "mergedAt": "2026-10-11T01:16:05Z",
+      "scope": "Admission-v2 capability, registered delegated-approval route and selected source dependencies",
+      "requiredNativePayloads": "Actual Mac ARM64 and Windows x64 server-full payloads already published from sourceHead; actual source identity unchanged"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "number": 181,
+      "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/181",
+      "sourceHead": "eb22353e2f7ea9c0976b8f0990ae092f2e76229a",
+      "mergeCommit": "30fa4ecc4f45744034203dae221ba4192dcb18e3",
+      "mergedAt": "2026-10-11T01:16:30Z",
+      "scope": "Select actual packaged Boss main window in external Cadence launcher and matching distributed copies"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "number": 57,
+      "url": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/57",
+      "sourceHead": "ac6fd96c6d60871c3738dfc809b452312765e1a2",
+      "mergeCommit": "09988a92823b8aa36010bc77767fb30202a0f2b1",
+      "mergedAt": "2026-10-11T01:17:38Z",
+      "scope": "Identical main-window launcher repair in mini source and distributed copies",
+      "ciLimitations": [
+        "Existing real canonical KBD integration job passed; this does not certify the whole skill pack",
+        "Other existing CI failures outside changed launcher files include CLI fixture execution, operator-owned version pins versus explicit source overrides and distribution fixture closure",
+        "Historical scanner occurrence f5de79415cc45c39b05c43434f515f1c47ea68e51486dcdb3d3d18784040c3a8 is a task-identifier suffix matched by the sk- detector; inspected without printing its contents"
+      ]
+    }
+  ],
+  "frozenRelease": {
+    "version": "2.2.32",
+    "macApplicationSource": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "windowsApplicationSource": "5f3f33d4f2f19d9a399547a693ba1fa23344bbef",
+    "uarSource": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "fullPackSource": "547a9bc93de61246bbe38567796d5fa2d0f616f0",
+    "miniPackSource": "6c63c0acec67444e30f65461836e7a943316e242",
+    "policy": "Existing installer inputs remain immutable. Source merges and external qualification-driver repairs are separate; they do not relabel the already frozen packaged skill pins or certify final public installers."
+  },
+  "accounting": {
+    "successfulDeliveries": 17,
+    "newDeliveries": 0,
+    "newQualifiedTasks": 0,
+    "historicalCodeTasks": "61/61",
+    "historicalCodeChanges": "20/20",
+    "portfolioTerminalItems": "43/61",
+    "pendingPublicationObligations": 2,
+    "clocksHistoryAndAcceptance": "preserved"
+  },
+  "execution": {
+    "newTestSuites": false,
+    "newApplicationBuilds": false,
+    "ledgerCompletionMutation": false,
+    "releaseAndInstalledAcceptance": "pending actual required evidence"
+  }
+}

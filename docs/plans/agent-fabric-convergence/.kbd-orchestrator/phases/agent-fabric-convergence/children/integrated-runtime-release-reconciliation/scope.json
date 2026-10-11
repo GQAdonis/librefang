@@ -1,0 +1,14 @@
+{
+  "allowedWritePaths": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/**",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-*",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/**",
+    "/Users/gqadonis/Projects/prometheus/worktrees/**",
+    "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/**"
+  ],
+  "deniedPaths": [
+    "**/tests/bauar_session_owner.rs",
+    "**/src/uar/mcp_server.rs"
+  ],
+  "inheritsConstraints": true
+}

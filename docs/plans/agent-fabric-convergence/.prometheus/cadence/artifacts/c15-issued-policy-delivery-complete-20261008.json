@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-local-team-model-issuance-delivery",
+  "recordedAt": "2026-10-08T12:16:05.342Z",
+  "iterationId": "86cd3838-c1ae-426c-92e5-5a8e9142c62a",
+  "iterationIndex": 9,
+  "status": "success",
+  "startedAt": "2026-10-08T11:25:26.206Z",
+  "finishedAt": "2026-10-08T12:13:34.865Z",
+  "applicationBuildSource": "ab3f42f1b197046e08762a503f17b3b16b1ce51a",
+  "excludedOperationDriverCommit": "fcd2e85561ce169fa655396f7442596f1aeddad4",
+  "releaseSource": "2b543cd4e7b08df69321666334913494a1dd10fb",
+  "mergedPr": "https://github.com/Prometheus-AGS/the-boss/pull/49",
+  "checks": [
+    "real-bundled-unknown-metadata-selection-import-save-reopen-retains-main-issuance",
+    "renderer-target-and-internally-consistent-issued-field-rewrites-refused-without-revision",
+    "actual-catalog-target-drift-refuses-reviewed-deployment-before-binding-install",
+    "restored-target-a-issued-reviewed-deployment-succeeds",
+    "restored-target-a-manual-override-deploys-and-preserves-original-issued-revision"
+  ],
+  "refusals": [
+    {
+      "channel": "prometheus.uar.teams.save_authoring",
+      "ipcCode": "INTERNAL",
+      "reason": "UAR_TEAM_MODEL_POLICY_ISSUANCE_MISMATCH"
+    },
+    {
+      "channel": "prometheus.uar.teams.save_authoring",
+      "ipcCode": "INTERNAL",
+      "reason": "UAR_TEAM_MODEL_POLICY_ISSUANCE_MISMATCH"
+    },
+    {
+      "channel": "prometheus.uar.teams.deploy_authored",
+      "ipcCode": "INTERNAL",
+      "reason": "UAR_TEAM_MODEL_POLICY_TARGET_MISMATCH"
+    }
+  ],
+  "buildReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-issued-policy-mac-build-20261008.json",
+  "operationEvidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-b5dc9710-6fc2-4be6-bb6b-b8c61b0a9430/evidence.json",
+    "sha256": "70e5e4fd1d6f5b07d0dde9636f535354aa3237ec3ba04c4d66a47f5eae6767c6"
+  },
+  "canonicalCompletionAwarded": {
+    "tasks": [],
+    "changes": [],
+    "phases": []
+  },
+  "remaining": [
+    "C15.1 requested role-strength qualification",
+    "Native Windows installed operation"
+  ],
+  "publication": {
+    "version": "2.2.16",
+    "runId": 37775569785,
+    "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37775569785",
+    "status": "dispatched; not publication evidence",
+    "platforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ]
+  },
+  "lesson": {
+    "observed": "Two operation driver failures involved renderer reload readiness and regenerated template IDs rather than changed production records.",
+    "improvement": "Wait for the new document/preload and compare only authoritative immutable revisions; preserve exact refusal assertions.",
+    "avoided": "No app rebuild for excluded driver-only fixes; no intermediate tests or review loops."
+  },
+  "securityBoundary": "Private main-issued selection receipts authenticate renderer-supplied target/source at save and deployment.",
+  "publicationDebtPreserved": true
+}

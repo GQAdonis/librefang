@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-completed-application-build",
+  "version": "2.2.16",
+  "platform": "darwin-arm64",
+  "source": "ab3f42f1b197046e08762a503f17b3b16b1ce51a",
+  "buildAttemptId": "c274885e-f75b-4f4d-ba6e-f537b5cf4dc3",
+  "buildStatus": "success",
+  "signed": true,
+  "notarized": false,
+  "installedWindowsAcceptance": "pending",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/The-Boss-2.2.16-mac-arm64.dmg",
+      "bytes": 699670266,
+      "sha256": "c3800267a6f384951e9630fce7b3a11e17b6965c442d3154aee0199fac046d18"
+    },
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "bytes": 346895689,
+      "sha256": "72eabcbee015cf3f85109dae10d7ddc1ec71deddff000b75fe815ac192a06066"
+    }
+  ]
+}

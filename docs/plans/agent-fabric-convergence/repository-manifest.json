@@ -15,12 +15,18 @@
       "sourceDivergence": "1400\t7",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:00.460Z",
-      "currentDefaultRevision": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
+      "currentDefaultRevision": "bb2e87f55b564b9b8aab7f1b716c3f03fa90d472",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
       "currentConvergenceBranch": null,
       "currentConvergenceDivergence": "0\t0",
-      "currentConvergenceState": "retained-worktree-detached-at-merged-main"
+      "currentConvergenceState": "retained-worktree-detached-at-merged-main",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.452Z",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang",
+        "sourceRevision": "9866a449438a2564654a33e810764e15073abf8a",
+        "disposition": "integrated-customer-release-worktree"
+      }
     },
     {
       "name": "universal-agent-runtime",
@@ -35,12 +41,18 @@
       "sourceDivergence": "20\t0",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:02.323Z",
-      "currentDefaultRevision": "79414bb7e134dad45330008999ee1dca999d44af",
+      "currentDefaultRevision": "fe77af32d38cc1ffcd0fdf5c34336943825e000d",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "676f995c73dc7dacdce71c929ffac88ac3618bb0",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "0\t1",
-      "currentConvergenceState": "stale-after-i1-merge"
+      "currentConvergenceState": "stale-after-i1-merge",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.494Z",
+        "worktree": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+        "sourceRevision": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "disposition": "integrated-customer-release-worktree"
+      }
     },
     {
       "name": "the-boss",
@@ -55,12 +67,18 @@
       "sourceDivergence": "52\t0",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:04.754Z",
-      "currentDefaultRevision": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad",
+      "currentDefaultRevision": "2f6238fd02b6200dc1b878e5385d807cdbd1a24f",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "480703469a18f06b4ba434c568526390cf80bbe7",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t150",
-      "currentConvergenceState": "stale-do-not-use-for-release-evidence"
+      "currentConvergenceState": "stale-do-not-use-for-release-evidence",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.548Z",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+        "sourceRevision": "0682e1b7a7032ee280c32b631d3dccd54d9ce791",
+        "disposition": "integrated-customer-release-worktree"
+      }
     },
     {
       "name": "flint-gate",
@@ -75,12 +93,18 @@
       "sourceDivergence": "1\t1",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:05.334Z",
-      "currentDefaultRevision": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "currentDefaultRevision": "40052f97e354f5ff630a3af35f5670db926e70fa",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "4cf940a5b7c1405364d9ac1cc44c6fb95156b8c7",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "initiative-doc-ahead"
+      "currentConvergenceState": "initiative-doc-ahead",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.596Z",
+        "worktree": null,
+        "sourceRevision": "40052f97e354f5ff630a3af35f5670db926e70fa",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     },
     {
       "name": "flint-realtime-fabric",
@@ -95,12 +119,18 @@
       "sourceDivergence": "0\t12",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:05.857Z",
-      "currentDefaultRevision": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "currentDefaultRevision": "adf7d35b3c29bb673b2f67b900948737b0ae719f",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "941e2508797cc9e990e849bd798c4447d0125f11",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "initiative-doc-ahead"
+      "currentConvergenceState": "initiative-doc-ahead",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.622Z",
+        "worktree": null,
+        "sourceRevision": "adf7d35b3c29bb673b2f67b900948737b0ae719f",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     },
     {
       "name": "flint-forge",
@@ -120,7 +150,13 @@
       "currentConvergenceHead": "8068c94ce74f99a6932d5dc2bfa8bd941d4cf001",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "initiative-doc-ahead"
+      "currentConvergenceState": "initiative-doc-ahead",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.643Z",
+        "worktree": null,
+        "sourceRevision": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     },
     {
       "name": "surreal-memory-server",
@@ -135,12 +171,18 @@
       "sourceDivergence": "33\t1",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:06.640Z",
-      "currentDefaultRevision": "2d8e3ceea13b8c448a7611353cb86f233046f448",
+      "currentDefaultRevision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "a335fdfe6b7f6f8789055756b7b068f6b3a015ee",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t8",
-      "currentConvergenceState": "stale-after-i1-merge"
+      "currentConvergenceState": "stale-after-i1-merge",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.664Z",
+        "worktree": null,
+        "sourceRevision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     },
     {
       "name": "prometheus-skill-pack",
@@ -155,12 +197,18 @@
       "sourceDivergence": "17\t0",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:09.310Z",
-      "currentDefaultRevision": "e9520f5832c598270bcfee79a6e9af39853d2760",
+      "currentDefaultRevision": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
       "convergenceWorktreePresent": false,
       "currentConvergenceHead": null,
       "currentConvergenceBranch": null,
       "currentConvergenceDivergence": null,
-      "currentConvergenceState": "manifest-worktree-retired"
+      "currentConvergenceState": "manifest-worktree-retired",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.684Z",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+        "sourceRevision": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2",
+        "disposition": "integrated-customer-release-worktree"
+      }
     },
     {
       "name": "prometheus-skills-mini",
@@ -175,12 +223,18 @@
       "sourceDivergence": "9\t19",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:09.646Z",
-      "currentDefaultRevision": "f38a98a6ed064f9e5b8b9837e8b91781af570d22",
+      "currentDefaultRevision": "c3936d8c2264e0366b41a6d515479c6390db5fa9",
       "convergenceWorktreePresent": false,
       "currentConvergenceHead": null,
       "currentConvergenceBranch": null,
       "currentConvergenceDivergence": null,
-      "currentConvergenceState": "manifest-worktree-retired-source-owned-by-shipping-closeout-help-fix-merged"
+      "currentConvergenceState": "manifest-worktree-retired-source-owned-by-shipping-closeout-help-fix-merged",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.723Z",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+        "sourceRevision": "90bcd46763175c8439968d4b7080963e62b18eea",
+        "disposition": "integrated-customer-release-worktree"
+      }
     },
     {
       "name": "know-me-app",
@@ -195,12 +249,18 @@
       "sourceDivergence": "0\t0",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:09.734Z",
-      "currentDefaultRevision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "currentDefaultRevision": "3d7b6d0375568162db683f4c32f82677c79818f7",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "b07b2d1fd31390bd44df39faa203e2e49c412f87",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "initiative-doc-ahead"
+      "currentConvergenceState": "initiative-doc-ahead",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.763Z",
+        "worktree": null,
+        "sourceRevision": "3d7b6d0375568162db683f4c32f82677c79818f7",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     },
     {
       "name": "know-me-system",
@@ -215,14 +275,20 @@
       "sourceDivergence": "3\t2",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:10.140Z",
-      "currentDefaultRevision": "c561d89e783264ef1215764db69e57493c4b815b",
+      "currentDefaultRevision": "dadd368b8dba4302ffe64bbefd86e1b8b829b9cb",
       "convergenceWorktreePresent": true,
       "currentConvergenceHead": "390c1520421c6151ed3c1a397daf86d4550c45df",
       "currentConvergenceBranch": "codex/agent-fabric-convergence",
       "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "initiative-doc-ahead"
+      "currentConvergenceState": "initiative-doc-ahead",
+      "integrationSelection": {
+        "observedAt": "2026-10-10T14:39:43.782Z",
+        "worktree": null,
+        "sourceRevision": "dadd368b8dba4302ffe64bbefd86e1b8b829b9cb",
+        "disposition": "refreshed-reference-deferred-features-excluded"
+      }
     }
   ],
-  "lastRefreshedAt": "2026-09-27T00:47:47Z",
-  "latestRefreshReceipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/checkpoint-merge-receipt-2026-09-27.json"
+  "lastRefreshedAt": "2026-10-10T14:39:43.782Z",
+  "latestRefreshReceipt": "receipts/integrated-runtime-source-refresh-20261010.json"
 }

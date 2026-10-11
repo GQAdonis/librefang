@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-payload-publication-intent",
+  "recordedAt": "2026-10-10T22:57:34.699Z",
+  "repository": "GQAdonis/librefang",
+  "tag": "bossfang-sidecar-92bc005f3",
+  "target": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "platform": "darwin-arm64",
+  "files": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-92bc005f3-native-inputs-20261010-WmTo8E/darwin-arm64/bossfang-darwin-arm64",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-92bc005f3-native-inputs-20261010-WmTo8E/darwin-arm64/bossfang-darwin-arm64.json"
+  ],
+  "sha256": "0cac6b62b4b8cf39063d35227c04048752243eea7da01b1a78395cf8bae51a0f",
+  "size": 176573952,
+  "sourceReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-92bc005f3-native-inputs-20261010-WmTo8E/darwin-arm64/staged-inputs.json",
+  "existingTagObserved": "not-found",
+  "installedAcceptance": "pending"
+}

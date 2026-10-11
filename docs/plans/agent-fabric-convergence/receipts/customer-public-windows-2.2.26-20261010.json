@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installer-byte-verification",
+  "version": "2.2.26",
+  "repository": "Prometheus-AGS/the-boss",
+  "runId": "38012115496",
+  "releaseUrl": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.26",
+  "installedAcceptance": "not-exercised",
+  "platforms": {
+    "win32-x64": {
+      "status": "passed",
+      "verifiedAt": "2026-10-10T01:47:05.306Z",
+      "platform": "win32",
+      "arch": "x64",
+      "version": "2.2.26",
+      "source": "d241809cf8c9059b1ac9461804f731363a49346b",
+      "runId": "38012115496",
+      "profile": "uar-enabled",
+      "recordUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/release-platform-v2.2.26-uar-enabled-win32-x64-d241809cf8c9059b1ac9461804f731363a49346b.json",
+      "recordSha256": "5c86cc5b46990897e6623453a4e281ed785e391e852e492653e9be1e15aa9d0e",
+      "recordBytes": 560,
+      "artifact": {
+        "name": "The-Boss-2.2.26-win-x64-setup.exe",
+        "size": 531618025,
+        "sha256": "385f52afd93fd68c05a3ba761266d515ece364b3f3b05298054c1bce09947b12",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-win-x64-setup.exe",
+        "signing": "unsigned",
+        "profile": "uar-enabled"
+      },
+      "downloaded": {
+        "startedAt": "2026-10-10T01:46:08.971Z",
+        "completedAt": "2026-10-10T01:47:05.307Z",
+        "status": 200,
+        "contentLength": 531618025,
+        "bytes": 531618025,
+        "sha256": "385f52afd93fd68c05a3ba761266d515ece364b3f3b05298054c1bce09947b12"
+      },
+      "signingEvidence": {
+        "reported": "unsigned",
+        "peCertificateTable": {
+          "peMachine": 332,
+          "certificateTableOffset": 0,
+          "certificateTableSize": 0
+        },
+        "observation": "Authenticode certificate table absent"
+      },
+      "architectureEvidence": "Immutable native platform record and canonical setup filename; installer payload not executed",
+      "installedAcceptance": "not-exercised"
+    },
+    "win32-arm64": {
+      "status": "passed",
+      "verifiedAt": "2026-10-10T01:51:33.407Z",
+      "platform": "win32",
+      "arch": "arm64",
+      "version": "2.2.26",
+      "source": "d241809cf8c9059b1ac9461804f731363a49346b",
+      "runId": "38012115496",
+      "profile": "uar-enabled",
+      "recordUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/release-platform-v2.2.26-uar-enabled-win32-arm64-d241809cf8c9059b1ac9461804f731363a49346b.json",
+      "recordSha256": "71781e8a9a1558dbf9c7209390be3d0ca3bf57a67f4ca66c8de34fae3c157708",
+      "recordBytes": 566,
+      "artifact": {
+        "name": "The-Boss-2.2.26-win-arm64-setup.exe",
+        "size": 494856156,
+        "sha256": "dd40bd769ea6750b4cbe1d428e1265124d66a721e9d4f68ac03045bb6db03efa",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-win-arm64-setup.exe",
+        "signing": "unsigned",
+        "profile": "uar-enabled"
+      },
+      "downloaded": {
+        "startedAt": "2026-10-10T01:50:41.548Z",
+        "completedAt": "2026-10-10T01:51:33.407Z",
+        "status": 200,
+        "contentLength": 494856156,
+        "bytes": 494856156,
+        "sha256": "dd40bd769ea6750b4cbe1d428e1265124d66a721e9d4f68ac03045bb6db03efa"
+      },
+      "signingEvidence": {
+        "reported": "unsigned",
+        "peCertificateTable": {
+          "peMachine": 332,
+          "certificateTableOffset": 0,
+          "certificateTableSize": 0
+        },
+        "observation": "Authenticode certificate table absent"
+      },
+      "architectureEvidence": "Immutable native platform record and canonical setup filename; installer payload not executed",
+      "installedAcceptance": "not-exercised"
+    }
+  },
+  "observations": [
+    {
+      "at": "2026-10-10T01:41:15.035Z",
+      "publicAssets": [
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-darwin-arm64-5b317b64c65928492f913fc41946d55ee099b472.json",
+          "size": 571,
+          "digest": "sha256:83e3a87f99be90b2df497f935632ef7bc37bbd03e67e12407f0dd454de98ec15"
+        },
+        {
+          "name": "The-Boss-2.2.26-mac-arm64.dmg",
+          "size": 711782548,
+          "digest": "sha256:2b6ead9a492ed4862e97b8fb69455a73f0706cc10a2ac0c321838fc8659222cb"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-10T01:42:47.327Z",
+      "publicAssets": [
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-darwin-arm64-5b317b64c65928492f913fc41946d55ee099b472.json",
+          "size": 571,
+          "digest": "sha256:83e3a87f99be90b2df497f935632ef7bc37bbd03e67e12407f0dd454de98ec15"
+        },
+        {
+          "name": "The-Boss-2.2.26-mac-arm64.dmg",
+          "size": 711782548,
+          "digest": "sha256:2b6ead9a492ed4862e97b8fb69455a73f0706cc10a2ac0c321838fc8659222cb"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-10T01:46:08.566Z",
+      "publicAssets": [
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-darwin-arm64-5b317b64c65928492f913fc41946d55ee099b472.json",
+          "size": 571,
+          "digest": "sha256:83e3a87f99be90b2df497f935632ef7bc37bbd03e67e12407f0dd454de98ec15"
+        },
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-win32-x64-d241809cf8c9059b1ac9461804f731363a49346b.json",
+          "size": 560,
+          "digest": "sha256:5c86cc5b46990897e6623453a4e281ed785e391e852e492653e9be1e15aa9d0e"
+        },
+        {
+          "name": "The-Boss-2.2.26-mac-arm64.dmg",
+          "size": 711782548,
+          "digest": "sha256:2b6ead9a492ed4862e97b8fb69455a73f0706cc10a2ac0c321838fc8659222cb"
+        },
+        {
+          "name": "The-Boss-2.2.26-win-x64-setup.exe",
+          "size": 531618025,
+          "digest": "sha256:385f52afd93fd68c05a3ba761266d515ece364b3f3b05298054c1bce09947b12"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-10T01:50:41.179Z",
+      "publicAssets": [
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-darwin-arm64-5b317b64c65928492f913fc41946d55ee099b472.json",
+          "size": 571,
+          "digest": "sha256:83e3a87f99be90b2df497f935632ef7bc37bbd03e67e12407f0dd454de98ec15"
+        },
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-win32-arm64-d241809cf8c9059b1ac9461804f731363a49346b.json",
+          "size": 566,
+          "digest": "sha256:71781e8a9a1558dbf9c7209390be3d0ca3bf57a67f4ca66c8de34fae3c157708"
+        },
+        {
+          "name": "release-platform-v2.2.26-uar-enabled-win32-x64-d241809cf8c9059b1ac9461804f731363a49346b.json",
+          "size": 560,
+          "digest": "sha256:5c86cc5b46990897e6623453a4e281ed785e391e852e492653e9be1e15aa9d0e"
+        },
+        {
+          "name": "The-Boss-2.2.26-mac-arm64.dmg",
+          "size": 711782548,
+          "digest": "sha256:2b6ead9a492ed4862e97b8fb69455a73f0706cc10a2ac0c321838fc8659222cb"
+        },
+        {
+          "name": "The-Boss-2.2.26-win-arm64-setup.exe",
+          "size": 494856156,
+          "digest": "sha256:dd40bd769ea6750b4cbe1d428e1265124d66a721e9d4f68ac03045bb6db03efa"
+        },
+        {
+          "name": "The-Boss-2.2.26-win-x64-setup.exe",
+          "size": 531618025,
+          "digest": "sha256:385f52afd93fd68c05a3ba761266d515ece364b3f3b05298054c1bce09947b12"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-actual-reusable-team-core",
+  "recordedAt": "2026-10-11T00:09:50.292Z",
+  "version": "2.2.31",
+  "status": "success",
+  "complete": true,
+  "startedAt": "2026-10-11T00:04:30.007Z",
+  "finishedAt": "2026-10-11T00:09:10.622Z",
+  "builtSource": {
+    "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "candidateId": "e8d1035b-80b2-48d2-aab7-d1004e1d221d",
+    "contentManifestDigest": "584d5a6934c8c85ee13d93530e8d95b9fc3edbfa4001935c0fb59f989e158beb"
+  },
+  "operatedSource": {
+    "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "driverDiffPaths": []
+  },
+  "originalOperation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-reusable-team-entrypoint-20261011/c15-a8ca0e94-f452-41be-8ab6-b0b5db77850e/integrated-team-operation.json",
+  "originalOperationSha256": "17ed168460043fbeed122be0a7d0e0f8e563fb50a78a16aff3536f309c01278b",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-reusable-team-entrypoint-20261011/c15-a8ca0e94-f452-41be-8ab6-b0b5db77850e/evidence.json",
+  "evidenceSha256": "419e9b5264871243a532d7f58b9c3f43af4ee66e50c237a4d9b2512e9712d791",
+  "checks": [
+    "named-product-design-team-with-per-role-models-and-exact-scoped-skill",
+    "immutable-package-and-private-scoped-binding-deployed",
+    "real-product-designer-reviewer-model-attempts-and-correlated-artifacts",
+    "revision-preserves-running-definition-package-binding",
+    "renderer-reopen-preserves-authoring-identities-attempts-and-artifacts",
+    "pre-terminal-public-member-model-output-visible",
+    "renderer-reopen-shows-correlated-saved-final-output"
+  ],
+  "acceptanceScope": "Affected C15.1/C16 reusable-team core on actual Mac ARM64 package only; no full C15.1 or Windows installed pass.",
+  "successfulDeliveries": 15,
+  "wholePortfolioQualificationChanged": false,
+  "newDelivery": false
+}

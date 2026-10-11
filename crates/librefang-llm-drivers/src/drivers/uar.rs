@@ -346,14 +346,12 @@ pub(super) async fn full_run_transport(
         })?;
         (binding, guard.credentials.runtime.clone())
     };
-    if !binding
-        .capabilities
-        .iter()
-        .any(|item| item == "full_harness_delegation_v1")
-    {
-        return Err(LlmError::Http(
-            "selected UAR instance does not advertise full_harness_delegation_v1".to_string(),
-        ));
+    for capability in ["full_harness_delegation_v1", "tool_admission_v2"] {
+        if !binding.capabilities.iter().any(|item| item == capability) {
+            return Err(LlmError::Http(format!(
+                "selected UAR instance does not advertise {capability}; update the selected runtime before full-run execution"
+            )));
+        }
     }
     let endpoint = binding.endpoints.runtime.clone().ok_or_else(|| {
         LlmError::Http("selected UAR binding has no runtime endpoint".to_string())

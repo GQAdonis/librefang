@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T14:52:27.723Z",
+  "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+  "implementation": "complete",
+  "sources": {
+    "mini": "3a7c0d245cb8a412b62e287872e23c694d20348b",
+    "full": "fd1e2c2de05f67dcb773d4710d5457588d2fe39b"
+  },
+  "productionGeneration": "npm runtime build in both packs completed; payload copied into The Boss",
+  "capability": "Eight-harness authoring preserves native options/extensions; reports emitted vs preserved-only features; refuses missing required capabilities.",
+  "qualification": {
+    "status": "pending",
+    "items": [
+      "Native harness qualification across eight tools",
+      "Full/mini operational parity",
+      "Installed customer-platform operation"
+    ]
+  },
+  "authority": "Operator approved implementation completion independent of nonpassing qualification; no qualification claimed."
+}

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "dispatchedAt": "2026-10-06T07:50:52.674Z",
+  "iterationId": "008bc325-ed29-4d86-8a82-d8ccaf2b7148",
+  "task": "C14.1",
+  "model": "gpt-6.1-sol",
+  "owners": [
+    "c14_teams_approval_repair",
+    "c14_bossfang_terminal_repair",
+    "root-packaging"
+  ],
+  "implemented": [
+    "R1",
+    "R2"
+  ],
+  "pending": [
+    "packaged operation",
+    "installer publication"
+  ],
+  "productCompletionsRecorded": 0,
+  "nativeBuilds": {
+    "local": {
+      "source": "035678b6290353a5988a5a96668d08a9781b1471",
+      "log": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/uar-native-recovery-20261006.log",
+      "status": "success",
+      "finishedAt": "2026-10-06T08:36:44.847Z",
+      "payloadRecordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-terminal-replay-035678b6-20261006/uar-sidecar-darwin-arm64.json"
+    },
+    "remoteUar": [
+      37432569302,
+      37432570375,
+      37432572455
+    ],
+    "bossfang": {
+      "source": "bac04cb6b2c144520e28234ad77f00d4cf0f5b23",
+      "status": "all-four-native-payloads-published-and-pinned",
+      "publishedPlatforms": [
+        "win32-x64",
+        "win32-arm64",
+        "darwin-x64",
+        "darwin-arm64"
+      ],
+      "releaseUrl": "https://github.com/GQAdonis/librefang/releases/tag/bossfang-sidecar-bac04cb6b",
+      "pendingPlatforms": []
+    },
+    "uarPublishedPlatforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "uarPendingPlatforms": []
+  },
+  "desktopSource": "c1394ec9cd5df2862ff912fb0cb5eba7bea9a196",
+  "updatedAt": "2026-10-06T12:03:07.700Z",
+  "packagingRecovery": {
+    "observedAt": "2026-10-06T08:29:07.457Z",
+    "commit": "e5d0d5f16e1a6851111300f9e1b87b174446518c",
+    "observedFailure": "target-only cache restored before pinned source ignore rules",
+    "fix": "prepare selected pinned sources before target cache restore",
+    "bossfangRetryRun": 37436069892,
+    "prometheusRun": 37436073601,
+    "serviceImagesRun": 37436077620,
+    "bossfangArmRun": 37434846509,
+    "latestPayloadSourcesPending": false,
+    "windowsLongPathsFix": "008587bae315c1a5e1509dabdbb52b90f1513dc5",
+    "prometheusNative": {
+      "source": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "version": "1.11.3",
+      "tag": "boss-tools-prometheus-3e8a891bc-20261006",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "win32-x64",
+        "win32-arm64"
+      ],
+      "status": "published-native-assets-operation-pending"
+    },
+    "images": {
+      "workflowRun": 37436077620,
+      "status": "published-and-pinned"
+    },
+    "nativeCacheCollision": {
+      "commit": "1c5bb40e4c71e7bdd980c884fe2950156027d316",
+      "evidenceRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/native-cache-collision-repair-20261006.json",
+      "futureRunVerification": "pending"
+    },
+    "localBossfangCache": {
+      "observedAt": "2026-10-06T10:13:25.138Z",
+      "status": "unavailable",
+      "previousBuildDirectory": "/Users/gqadonis/.cargo-build/b4/8f5538a2784c9e",
+      "finding": "Prior bafa intermediates no longer exist; only final executable/debug output remains. No compatible warm local build evidenced; preserve ongoing native CI jobs.",
+      "productionCodeChanged": false,
+      "duplicateBuildStarted": false
+    },
+    "bossfangArmFinal": {
+      "workflowRun": 37434846509,
+      "job": 112174080837,
+      "conclusion": "cancelled",
+      "cause": "The job has exceeded the maximum execution time of 3h0m0s",
+      "compilerFailureObserved": false,
+      "artifactCount": 0,
+      "evidenceRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/recovery-native-20261006/37434846509/darwin-arm64/failure-annotations.json"
+    },
+    "localBossfangFallback": {
+      "status": "succeeded",
+      "source": "bac04cb6b2c144520e28234ad77f00d4cf0f5b23",
+      "features": [
+        "telemetry",
+        "surreal-backend",
+        "uar-driver"
+      ],
+      "releaseOverrides": {
+        "lto": "thin",
+        "codegenUnits": 4,
+        "jobs": 4
+      },
+      "firstAttempt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-arm-local-native-20261006.json",
+      "currentAttempt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-arm-local-native-retry1-20261006.json",
+      "dependencyRepair": "pnpm install --force --frozen-lockfile restored observed missing Rolldown darwin-arm64 binding; no source or lockfile edits",
+      "scope": "Actual production native payload build only; no suites/probes",
+      "finishedAt": "2026-10-06T11:57:57.503Z",
+      "sha256": "f6d1f9b2a16791e2334d04b2ea9978d8fbc5ff33aaba3cdde54834cb08d29204"
+    }
+  },
+  "localNativeBuild": {
+    "source": "035678b6290353a5988a5a96668d08a9781b1471",
+    "result": "success",
+    "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/uar-native-recovery-20261006.json",
+    "finishedAt": "2026-10-06T08:36:44.847Z"
+  },
+  "compass": {
+    "status": "refresh-deferred",
+    "reason": "Serialize upcoming complete native payload/application packaging; retained graph freshness does not certify implementation",
+    "recordedAt": "2026-10-06T08:52:56.591Z"
+  },
+  "sccache": {
+    "persistentConfiguration": {
+      "path": "/Users/gqadonis/Library/Application Support/Mozilla.sccache/config",
+      "cacheLocation": "Local disk: \"/Users/gqadonis/.cache/sccache\"",
+      "maxCacheBytes": 42949672960,
+      "evidenceRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/sccache-persistent-configuration-20261006.json",
+      "observedAt": "2026-10-06T09:11:29.228Z"
+    }
+  },
+  "skillReceiptRepair": {
+    "fullRevision": "c5db763f034726af90d5ac456c52b121f34e7f3e",
+    "miniRevision": "e3fed05944e6b365ad74af30926b875e6857190f",
+    "evidenceRef": ".prometheus/cadence/artifacts/launcher-receipt-collision-repair-20261006.json",
+    "packagedLaunch": "pending"
+  }
+}

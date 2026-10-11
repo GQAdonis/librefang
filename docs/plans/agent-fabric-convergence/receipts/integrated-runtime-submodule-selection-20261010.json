@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-10T14:31:09.137Z",
+  "repositories": [
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "skills/imported/artifact-refiner",
+      "url": "https://github.com/GQAdonis/artifact-refiner-skill.git",
+      "prior": "18d000f3e46952418f682159b227dbf71ce61dcb",
+      "remote": "18d000f3e46952418f682159b227dbf71ce61dcb",
+      "selected": "18d000f3e46952418f682159b227dbf71ce61dcb",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "skills/imported/sycophancy-correction",
+      "url": "https://github.com/Know-Me-Tools/sycophancy-correction-skill.git",
+      "prior": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+      "remote": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+      "selected": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/surreal-memory-server",
+      "url": "https://github.com/Prometheus-AGS/surreal-memory-server.git",
+      "prior": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+      "remote": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+      "selected": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/prometheus-knowledge",
+      "url": "https://github.com/Prometheus-AGS/prometheus-knowledge-rs.git",
+      "prior": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "remote": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "selected": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/liter-llm",
+      "url": "https://github.com/GQAdonis/liter-llm.git",
+      "prior": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "remote": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "selected": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "reason": "preserve three approved release repair commits ahead of origin/main"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "skills/imported/prometheus-entity-management",
+      "url": "https://github.com/Prometheus-AGS/prometheus-entity-management.git",
+      "prior": "d1588d8c93cc267774d1911e8bd53bd3918a7f12",
+      "remote": "34a211563fe7f06118996a40cc398c4c3af953ef",
+      "selected": "34a211563fe7f06118996a40cc398c4c3af953ef",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/cowork-skills",
+      "url": "https://github.com/GQAdonis/cowork-skills.git",
+      "prior": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+      "remote": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+      "selected": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/disk-space-guardian",
+      "url": "https://github.com/GQAdonis/disk-space-guardian.git",
+      "prior": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+      "remote": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+      "selected": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "path": "tools/openai-proxy",
+      "url": "https://github.com/GQAdonis/openai-proxy.git",
+      "prior": "d269910e45811c8450c7d80004405b6ea3cd9665",
+      "remote": "b68861e0a6672f5ece900c58fd44b9e23a6b5691",
+      "selected": "b68861e0a6672f5ece900c58fd44b9e23a6b5691",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+      "path": "tools/prometheus-knowledge",
+      "url": "https://github.com/Prometheus-AGS/prometheus-knowledge-rs.git",
+      "prior": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "remote": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "selected": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+      "path": "tools/liter-llm",
+      "url": "https://github.com/GQAdonis/liter-llm.git",
+      "prior": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "remote": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "selected": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "reason": "preserve three approved release repair commits ahead of origin/main"
+    },
+    {
+      "repo": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-mini",
+      "path": "tools/surreal-memory-server",
+      "url": "https://github.com/Prometheus-AGS/surreal-memory-server.git",
+      "prior": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+      "remote": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+      "selected": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "path": "models.dev",
+      "url": "https://github.com/Know-Me-Tools/models.dev.git",
+      "prior": "f97df19af40bc322ccbffc91138f360154940a63",
+      "remote": "4a0154da2410bca18e97be812fecb9e8f85466e8",
+      "selected": "4a0154da2410bca18e97be812fecb9e8f85466e8",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "path": "crates/prometheus-skill-system",
+      "url": "https://github.com/Prometheus-AGS/prometheus-skill-system.git",
+      "prior": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+      "remote": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "selected": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "path": "frontend/packages/prometheus-entity-management",
+      "url": "https://github.com/Prometheus-AGS/prometheus-entity-management.git",
+      "prior": "959839a88e65704014bab0bdd055df17fb210298",
+      "remote": "34a211563fe7f06118996a40cc398c4c3af953ef",
+      "selected": "34a211563fe7f06118996a40cc398c4c3af953ef",
+      "reason": "latest fork default branch"
+    },
+    {
+      "repo": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "path": "vendor/git/liter-llm",
+      "url": "https://github.com/GQAdonis/liter-llm.git",
+      "prior": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "remote": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "selected": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "reason": "preserve three approved release repair commits ahead of origin/main"
+    },
+    {
+      "repo": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "path": "vendor/git/rust-mcp-filesystem",
+      "url": "https://github.com/GQAdonis/rust-mcp-filesystem.git",
+      "prior": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+      "remote": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+      "selected": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+      "reason": "latest fork default branch"
+    }
+  ]
+}

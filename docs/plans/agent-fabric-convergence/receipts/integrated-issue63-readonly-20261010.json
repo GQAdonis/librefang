@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "kind": "external-effect-read-only-reconciliation",
+  "observedAt": "2026-10-10T15:18:39.455Z",
+  "method": "GET",
+  "issue": {
+    "closedAt": "2026-10-09T14:00:34Z",
+    "number": 63,
+    "state": "CLOSED",
+    "title": "Add Work feedback flow for reviewable GitHub issue publication",
+    "url": "https://github.com/Prometheus-AGS/the-boss/issues/63"
+  },
+  "newEffects": 0,
+  "scope": "Existing issue state only; earlier approved effect receipt remains authoritative. No new issue or comment created."
+}

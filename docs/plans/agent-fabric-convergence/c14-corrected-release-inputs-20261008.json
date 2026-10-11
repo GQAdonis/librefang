@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "kind": "prepared-release-dispatch",
+  "state": "not-dispatched",
+  "version": "2.2.15",
+  "profile": "uar-enabled",
+  "sourceBranch": "codex/afc-c14-bossfang-workflow",
+  "requiredBeforeDispatch": [
+    "corrected Mac ARM64 build and real ordinary BossFang workflow operation",
+    "merge approved producer/consumer/app changes with default main version 2.2.15",
+    "each selected platform native record actually published"
+  ],
+  "customerPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "secondaryPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "payloads": {
+    "darwin-arm64": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-c14-terminal-49ffa8e-native/uar-sidecar-darwin-arm64.json",
+    "darwin-x64": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-c14-terminal-49ffa8e-native/uar-sidecar-darwin-x64.json",
+    "win32-x64": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-c14-terminal-49ffa8e-native/uar-sidecar-win32-x64.json",
+    "win32-arm64": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-c14-terminal-49ffa8e-native/uar-sidecar-win32-arm64.json"
+  },
+  "bossfangPayloadTag": "bossfang-sidecar-0899e4993",
+  "nativeSourceRevisions": {
+    "uar": "49ffa8e008b6c46b67729416654c2778cf2b6216",
+    "bossfang": "0899e4993ebfede3f91366b22cfe9310b2e58f69"
+  },
+  "recordInputPolicy": "Supply only already published selected-platform record URLs. Importer loads all supplied URLs; do not pass an unfinished secondary record to the customer-platform build.",
+  "publication": "Serialized existing metadata/site publisher; publish each completed platform immediately; retain prior complete artifact for pending platforms",
+  "nativeAcceptance": "tracked separately; not implied by dispatch or compile",
+  "clockPolicy": "Current iteration start retained, publication debt retained"
+}

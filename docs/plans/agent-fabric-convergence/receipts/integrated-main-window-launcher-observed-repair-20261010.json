@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-main-window-launcher-repair",
+  "operationSession": 37412,
+  "observedAt": "2026-10-11T00:02:12.908Z",
+  "status": "cancelled-before-feature-operation",
+  "owningProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-oIZ5SZ",
+  "observedAuxiliaryWindow": {
+    "component": "subWindow",
+    "bodyChars": 0
+  },
+  "observedMainWindow": {
+    "component": "main",
+    "bodyChars": 214,
+    "providerSetupVisible": true
+  },
+  "implementationFailure": "launcher-selected-first-auxiliary-page",
+  "ownedAppGroup": 81505,
+  "cleanupSignals": [
+    "SIGTERM",
+    "SIGKILL"
+  ],
+  "appSourceUnchanged": true,
+  "cadenceCountersUnchanged": true,
+  "originalFailurePreserved": true
+}

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-pending-approval-runtime-restart-recovery",
+  "recordedAt": "2026-10-10T03:45:16.862Z",
+  "version": "2.2.30",
+  "platform": "darwin-arm64",
+  "status": "passed",
+  "complete": true,
+  "passed": true,
+  "sources": {
+    "boss": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "appAsarSha256": "d95d06d51b589e25d204d4c3235c3b40b5e389619315e008640fe3b5a90ce877",
+    "sidecarSha256": "959cbb3294b32fb24e2b0a35c21cd00159c71988e9ff6e99a00bb83b006c8f1b",
+    "installerSha256": "1afe14f2b97b1b96ba8d38699ee027568d07ee02bb3ab419e715be250bc31440",
+    "installedVersion": "2.2.30",
+    "operationDriverRevision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "selectedScenarioSha256": "2e9b364750832f1467e427fcc64acbbe56eaf640b31365d80615f9eb80a20ed1",
+    "installationReceiptSha256": "057d7a415511d0745ed30c1ccaa6359aa3914d5b8a7dfa496ea7cd4282684880"
+  },
+  "startedAt": "2026-10-10T03:42:45.745Z",
+  "finishedAt": "2026-10-10T03:43:37.628Z",
+  "checks": [
+    {
+      "name": "exact-real-pending-challenge-without-approved-effect",
+      "passed": true
+    },
+    {
+      "name": "owned-runtime-restarted-without-another-turn-or-decision",
+      "passed": true
+    },
+    {
+      "name": "same-command-retained-with-terminal-interruption-and-no-replay",
+      "passed": true,
+      "outcome": "confirmed-cancellation"
+    },
+    {
+      "name": "retained-history-readable-old-challenge-unresolvable-no-successful-effect",
+      "passed": true
+    }
+  ],
+  "decisionSubmitted": false,
+  "retrySubmitted": false,
+  "before": {
+    "instanceId": "b49f2d44-7cd8-48c4-a09e-7e9108a898e5",
+    "commandId": "e855da0d-541b-4d56-b126-0eea1862b3c8",
+    "attemptId": "d9929487-2e2b-4715-a642-27bd47f0b48c",
+    "runId": "270c9c57-33f6-4f79-8c77-a1fcf1119905",
+    "commandStatus": "running",
+    "approvalId": "d864d56f-bc02-4134-954d-89bea8081c53",
+    "toolName": "file_read",
+    "admissionOwner": "paired-host",
+    "decisionOwner": "uar-runtime",
+    "argumentsSha256": "a3a89e82926eaf69cd9a4bb6bd4a86d93ef6e8eb8959b4a7b916a22a920f4589",
+    "successfulEffects": 0,
+    "effectStates": [
+      {
+        "toolName": "file_read",
+        "state": "awaiting_approval"
+      }
+    ]
+  },
+  "restart": {
+    "operationId": "e5495697-05a8-4180-b694-7a1876a1fefc",
+    "status": "succeeded",
+    "generationBefore": 2,
+    "generationAfter": 3,
+    "instanceId": "managed-local"
+  },
+  "after": {
+    "instanceId": "b49f2d44-7cd8-48c4-a09e-7e9108a898e5",
+    "commandId": "e855da0d-541b-4d56-b126-0eea1862b3c8",
+    "attemptId": "d9929487-2e2b-4715-a642-27bd47f0b48c",
+    "runId": "270c9c57-33f6-4f79-8c77-a1fcf1119905",
+    "commandStatus": "cancelled",
+    "lifecycle": "dormant",
+    "recovery": "ready",
+    "activeRunId": null,
+    "activeCommandId": null
+  },
+  "afterRestartHistory": {
+    "available": true,
+    "pendingApprovalPresent": false,
+    "exactChallengePresent": true,
+    "approvalState": "cancelled",
+    "resolvable": false,
+    "successfulEffects": 0
+  },
+  "interruptionOutcome": "confirmed-cancellation",
+  "cleanup": {
+    "grantRevoked": true,
+    "instanceDisabled": true,
+    "nativeSettingsRestoredForNextRestart": true
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/pending-approval-recovery-afb35ef6-d58f-4f17-a1cf-aeab75ebc4ed/evidence.json",
+    "sha256": "c715657cb67da9b59dfb97392e680789be07100dcadb82c7b22405968095b663"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/pending-approval-recovery-afb35ef6-d58f-4f17-a1cf-aeab75ebc4ed/operation.json",
+    "sha256": "1f3118a69c906ac11664c74e3c45bdfa1fca6c0b59bd8b4b67ca926e1e07e244"
+  },
+  "retainedFailure": {
+    "receipt": "receipts/customer-pending-approval-restart-partial-2.2.29-20261010.json",
+    "rewritten": false,
+    "interpretation": "Historical2.2.29 reader404/unknown effect history remains its own incomplete attempt. This2.2.30 operation proves corrected history on its exact new synthetic command."
+  },
+  "installedAcceptance": {
+    "darwinArm64": "pending final identified candidate",
+    "win32X64": "pending final identified candidate"
+  },
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "verification": {
+    "buildsByEvidenceAgent": [],
+    "testSuitesRun": [],
+    "operationsByEvidenceAgent": []
+  },
+  "limits": [
+    "Undecided real file_read interrupted by owned managed runtime restart remains the same cancelled command/attempt/run; no transparent continuation or replay.",
+    "Actual history identifies the exact old challenge as cancelled/unresolvable with zero successful effects; no approval decision was submitted.",
+    "This is interrupted-approval recovery, not represented-read/disclosure success, human consent, graceful Application Quit or final acceptance."
+  ]
+}

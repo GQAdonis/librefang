@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-platform-release-update",
+  "recordedAt": "2026-10-11T01:38:14.354Z",
+  "operatorDirection": "Mac ARM64 and Windows x64 only; every other platform is deferred and must not block this milestone.",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64",
+    "linux-x64",
+    "linux-arm64"
+  ],
+  "planRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md",
+  "release": {
+    "version": "2.2.32",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.32",
+    "public": true,
+    "platforms": [
+      {
+        "platform": "darwin-arm64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.32/The-Boss-2.2.32-mac-arm64.dmg",
+        "size": 717484482,
+        "sha256": "453a66c892460d5e849ab262518d8b7f415bc30f7acdce5db021a40f76865920",
+        "signing": "Developer ID (notarized)",
+        "evidence": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/installation-public-mode-reconciled.json",
+          "sha256": "984cb6c8924da4c92cfac695e0dea90d0c5913895824d2d23f0a7dbc795958e2"
+        }
+      },
+      {
+        "platform": "win32-x64",
+        "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.32/The-Boss-2.2.32-win-x64-setup.exe",
+        "size": 529818664,
+        "sha256": "e2cf1933fd9c01f1854011585edb03e1a6cfb3882afad5d5667f3b2f3a50393a",
+        "signing": "unsigned",
+        "evidence": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-win32-x64-2.2.32/download-verification.json",
+          "sha256": "b6b587dd98eae63b9c7298f70686e48acd6452e123aa6256e46f8cbe3838c648"
+        }
+      }
+    ]
+  },
+  "metadataCommit": "f7f82e312fcdccb9701cefbaa3ade7cb821dd6d9",
+  "landing": {
+    "repository": "Know-Me-Tools/boss-landing-spot",
+    "macCommit": "d44c4082451996ac135b19829237519be1711c89",
+    "windowsCommit": "9bfd716fbc5cfa3a1cffba574593730054ae4e5a",
+    "bothPushedToMain": true,
+    "liveWebsiteVerification": "pending: last observed live bundle still lacks 2.2.32 links; Lovable update in progress"
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "eventsSeq": 1455,
+    "successfulDeliveries": 17,
+    "clockAndHistoryUnchanged": true,
+    "mutation": false
+  },
+  "accounting": {
+    "historicalCode": "61/61 tasks, 20/20 changes",
+    "portfolioQualification": "43/61 terminal: 42 qualified and 1 historical skipped duplicate",
+    "newQualificationCredit": 0
+  },
+  "installedAcceptance": {
+    "darwin-arm64": "pending candidate-specific public operation and operator acceptance",
+    "win32-x64": "pending native operation and operator acceptance"
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-native-inference-post-login-diagnosis",
+  "recordedAt": "2026-10-09T23:02:16.927Z",
+  "status": "operation-launch-defect-diagnosed-retry-pending",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "installedVersion": "2.2.25",
+    "publicApp": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "scenarioSha256": "276b27eb65efa7a338b1fd2b991145e7a25a01df74689081bc844f62a3924f16",
+    "operationDriverSha256": "d859192a61fc41e66107ceb5832d3364fbb28417565ee9ca57c85bfda6a71634",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0"
+  },
+  "preservedPriorDiagnosis": "receipts/customer-native-inference-failure-diagnosis-20261009.json",
+  "failedClaudeOnlyEvidence": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-ed8e408b-ea78-42ea-a88e-c41ed2d0d14d/evidence.json",
+  "failedClaudeOnlyEvidenceSha256": "3c7c91282c28fccbc9e74cd609a1cfd7c92a5d46b8eede1c542054869a7fe47d",
+  "failure": {
+    "name": "ClaudeCodeResultError",
+    "classification": "native-sign-in-required",
+    "message": "Not logged in · Please run /login",
+    "statusCode": null,
+    "reasonCode": "auth",
+    "sourceLayer": "runtime",
+    "retryable": false,
+    "originalMessageSha256": "ddcf5c1f4a3b398837003d800ea793d0a3ebb7ec0a1304b3186393460a7d5bd6",
+    "rawErrorRecorded": false
+  },
+  "operatorSignInReported": true,
+  "readOnlyAuthProbes": {
+    "commandArguments": [
+      "auth",
+      "status",
+      "--json"
+    ],
+    "normalObservedAt": "2026-10-09T22:56:33.511Z",
+    "normal": [
+      {
+        "binary": "exact-public-bundled-cli",
+        "environment": "minimal-with-host-identity",
+        "exitCode": 0,
+        "loggedIn": true,
+        "authMethod": "claude.ai"
+      },
+      {
+        "binary": "exact-public-bundled-cli",
+        "environment": "inherited",
+        "exitCode": 0,
+        "loggedIn": true,
+        "authMethod": "claude.ai"
+      },
+      {
+        "binary": "current-shell-cli",
+        "environment": "minimal-with-host-identity",
+        "exitCode": 0,
+        "loggedIn": true,
+        "authMethod": "claude.ai"
+      },
+      {
+        "binary": "current-shell-cli",
+        "environment": "inherited",
+        "exitCode": 0,
+        "loggedIn": true,
+        "authMethod": "claude.ai"
+      }
+    ],
+    "isolationObservedAt": "2026-10-09T23:00:00.593Z",
+    "isolation": [
+      {
+        "environment": "minimal-without-USER",
+        "loggedIn": false,
+        "exitCode": 1
+      },
+      {
+        "environment": "same-plus-USER",
+        "loggedIn": true,
+        "exitCode": 0
+      },
+      {
+        "environment": "same-plus-LOGNAME",
+        "loggedIn": false,
+        "exitCode": 1
+      },
+      {
+        "environment": "same-plus-SHELL",
+        "loggedIn": false,
+        "exitCode": 1
+      },
+      {
+        "environment": "same-plus-USER-and-LOGNAME",
+        "loggedIn": true,
+        "exitCode": 0
+      }
+    ],
+    "runtimeFlagsConfirmation": {
+      "observedAt": "2026-10-09T23:00:32.375Z",
+      "environment": "known-runtime-flags-plus-host-USER",
+      "exitCode": 0,
+      "loggedIn": true,
+      "authMethod": "claude.ai"
+    },
+    "intermediateFlagSpecificAttributionRejected": true
+  },
+  "rootCause": "Cadence minimalEnvironment omits USER. The exact native Claude CLI cannot locate the authenticated macOS credential account in that environment; preserving only the existing USER restores auth. Normal host sign-in is valid.",
+  "repair": {
+    "ownedLauncher": "inputs/operate-retained-customer-inference-20261009.mjs",
+    "preservesOnlyExistingHostUSER": true,
+    "credentialsCopied": false,
+    "applicationAuthCodeChanged": false,
+    "sharedFullMiniFix": "approved separately; exact process.mjs ownership"
+  },
+  "newApplicationOperationRunByDiagnosis": false,
+  "newCadenceDelivery": false,
+  "credentialValuesOrAccountIdentityRecorded": false
+}

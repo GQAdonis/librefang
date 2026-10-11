@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-customer-operation",
+  "operationId": "skills-handoff",
+  "startedAt": "2026-10-09T22:56:12.753Z",
+  "finishedAt": "2026-10-09T22:56:30.266Z",
+  "preparationStartedAt": "2026-10-09T22:56:12.722Z",
+  "preparationFinishedAt": "2026-10-09T22:56:12.743Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+    "selectedScenarioSha256": "d5e9fdf86d2d0fa91d4c456ee86c779d28dd57b715760a86b6fc6f5dd520467f",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+  },
+  "installationReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installation.json",
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/launch.json",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/evidence.json",
+  "evidenceSha256": "27b717401838d5059b7fc4ad373fb13b7543b23f6eb43cea62d9b5fbdd6b29e7",
+  "status": "passed",
+  "functionalAcceptance": "scenario-confirmed",
+  "checks": [
+    "actual-packaged-creator-captures-dirty-files-evidence-karpathy-and-local-scoped-memory",
+    "real-canonical-task-identity-status-read-without-transition",
+    "read-only-inspection-preserves-source-ownership",
+    "changed-and-missing-selected-source-reported-without-rewriting-capture",
+    "explicit-cross-harness-local-ownership-transfer-retains-provenance-and-queued-memory",
+    "stale-original-task-revision-refused-without-state-mutation",
+    "prior-packaged-producer-legacy-packet-readable-without-invented-provenance",
+    "canonical-parent-task-status-unchanged"
+  ],
+  "acceptance": "operator-acceptance-pending",
+  "newCadenceDelivery": false
+}

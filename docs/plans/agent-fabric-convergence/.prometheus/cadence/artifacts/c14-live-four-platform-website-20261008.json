@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-release-website-publication",
+  "version": "2.2.15",
+  "sourceCommit": "997247b431593e4339d73398ac1409fdf4332e50",
+  "landingCommit": "0e3cdf255e504324e76643a4f9694125f4c344f3",
+  "status": "passed",
+  "siteUrl": "https://the-boss.know-me.tools/",
+  "httpStatus": 200,
+  "bundleUrl": "https://the-boss.know-me.tools/assets/index-Chkg_zAz.js",
+  "bundleSha256": "9f15df5fa155d6647b4c2a0660b8bdf568ff9f894f98e15140ce6c1686f63f68",
+  "bundleHttpStatus": 200,
+  "links": [
+    {
+      "platform": "darwin-arm64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-mac-arm64.dmg",
+      "present": true
+    },
+    {
+      "platform": "darwin-x64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-mac-x64.dmg",
+      "present": true
+    },
+    {
+      "platform": "win32-x64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-win-x64-setup.exe",
+      "present": true
+    },
+    {
+      "platform": "win32-arm64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.15/The-Boss-2.2.15-win-arm64-setup.exe",
+      "present": true
+    }
+  ],
+  "publicationMethod": "existing signed-in Lovable project Publish changes",
+  "uiConfirmation": "Your website was updated",
+  "startedAt": "2026-10-08T11:20:10.276Z",
+  "finishedAt": "2026-10-08T11:20:13.288Z",
+  "installedAcceptance": "pending",
+  "installerBytesEvidence": "separate immutable platform verification receipts"
+}

@@ -1,0 +1,109 @@
+{
+  "phase": "six-hour-convergence-recovery",
+  "generated_at": "2026-10-05T23:27:41.231Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier1_local_inspection": 2,
+      "tier1_external": 0,
+      "tier2": 0,
+      "tier3": 0,
+      "tier4": 0
+    }
+  },
+  "gaps_addressed": [
+    "Teams prepared approval facts versus display",
+    "BossFang authoritative terminal observation",
+    "Delivery coupling and rebuild churn"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Existing host admission record and protected approval read",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Teams prepared approval facts versus display",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "claim": "Private validated arguments/digest exist at UarHostToolAdmission.ts:278; existing inspect at :437 omits effect facts; driver requires raw file_path at approvals.mjs:164."
+        }
+      ],
+      "risks": [
+        "Display target is truncated; never use it as exact execution authority.",
+        "Fixture-specific expected content must stay outside production API."
+      ],
+      "decision_rationale": "Extend the existing trusted contract narrowly; no new endpoint or approval authority."
+    },
+    {
+      "id": "cand-002",
+      "name": "Existing admitted-instance run lookup and observation projection",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "BossFang authoritative terminal observation",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "claim": "uar_delegation.rs:270 observes/persists without state refresh; desktop requires authoritative completion; empty terminal replay can await future events."
+        }
+      ],
+      "risks": [
+        "agui.done is not final authoritative state proof.",
+        "Already-terminal handling must preserve unread output and original instance authority."
+      ],
+      "decision_rationale": "Repair freshness and terminal observation using existing ownership and lookup."
+    },
+    {
+      "id": "cand-003",
+      "name": "Existing Cadence candidate receipts and isolated pipeline",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Delivery coupling and rebuild churn",
+      "verdict": "adopt",
+      "evidence": [
+        {
+          "tier": 1,
+          "claim": "delivery-cadence references/pipeline-contract.md supports immutable candidates, receipt adoption and isolated authorized work-ahead."
+        }
+      ],
+      "risks": [
+        "Revision 9 approved combined scope; independent release splitting needs explicit amendment.",
+        "Changed packaged inputs invalidate prior applicable build evidence."
+      ],
+      "decision_rationale": "Use existing controls; no Cadence engine redesign or publication-policy change."
+    },
+    {
+      "id": "cand-004",
+      "name": "Replacement runtime or generalized contract framework",
+      "kind": "framework",
+      "registry": "none",
+      "fit_for_gap": "Localized current boundary defects",
+      "verdict": "reject",
+      "evidence": [
+        {
+          "tier": 1,
+          "claim": "Current receipts pass ownership/admission and show actual BossFang model output; failures localize to inspection and stale observation."
+        }
+      ],
+      "risks": [
+        "Adds migration and implementation scope without evidence it fixes these faster."
+      ],
+      "decision_rationale": "Unnecessary for the reported failures."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "Narrow host prepared-effect inspection and aligned operation consumer",
+      "why_no_candidate": "The existing repository contract needs an application-specific extension; no package substitutes for its private admission authority.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Native delegation state refresh and terminal observation repair",
+      "why_no_candidate": "The stale projection is in existing application code and requires a local correction, not a dependency.",
+      "capability_gap_id": null
+    }
+  ]
+}

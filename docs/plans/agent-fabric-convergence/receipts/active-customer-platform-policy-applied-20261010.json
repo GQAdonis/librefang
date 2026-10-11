@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "kind": "active-customer-platform-policy-applied",
+  "recordedAt": "2026-10-10T20:51:40.252Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "runStartedAt": "2026-10-06T17:07:34.783Z",
+  "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+  "iterationStartedAt": "2026-10-10T14:57:53.458Z",
+  "successfulDeliveries": 15,
+  "profileRevision": 5,
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64",
+    "linux-x64",
+    "linux-arm64"
+  ],
+  "authority": {
+    "recordedAt": "2026-10-10T20:47:19.728Z",
+    "authorityRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-platform-priority-20261010.json",
+    "authorityEvidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-platform-priority-20261010.json",
+      "sha256": "e2351f3729b31f24178a6b226eb42f2b7c582f7c8cf001369843d0f0acf3df82"
+    },
+    "reason": "Operator explicitly deferred Mac Intel, Windows ARM64 and Linux; preserve the current continuous delivery.",
+    "before": {
+      "mode": "count",
+      "every": 2,
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "win32-x64",
+        "win32-arm64"
+      ],
+      "websiteUrl": "https://the-boss.know-me.tools",
+      "procedure": {
+        "repository": "Prometheus-AGS/the-boss",
+        "workflow": "the-boss-release.yml",
+        "profile": "uar-enabled",
+        "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+        "requiredInputs": [
+          "release_version",
+          "release_profile",
+          "platforms",
+          "uar_win32_x64_record_url",
+          "uar_win32_arm64_record_url",
+          "uar_darwin_arm64_record_url",
+          "uar_darwin_x64_record_url"
+        ],
+        "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+        "landingRepository": "Know-Me-Tools/boss-landing-spot",
+        "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+      },
+      "requireMetadata": true,
+      "acceptancePlatforms": []
+    },
+    "after": {
+      "mode": "count",
+      "every": 2,
+      "platforms": [
+        "darwin-arm64",
+        "win32-x64"
+      ],
+      "websiteUrl": "https://the-boss.know-me.tools",
+      "procedure": {
+        "repository": "Prometheus-AGS/the-boss",
+        "workflow": "the-boss-release.yml",
+        "profile": "uar-enabled",
+        "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+        "requiredInputs": [
+          "release_version",
+          "release_profile",
+          "platforms",
+          "uar_darwin_arm64_record_url",
+          "uar_win32_x64_record_url"
+        ],
+        "platforms": "darwin-arm64,win32-x64",
+        "landingRepository": "Know-Me-Tools/boss-landing-spot",
+        "completion": "Both selected installers, source-bound metadata and matching live website links are published. Installed acceptance remains separate."
+      },
+      "requireMetadata": true,
+      "acceptancePlatforms": []
+    },
+    "deferredPlatforms": [
+      "darwin-x64",
+      "win32-arm64"
+    ],
+    "priorCandidateId": "02c4dd1a-3344-4b97-9f49-08f7a84bb2ab",
+    "historicalObligationsChanged": false
+  },
+  "input": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/customer-two-platform-active-publication-20261010.json",
+    "sha256": "da9efe598495396d621a9fc70aa5a0b65df1c5cf841e488e293d98e37d73af4c"
+  },
+  "skillSources": {
+    "full": "dc76134c8e6ca4b5fc32cb1f4d6a94c36c54636f",
+    "mini": "90d622cde5a3072b25166d4f305b1ffb0d2abb74"
+  },
+  "applicationSkillImport": "fa84d530e7",
+  "clockReset": false,
+  "newDeliveryCredited": false,
+  "newQualificationCredited": false,
+  "buildRequired": "New candidate freeze/build/operation for production repairs; prior candidate receipts retained but cannot certify the changed application."
+}

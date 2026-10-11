@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "reviewed-skills-public-failed-operation-safe-projection",
+  "recordedAt": "2026-10-09T23:07:52.772Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+    "selectedScenarioSha256": "791086d723b77429d8e56e0cfca955f3c344e4370a4035ce551f0f3a57f47719",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "fullSkillSourceRevision": "fd1e2c2de05f67dcb773d4710d5457588d2fe39b",
+    "miniSkillSourceRevision": "3a7c0d245cb8a412b62e287872e23c694d20348b"
+  },
+  "originalOperation": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/reviewed-skills-imports-52f7acb2-46f9-4f17-ad33-3da7e56a9ebb/operation.json",
+  "originalEvidence": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/reviewed-skills-imports-52f7acb2-46f9-4f17-ad33-3da7e56a9ebb/evidence.json",
+  "originalEvidenceSha256": "414bb6b17d5a401edd3455dc0f61909026ab37b6d06e52596e18af613c24eca7",
+  "status": "failed",
+  "functionalAcceptance": "not-performed",
+  "failureStage": "normal-work-run-with-read-only-approval",
+  "failureCode": "C15_REVIEWED_SKILL_ATTEMPT_FAILED",
+  "completedChecks": [
+    "prelaunch-isolated-signed-full-generation-used-as-packaged-application-home",
+    "required-reviewed-mini-and-full-skills-selected-for-read-only-members-and-exact-revision-deployed",
+    "closure-tampering-and-required-tool-scope-refused-without-changing-installed-binding"
+  ],
+  "failedExecution": [
+    {
+      "status": "failed",
+      "executionOutcome": "failed",
+      "diagnostic": {
+        "code": "TEAM_PROVIDER_REQUEST_REJECTED",
+        "sourceStage": "provider-opening",
+        "category": "provider_timeout"
+      }
+    }
+  ],
+  "coverageCoreComplete": true,
+  "coverageComplete": false,
+  "privateCoveragePreflight": {
+    "scenario": "private-coverage-claim",
+    "status": "not-exercised",
+    "reason": "trusted-native-request-unavailable"
+  },
+  "interpretation": "Required reviewed closures were selected/deployed and tamper/tool-scope refusals operated. The normal Work attempt failed while opening its provider, categorized provider_timeout. The preserved failedApplicationRequest UAR_TEAM_SKILL_TOOLS_UNAVAILABLE is the intentional refused tool-scope scenario, not the provider timeout cause. The exact transport/backend cause is not established by this safe report.",
+  "newCadenceDelivery": false,
+  "qualificationCredit": false,
+  "rawProtectedDiagnosticRecorded": false,
+  "privateFixtureRecorded": false
+}

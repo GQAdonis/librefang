@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "kind": "approved-customer-qualification-scope",
+  "authority": "operator-approved Qualify and close the customer release plan",
+  "canonicalDecision": {
+    "id": "customer-qualification-scope-20261009",
+    "commandId": "customer-qualification-scope-20261009",
+    "revision": 615,
+    "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+    "recordedAt": "2026-10-09T21:28:00.882705Z",
+    "committedLocally": true
+  },
+  "markers": {
+    "codeDone": 61,
+    "codeTotal": 61,
+    "changesDone": 20,
+    "changesTotal": 20,
+    "portfolioTerminal": 43,
+    "portfolioPassed": 42,
+    "historicalDuplicate": 1,
+    "portfolioTotal": 61,
+    "customerQualification": "pending source-bound operations and exact-candidate installed acceptance"
+  },
+  "candidate": {
+    "version": "2.2.25",
+    "source": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uarSource": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "requiredInstalledPlatforms": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "packagePublicationPlatforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "installedAcceptance": "pending; operator accepted 2.2.24 only"
+  },
+  "fullPackHistoryMirror": {
+    "pullRequest": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/177",
+    "commit": "e02c35b71425b1effab0e184e2e0e9548a6b695c",
+    "path": "docs/cadence-history-ipfs.md",
+    "size": 15011,
+    "sha256": "d329f2fa9dce519ee03a9488e4c953a7e53d0787110402ac2fa8824d19b9355a",
+    "scope": "Documentation-only encrypted snapshot index and recovery instructions matching merged mini PR53. No new skill runtime or payload release.",
+    "state": "merged"
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "startedAt": "2026-10-06T17:07:34.783Z",
+    "successfulDeliveries": 15,
+    "newDelivery": false,
+    "publicationDue": true,
+    "pendingObligations": 2,
+    "explanation": "Published 2.2.25 inputs differ from the two historical frozen candidates; preserve their obligations until a supported source/scope-bound reconciliation is recorded. No counters, receipts or clocks reset."
+  },
+  "references": [
+    "../customer-release-qualification-plan.md",
+    "customer-qualification-evidence-audit-20261009.md",
+    "customer-release-2.2.25-live-website-20261009.json",
+    "customer-release-2.2.25-downloaded-bytes-20261009.json",
+    "customer-team-operation-driver-correction-20261009.json"
+  ]
+}

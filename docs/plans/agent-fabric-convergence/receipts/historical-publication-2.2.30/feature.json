@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "kind": "feature",
+  "status": "success",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "verifiedAt": "2026-10-10T03:43:37.325Z",
+  "evidenceRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/pending-approval-recovery-afb35ef6-d58f-4f17-a1cf-aeab75ebc4ed/evidence.json",
+      "sha256": "c715657cb67da9b59dfb97392e680789be07100dcadb82c7b22405968095b663"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.30/pending-approval-recovery-afb35ef6-d58f-4f17-a1cf-aeab75ebc4ed/operation.json",
+      "sha256": "1f3118a69c906ac11664c74e3c45bdfa1fca6c0b59bd8b4b67ca926e1e07e244"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-pending-approval-restart-recovery-2.2.30-20261010.json",
+      "sha256": "e69c125006ee028a8a3c2662f6bf1d6d93b4fd5b6393786fd3b60a238a7cdcf6"
+    }
+  ],
+  "startedAt": "2026-10-10T03:42:55.281Z",
+  "finishedAt": "2026-10-10T03:43:37.325Z",
+  "artifact": {
+    "platform": "darwin-arm64",
+    "sha256": "1afe14f2b97b1b96ba8d38699ee027568d07ee02bb3ab419e715be250bc31440"
+  },
+  "operationId": "pending-approval-recovery",
+  "outcome": "Actual same pending command interrupted by owned-runtime restart; exact cancelled/unresolvable approval retained, readable historical run and zero successful effects",
+  "checks": [
+    {
+      "name": "exact-real-pending-challenge-without-approved-effect",
+      "passed": true
+    },
+    {
+      "name": "owned-runtime-restarted-without-another-turn-or-decision",
+      "passed": true
+    },
+    {
+      "name": "same-command-retained-with-terminal-interruption-and-no-replay",
+      "passed": true,
+      "outcome": "confirmed-cancellation"
+    },
+    {
+      "name": "retained-history-readable-old-challenge-unresolvable-no-successful-effect",
+      "passed": true
+    }
+  ],
+  "decisionSubmitted": false,
+  "retrySubmitted": false,
+  "operatorAcceptance": "pending",
+  "representedRead": "not-qualified",
+  "timestampBasis": "Actual feature scenario evidence interval; wrapper operation interval begins before launching the application and is preserved in evidenceRefs"
+}

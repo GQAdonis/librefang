@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "published-release-installer-byte-acceptance",
+  "releaseTag": "v2.2.16",
+  "releaseUrl": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.16",
+  "sourceRunId": "37775569785",
+  "publisherRunId": "37780740659",
+  "expectedSource": "2b543cd4e7b08df69321666334913494a1dd10fb",
+  "source": "2b543cd4e7b08df69321666334913494a1dd10fb",
+  "platform": "darwin",
+  "architecture": "x64",
+  "version": "2.2.16",
+  "profile": "uar-enabled",
+  "features": {
+    "uar": true
+  },
+  "manifest": {
+    "name": "release-platform-v2.2.16-uar-enabled-darwin-x64-2b543cd4e7b08df69321666334913494a1dd10fb.json",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/release-platform-v2.2.16-uar-enabled-darwin-x64-2b543cd4e7b08df69321666334913494a1dd10fb.json",
+    "assetApiUrl": "https://api.github.com/repos/Prometheus-AGS/the-boss/releases/assets/621843389",
+    "size": 565,
+    "sha256": "1ccdb49dffb225914be95320e03d4030906ca39ee6883ae6df5da4bfac867916",
+    "declaredGithubDigest": "sha256:1ccdb49dffb225914be95320e03d4030906ca39ee6883ae6df5da4bfac867916"
+  },
+  "artifacts": [
+    {
+      "name": "The-Boss-2.2.16-mac-x64.dmg",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-mac-x64.dmg",
+      "declaredSize": 744462022,
+      "declaredSha256": "17c5e277b3214340ef9ce9747568a69a13d2c167e2a761d7b7b63fb63e3eac7e",
+      "size": 744462022,
+      "sha256": "17c5e277b3214340ef9ce9747568a69a13d2c167e2a761d7b7b63fb63e3eac7e",
+      "sizeMatches": true,
+      "sha256Matches": true,
+      "githubAssetSizeMatches": true,
+      "githubAssetSha256Matches": true,
+      "signing": {
+        "declared": "Developer ID (notarized)",
+        "verification": "publisher-manifest declaration; signing and notarization not independently executed"
+      },
+      "streamStartedAt": "2026-10-08T13:02:26.992Z",
+      "checkedAt": "2026-10-08T13:02:53.159Z",
+      "httpStatus": 200,
+      "finalHost": "release-assets.githubusercontent.com"
+    }
+  ],
+  "checks": {
+    "recordSizeMatches": true,
+    "recordSha256Matches": true,
+    "sourceMatches": true,
+    "versionMatches": true,
+    "platformMatches": true,
+    "architectureMatches": true,
+    "artifactCountMatches": true,
+    "installerBytesMatch": true
+  },
+  "result": "pass",
+  "startedAt": "2026-10-08T13:02:26.547Z",
+  "checkedAt": "2026-10-08T13:02:53.160Z",
+  "verificationMethod": "Public HTTPS installer response consumed incrementally into SHA-256 and byte count; no installer file or full installer buffer created"
+}

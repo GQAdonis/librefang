@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-completed-boundary-recovery",
+  "recordedAt": "2026-10-08T03:03:41.325Z",
+  "taskRefs": [
+    "C14.3",
+    "C14.4"
+  ],
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "originalStartedAt": "2026-10-07T23:24:33.943Z",
+    "clockReset": false,
+    "publicationDebtPreserved": true
+  },
+  "actualOperation": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-workflow-66dfcbdc-cbdc-4f58-a3c8-93732b411375/operation.json",
+  "artifactSource": "7f9394f4c1b0830f416f2128792095ce4c43c171",
+  "driverSource": "eedb5c6346126b6a6b40b4158a57f12c23f0138d",
+  "observedFindings": [
+    {
+      "id": "native-workflow-observation-request-amplification",
+      "evidence": "Actual cleanup POST cancellation receives HTTP429 after duplicate driver observation removed; native workflow reopens an SSE stream per nonempty chunk and performs capability/task lookup per cycle.",
+      "repair": "Retain original-task stream and publish authoritative incremental projections; preserve existing limiter."
+    },
+    {
+      "id": "native-root-run-identity-omitted",
+      "evidence": "Original persisted delegation uarRootRunId is null; native wire conversion initializes None. All other operation correlation identities match.",
+      "repair": "Carry explicit authenticated root-run identity through native wire/event conversion; do not infer root from current run or weaken approval checks."
+    }
+  ],
+  "taskCompletionCredited": false,
+  "deliveryCompletionCredited": false,
+  "checksRun": "Only failed completed-boundary actual packaged application operation; no unit/mock/lint/review suites or verification builds."
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-build-progress-observation",
+  "recordedAt": "2026-10-10T22:51:34.172Z",
+  "repository": "Prometheus-AGS/universal-agent-runtime",
+  "run": 38090581696,
+  "job": 114326008204,
+  "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+  "method": "Authenticated background GitHub job page, read-only rendered log extraction",
+  "observedCompilerUnits": [
+    "config v0.15.25",
+    "serde_norway v0.9.42",
+    "lopdf v0.44.0",
+    "prometheus_parking_lot v0.1.0",
+    "governor v0.10.4",
+    "async-stream v0.3.6",
+    "axum-extra v0.12.6",
+    "notify v8.2.0",
+    "jsonschema v0.49.4",
+    "liter-llm v2.1.1"
+  ],
+  "status": "production-compilation-in-progress",
+  "cacheHit": "unconfirmed",
+  "artifactPublished": false,
+  "qualificationCredit": false,
+  "limits": "Compiler progress is not a completed build, runnable payload, functional operation or installed acceptance."
+}

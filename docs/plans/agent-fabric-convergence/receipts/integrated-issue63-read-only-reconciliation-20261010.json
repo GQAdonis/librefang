@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-existing-github-effect-read-only-reconciliation",
+  "recordedAt": "2026-10-10T23:04:45.339Z",
+  "requestMethod": "GET",
+  "repository": "Prometheus-AGS/the-boss",
+  "number": 63,
+  "url": "https://github.com/Prometheus-AGS/the-boss/issues/63",
+  "title": "Add Work feedback flow for reviewable GitHub issue publication",
+  "state": "CLOSED",
+  "createdAt": "2026-10-09T12:37:53Z",
+  "closedAt": "2026-10-09T14:00:34Z",
+  "observedBodySha256": "01b639a3ed0c62879b139e493531c89edefb22c81f91c19abb59425d0dfdf020",
+  "intakeId": "83485704-b112-4fe3-9337-036bd12639c3",
+  "effectId": "3df1f737-61a3-4429-be23-868461965999",
+  "dispatchId": "623e64bf-2fc8-47b2-be95-ad7261241559",
+  "retainedPayloadDigest": "sha256:37bdb6531cd8f3d3d995933257139d4d3cfe92ec1f444343207ef30470e81767",
+  "retainedReceiptSha256": "7700e6c03403a358be93b87a75b4d6114c62cd91fb65bf8c1f1030b7ae17d322",
+  "originalOperation": {
+    "path": "receipts/customer-public-mac-2.2.25-feedback-recovery-20261009-operation.json",
+    "sha256": "7a932c143c6f84b747a2fc49ad462109aeffb932b76cff076cf1409c959201b3"
+  },
+  "sameExternalIssueAndIntake": true,
+  "issuePostsPerformed": 0,
+  "deliveryCredit": false,
+  "qualificationCredit": false,
+  "limitations": [
+    "Read-only external issue identity reconciliation; historical application recovery evidence retains its original 2.2.25 source and package.",
+    "This does not independently certify the pending 2.2.31 package or compare the amended public body with the originally approved payload."
+  ]
+}

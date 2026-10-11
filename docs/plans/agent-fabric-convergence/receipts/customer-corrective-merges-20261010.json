@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-corrective-source-merges",
+  "merges": [
+    {
+      "repository": "GQAdonis/openai-proxy",
+      "pr": 2,
+      "source": "d269910e45811c8450c7d80004405b6ea3cd9665",
+      "mergeCommit": "b68861e0a6672f5ece900c58fd44b9e23a6b5691",
+      "mergedAt": "2026-10-10T00:43:05Z",
+      "operationReceipt": "receipts/customer-proxy-final-arguments-corrected-stream-20261010.json"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "pr": 179,
+      "source": "5aa8abb7a3ebcdef8883b2753cfeb7cda56d0971",
+      "mergeCommit": "c6a6b0df726c80a0743d993f608e6a2c2a38f25a",
+      "mergedAt": "2026-10-10T00:47:08Z",
+      "scope": "Native installer proxy source pin and its provenance; frozen application skill source remains bb8950b254825079ab382119a8c425d645a081ae"
+    },
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "pr": 65,
+      "source": "5b317b64c65928492f913fc41946d55ee099b472",
+      "mergeCommit": "3f98e3675099584a9ae81be95e5df2a167fdb3a5",
+      "mergedAt": "2026-10-10T00:47:56Z",
+      "operationReceipt": "receipts/customer-durable-turn-local-mac-2.2.26-build-20261010.json"
+    }
+  ],
+  "buildLaunchOperationPublicationAcceptanceAreSeparate": true,
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false
+}

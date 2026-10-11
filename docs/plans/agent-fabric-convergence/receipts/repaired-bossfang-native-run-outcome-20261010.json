@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-repaired-customer-payload-run-outcome",
+  "recordedAt": "2026-10-10T21:54:32.688Z",
+  "runId": "38084557578",
+  "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38084557578",
+  "status": "completed",
+  "conclusion": "success",
+  "producer": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+  "jobs": [
+    {
+      "id": 114308270695,
+      "name": "Native tools (win32-x64)",
+      "startedAt": "2026-10-10T20:39:01Z",
+      "completedAt": "2026-10-10T21:53:35Z",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 114308270763,
+      "name": "Native tools (darwin-arm64)",
+      "startedAt": "2026-10-10T20:39:09Z",
+      "completedAt": "2026-10-10T21:20:33Z",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "publicationReceipt": "repaired-bossfang-two-platform-publication-20261010.json",
+  "deliveryCredit": false,
+  "qualificationCredit": false
+}

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-customer-release-website",
+  "startedAt": "2026-10-10T01:52:28.130Z",
+  "finishedAt": "2026-10-10T01:52:29.246Z",
+  "status": "passed",
+  "website": "https://the-boss.know-me.tools/",
+  "asset": "/assets/index-7OwSbvZM.js",
+  "assetSha256": "b5b9f8e994c9f5c1d00f89194027a08f8c1ba76f6843ee02a33b3ec53cbf08a2",
+  "source": "18b5bfc25445c300267e960835bfe5e99445e023",
+  "publication": {
+    "method": "existing signed-in Lovable project Publish changes via BrowserOS page DOM",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "confirmedBy": "actual live domain JavaScript contains exact immutable installer URLs"
+  },
+  "checks": [
+    {
+      "platform": "darwin-arm64",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-mac-arm64.dmg",
+      "status": 200,
+      "contentLength": 711782548
+    },
+    {
+      "platform": "darwin-x64",
+      "version": "2.2.25",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-mac-x64.dmg",
+      "status": 200,
+      "contentLength": 747566816
+    },
+    {
+      "platform": "win32-x64",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-win-x64-setup.exe",
+      "status": 200,
+      "contentLength": 531618025
+    },
+    {
+      "platform": "win32-arm64",
+      "version": "2.2.25",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-win-arm64-setup.exe",
+      "status": 200,
+      "contentLength": 494878622
+    }
+  ],
+  "scope": "Ready Windows x64 and Apple Silicon 2.2.26 advertised; Intel and ARM64 retain prior installers until their site publication. Full installer byte evidence remains separate.",
+  "newCadenceDelivery": false,
+  "successfulDeliveriesUnchanged": 15
+}

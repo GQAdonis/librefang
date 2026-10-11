@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-06T00:17:18.769Z",
+  "command": "node scripts/kbd-apply.mjs archive afc-six-hour-delivery-recovery",
+  "exitCode": 0,
+  "result": "archived: afc-six-hour-delivery-recovery",
+  "archivePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/archive/2026-10-05-afc-six-hour-delivery-recovery",
+  "files": [
+    ".openspec.yaml",
+    "design.md",
+    "proposal.md",
+    "tasks.md"
+  ],
+  "activeChangeRemoved": true,
+  "productBuilds": 0,
+  "productTests": 0
+}

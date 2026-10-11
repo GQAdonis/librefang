@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-required-platform-release-progress",
+  "releaseVersion": "2.2.32",
+  "requiredPlatforms": ["darwin-arm64", "win32-x64"],
+  "deferredPlatforms": ["darwin-x64", "win32-arm64", "linux-x64", "linux-arm64"],
+  "scopeAuthority": "Operator instruction: only Apple Silicon Mac and Intel Windows matter for this release; all others later. Child plan already records this revision.",
+  "productionIntegration": {
+    "pullRequest": "https://github.com/Prometheus-AGS/the-boss/pull/71",
+    "state": "merged",
+    "mergedAt": "2026-10-11T01:06:06Z",
+    "mergeCommit": "bfec76ea6b08f7769eac045ada3dce6b79255762",
+    "verifiedMainVersion": "2.2.32",
+    "publicationRepair": "Main now matches the release version, resolving the previously observed metadata publication version mismatch. No installer source revision is relabeled."
+  },
+  "windowsBossFangPayload": {
+    "sourceCommit": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+    "producerCommit": "c0a95c3d3b2cc00d8f847882032ede89666cf143",
+    "runId": "38091286809",
+    "nativeJobId": 114328286929,
+    "buildStep": "success",
+    "uploadStep": "success",
+    "releaseTag": "bossfang-sidecar-92bc005f3",
+    "url": "https://github.com/GQAdonis/librefang/releases/download/bossfang-sidecar-92bc005f3/bossfang-win32-x64.exe",
+    "size": 163417600,
+    "sha256": "8184d12ba27159f6f54a6d2776deef4298eacfa8c53957f2f3346f5f1044bfa5",
+    "recordUrl": "https://github.com/GQAdonis/librefang/releases/download/bossfang-sidecar-92bc005f3/bossfang-win32-x64.json",
+    "recordSha256": "fa2c19e5f1c84733072dd4aa628c5f6cac5a5244d72814a396e8a8f668c95fe9",
+    "publishedAssetDigestAndSize": "matched exact local native records",
+    "dashboardFiles": 281,
+    "uarLifecycle": "connection-only",
+    "installedOperation": "pending",
+    "importCommit": "5f3f33d4f2f19d9a399547a693ba1fa23344bbef"
+  },
+  "installerRuns": [
+    {
+      "platform": "darwin-arm64",
+      "runUrl": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38099846947",
+      "sourceCommit": "46d68291aec8dfa57a41f0453af22050fd34a035",
+      "lastObserved": "building actual installer",
+      "publication": "pending"
+    },
+    {
+      "platform": "win32-x64",
+      "runUrl": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38100625885",
+      "sourceCommit": "5f3f33d4f2f19d9a399547a693ba1fa23344bbef",
+      "lastObserved": "platform selection passed; installer queued",
+      "publication": "pending"
+    }
+  ],
+  "redundantNativeRun": {
+    "runId": "38099004997",
+    "cancellation": "requested after correct-source Windows payload publication",
+    "reason": "Later thin-LTO rebuild is unnecessary for the release; preserve original fat-LTO producer provenance.",
+    "terminalOutcome": "not yet observed"
+  },
+  "accounting": {
+    "successfulDeliveries": 17,
+    "newDeliveries": 0,
+    "newQualifiedTasks": 0,
+    "historicalCodeTasks": "61/61",
+    "historicalCodeChanges": "20/20",
+    "portfolioTerminalItems": "43/61",
+    "publicationDebt": "preserved until exact required artifacts, metadata and website evidence exist",
+    "installedAcceptance": "separate; final candidate still pending",
+    "clocksAndHistory": "unchanged"
+  }
+}

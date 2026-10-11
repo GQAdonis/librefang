@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-feature-operation",
+  "creationTaskRef": "C15.1",
+  "status": "blocked",
+  "startedAt": "2026-10-09T21:33:14.737Z",
+  "evidenceLevel": "real-packaged-authoring-and-work-ui",
+  "normalProfile": true,
+  "experimentalOptIn": false,
+  "sourceRefs": {
+    "boss": "0f6771c67cef921ca0c151f21d5a96f501cdd826",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sourcePinSha256": "7ca3cb0c328960e930da31157687905b2f4c7c923315dd6d7717d4c0a9cdd9f1",
+    "appAsarSha256": "fd68d22460a4de19f0c9ea117fc804ec9e3ad7c1fb5db8131f3d8b4ac489b4ad",
+    "sidecarSha256": "1d6f33798021debdd894a60b21d18a12a83ef2051708b0230089bdedfe7d2432",
+    "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+    "selectedScenarioSha256": "86a3456d35873705bf843a2150fd083bac70feb6ae42dc0f3783ea2500aac03b",
+    "scenarioFiles": {
+      "operate-reusable-team.mjs": "72c68322a91ca00b2bb616249d1de38284a47387320ddd3adac458c5d1df46a0",
+      "reusable-team-operation/scenario.mjs": "86a3456d35873705bf843a2150fd083bac70feb6ae42dc0f3783ea2500aac03b",
+      "reusable-team-operation/io.mjs": "6e74174d4f18b3bd1c6a7e41df0c127f9379cc77b5296504116b241cfbc18b4c",
+      "reusable-team-operation/live-output.mjs": "34c81d4a3bcd5f651ceffbf6d7cd9c53838231a9fb3dff3ce30616f540e7d792",
+      "reusable-team-operation/attempt-diagnostics.mjs": "c5a7a6126dfaac215f466cacccb7f4051557bc95b68fbc0b60e365007e1112af",
+      "reusable-team-operation/approvals.mjs": "425db6c15d77899f07f3ce747c5dce6cd7e07e08f39006b341ae88f7767eb5f9"
+    }
+  },
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-qualification-2.2.25-driver-repair/c15-04901c37-c504-457a-abe1-1625ee91efb7/launch.json",
+  "functionalAcceptance": "not-performed",
+  "checks": [],
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-qualification-2.2.25-driver-repair/c15-04901c37-c504-457a-abe1-1625ee91efb7/evidence.json",
+  "evidenceSha256": "b57c1663e5ed7e561777e29659b067efbda968caa14d6f11d67abc65e8a77d5c",
+  "failureCode": "C15_VISIBLE_CONTROL_UNAVAILABLE",
+  "finishedAt": "2026-10-09T21:34:36.759Z"
+}

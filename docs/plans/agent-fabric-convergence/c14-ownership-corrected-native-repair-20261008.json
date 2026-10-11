@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "production-delivery-repair",
+  "recordedAt": "2026-10-08T03:59:35.470Z",
+  "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+  "originalStartedAt": "2026-10-07T23:24:33.943Z",
+  "observedCompilerFailure": {
+    "source": "ac2ad891be89fdac36e69083ca03da6402bb8ca9",
+    "runId": 37721579927,
+    "code": "E0382",
+    "path": "src/uar/api/full_harness/handlers.rs",
+    "fix": "Clone the task ID in the error closure instead of consuming it before stream response creation"
+  },
+  "uar": {
+    "source": "d51991589c45cc0378ddc78a4a0e00f0d61e9aa2",
+    "runs": {
+      "darwin-arm64": 37725190973,
+      "win32-x64": 37725193316,
+      "darwin-x64": 37725195719,
+      "win32-arm64": 37725197815
+    },
+    "dispatchEvent": "workflow_dispatch",
+    "compile": "pending",
+    "publication": "pending"
+  },
+  "bossfang": {
+    "source": "dab625b6802c3ad03f3a00b365647c698cf3036b",
+    "runId": 37721585260,
+    "macArm64": {
+      "source": "dab625b6802c3ad03f3a00b365647c698cf3036b",
+      "published": true,
+      "sha256": "baf53a3633fec1d7a530658d969c6e2916ece2e6d938ae0987984af45106b32b",
+      "bytes": 158901296,
+      "applicationOperation": "pending"
+    }
+  },
+  "boss": {
+    "source": "408bda7ac00e31c949a96ba19071df0953cc19da",
+    "payloadEntrySourcesRetained": true,
+    "correctedApplicationBuild": "pending"
+  },
+  "cadence": {
+    "clockReset": false,
+    "historyPreserved": true,
+    "publicationDebtPreserved": true,
+    "newDeliveryCredit": 0,
+    "newTaskCredit": 0
+  },
+  "checks": {
+    "testSuitesRun": 0,
+    "verificationBuildsRun": 0,
+    "actualPackagingFailureRetained": true
+  }
+}

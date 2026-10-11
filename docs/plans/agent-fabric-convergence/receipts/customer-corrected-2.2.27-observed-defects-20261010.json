@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-customer-candidate-defects",
+  "recordedAt": "2026-10-10T02:04:09.460Z",
+  "candidate": {
+    "version": "2.2.27",
+    "boss": "ff98af813c59e7c2733db74306ebfe087fec069a",
+    "uar": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400"
+  },
+  "provenance": {
+    "representation": {
+      "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/synthetic-representation-2-2-27-15d559d1-b512-44dd-8ca1-06d7608be1bc/evidence.json",
+      "sha256": "40c2375c387e957c702e4004f0ce58ea1f5bdab7555116e9032e85078e7c3d06"
+    },
+    "external": {
+      "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/bossfang-authenticated-alternate-2-2-27-973677b4-95a5-4a5d-877b-5ef48d327fbb/evidence.json",
+      "sha256": "87b555047220ccefa3e7c92daa9a59d6a63ea8dd7dcf99116566adffcfe87ec6"
+    }
+  },
+  "defects": [
+    {
+      "id": "C17-ACTOR-KERNEL-FAILURE",
+      "status": "repair-investigation",
+      "sourceStage": "run_kernel",
+      "errorCode": "actor_kernel_failed",
+      "publicOutcome": "turn_outcome_uncertain",
+      "unknownOutcomeReplayed": false,
+      "qualification": "not-passed",
+      "cause": "Underlying actor failure not yet identified; generic mapping is not a diagnosis."
+    },
+    {
+      "id": "BOSSFANG-SCOPED-PROVIDER-READ",
+      "status": "source-repair-in-progress",
+      "operation": "bossfang.models",
+      "route": "GET /api/uar/providers",
+      "httpStatus": 401,
+      "passingSubset": [
+        "external-scoped-credential-authenticated-discovery-and-identity",
+        "managed-UAR-process-preserved",
+        "borrowed-secondary-alive-after-switch",
+        "owned-secondary-stdin-EOF-shutdown"
+      ],
+      "cause": "Scoped ModelRead allowlist omits the exact mounted provider route used by BossFang.",
+      "securityBoundary": "Repair only exact read alias; separate admin key, authenticated principal, workspace scope, expiry and revocation remain."
+    }
+  ],
+  "fixtureCorrection": {
+    "originalFailure": "CUSTOMER_PRIMARY_MODEL_REQUIRED",
+    "change": "Use existing teams.setup_coding to install the selected gateway model into the native catalog before BossFang selection.",
+    "applicationSourceChanged": false,
+    "originalAttemptPreserved": true
+  },
+  "historicalCodeCompletion": {
+    "tasks": "61/61",
+    "changes": "20/20"
+  },
+  "portfolioQualification": {
+    "terminal": 43,
+    "total": 61,
+    "qualified": 42,
+    "skippedDuplicate": 1
+  },
+  "newCadenceDelivery": false,
+  "successfulDeliveriesUnchanged": 15,
+  "installedAcceptance": "pending"
+}

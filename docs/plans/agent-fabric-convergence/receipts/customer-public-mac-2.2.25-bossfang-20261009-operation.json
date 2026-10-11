@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-customer-operation",
+  "operationId": "bossfang-workflow",
+  "startedAt": "2026-10-09T22:09:45.273Z",
+  "finishedAt": "2026-10-09T22:12:18.212Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "9a043ae0d5d32e9b2fbcbae39d5f7839cd4a3382",
+    "selectedScenarioSha256": "d85788cd50d665f3e9840f1f7f3ce9b39d9364adec7088865094a38cce8bc3a7",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+  },
+  "installationReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installation.json",
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/bossfang-workflow-19e2484a-a735-4107-a1cd-23114c996878/launch.json",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/bossfang-workflow-19e2484a-a735-4107-a1cd-23114c996878/evidence.json",
+  "evidenceSha256": "192581606b68dc2ff0fd2ca82450f9f8b96ad40cba04c65e241edcc527d105c9",
+  "status": "passed",
+  "functionalAcceptance": "scenario-confirmed",
+  "checks": [
+    "actual-compiled-authenticated-embedded-dashboard",
+    "visible-canvas-bound-target-authoring-and-native-persistence",
+    "visible-ordinary-run-admission-to-original-bound-uar",
+    "native-workflow-step-delegation-task-thread-root-run-correlations",
+    "actual-native-message-output-visible-and-settled-by-ordinary-engine",
+    "visible-original-pending-approval-exact-prepared-write",
+    "canonical-durable-host-human-approval-before-exact-disposable-effect",
+    "visible-original-authoritative-denial-canonical-durable-history-without-effect",
+    "visible-two-step-confirmed-cancel-forwarded-to-original-native-run",
+    "native-cancellation-request-acknowledgment-terminal-cleanup-settled",
+    "pending-approval-cancelled-canonical-history-and-ordinary-engine-without-effect",
+    "work-global-selection-and-original-uar-pid-start-port-preserved"
+  ],
+  "acceptance": "operator-acceptance-pending",
+  "newCadenceDelivery": false
+}

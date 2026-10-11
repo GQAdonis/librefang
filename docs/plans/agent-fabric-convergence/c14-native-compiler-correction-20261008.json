@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "observed-native-compiler-failure-correction",
+  "recordedAt": "2026-10-08T01:01:41.635Z",
+  "previousSource": "bc3699c60e5ca34e9fd3557722ee3a2d9611d2ad",
+  "source": "3282e40815c36b60897ca55b2e5691bae9984940",
+  "failedRunId": 37707410573,
+  "failedJobId": 113084973736,
+  "errors": [
+    {
+      "code": "E0415",
+      "location": "workflow.rs:1265",
+      "failure": "Duplicate api_user parameter"
+    },
+    {
+      "code": "E0308",
+      "location": "workflow.rs:1213/1388",
+      "failure": "Typed ResumeRunError results passed to dispatch String error boundary"
+    }
+  ],
+  "correction": "Remove duplicate extractor and use existing Display conversion at the two dispatch result boundaries; keep typed engine and synchronous error mapping",
+  "correctiveRunId": 37710783505,
+  "verification": "actual production native packaging build pending; no test suites",
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "startedAt": "2026-10-07T23:24:33.943Z",
+    "historyPreserved": true,
+    "publicationDebtCleared": false
+  }
+}

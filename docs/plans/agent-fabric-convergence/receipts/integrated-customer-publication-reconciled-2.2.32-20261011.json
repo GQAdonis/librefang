@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-required-platform-publication-and-historical-reconciliation",
+  "recordedAt": "2026-10-11T01:44:18.041Z",
+  "releaseVersion": "2.2.32",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "publication": {
+    "status": "passed",
+    "release": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.32",
+    "website": "https://the-boss.know-me.tools",
+    "metadataCommit": "f7f82e312fcdccb9701cefbaa3ade7cb821dd6d9",
+    "landingCommit": "9bfd716fbc5cfa3a1cffba574593730054ae4e5a",
+    "evidence": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/darwin-arm64.json",
+        "sha256": "4db9b8978013c7a80bd261ee0cc0cb98fb34acf49a73493a265f711249127163"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/win32-x64.json",
+        "sha256": "364f9d3745065d45dfe2d4fef33411a79774985cc57635a2ac4c23ccaee856a9"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/metadata.json",
+        "sha256": "49f97bf600950211fc726acc3eb3c7b99a9b193a634065da3a9bc3a72d4a7a86"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/website.json",
+        "sha256": "bc77f02d3ec1f3351ee11bff3c20b936768811239bc954feb8203f8048f09332"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/packet.json",
+        "sha256": "0a17f9339f62ff3905437e80ada088115b895b1e49e54e5ca67541ad28d14140"
+      }
+    ]
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "startedAt": "2026-10-06T17:07:34.783Z",
+    "eventsSeq": 1457,
+    "successfulDeliveries": 17,
+    "publicationDue": false,
+    "newDeliveries": 0,
+    "historyAndClocksPreserved": true,
+    "historicalRelease": {
+      "externalReleaseId": "github:Prometheus-AGS/the-boss:409302627",
+      "releaseVersion": "2.2.32",
+      "publishedAt": "2026-10-11T01:30:00Z"
+    },
+    "links": [
+      {
+        "id": "74998ad11ace38cd81f4061b618416ba3da9329e5e1f95e0ae9daf5a9f776945",
+        "obligationId": "1e3aff82-8c61-4278-a84c-8ef1d4e477eb",
+        "recordedAt": "2026-10-11T01:43:27.215Z"
+      },
+      {
+        "id": "c84d023f9225b255213449696602ae40d2d1c2a5f9e926aa804eab7095a0a00a",
+        "obligationId": "49dd72f0-c9f9-42ad-81f8-ebba7c2f2359",
+        "recordedAt": "2026-10-11T01:43:27.216Z"
+      }
+    ],
+    "stateSnapshot": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/cadence-publication-2.2.32-contract-20261011/state-after-adoption.json",
+      "sha256": "70ec78c7c47dd81931e74f48295ae45faf7aa80f372e442a44384a532d623e70"
+    }
+  },
+  "publicMacOperation": {
+    "status": "passed",
+    "scope": "Packaged main window launch and read-only production administration IPC. No new inference/delegation qualification asserted.",
+    "evidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/launch-operation-WyVOTo/operation.json",
+      "sha256": "4554e2cd0b11e332f7e507fa73fccafc778709bf06f868b11f32c2fe07d41318"
+    },
+    "failedDriverAttemptRetained": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/launch-operation-LZTBnn/operation.json",
+      "sha256": "9ef802db4d2f037463270eb91812a72ea8b7b592d4f2e332f3bdd1b4a5ee0e8b"
+    },
+    "correction": "Use declared void input for app.get_info and bossfang.status instead of an empty-object payload."
+  },
+  "acceptance": {
+    "macArm64": "pending operator acceptance and remaining customer operation",
+    "windowsX64": "pending native installed-operation evidence and operator acceptance"
+  },
+  "accounting": {
+    "historicalCode": "61/61 tasks and 20/20 changes",
+    "portfolioQualification": "43/61 terminal items (42 qualified, 1 historical skipped duplicate)",
+    "newWholeCustomerQualificationCredit": 0
+  }
+}

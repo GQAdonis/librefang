@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-release-platform-live-website",
+  "recordedAt": "2026-10-10T04:19:21.366Z",
+  "status": "passed",
+  "latestVersion": "2.2.30",
+  "websiteUrl": "https://the-boss.know-me.tools/",
+  "landingSource": "62dd0edc15dd3a023b6b3e2703e158eb72003421",
+  "landingSyncRun": "https://github.com/Know-Me-Tools/boss-landing-spot/actions/runs/38023072950",
+  "publicationRun": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38023027184",
+  "generatedReleaseSha256": "448c19e3d6ed01f88ec2c8b72a484cb1016e3ce89a81c165cc8061c37dc7dbaa",
+  "deployedBundle": {
+    "url": "https://the-boss.know-me.tools/assets/index-C4D7pBbu.js",
+    "sha256": "622eece2ff0d4b4985d07cb81d1429bb0dfff5be7b6fa33e8c24994fcb8f0ad1",
+    "httpStatus": 200
+  },
+  "installers": [
+    {
+      "label": "macOS (Apple Silicon)",
+      "version": "2.2.30",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-arm64.dmg",
+      "sha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+      "signing": "Developer ID (notarized)",
+      "httpStatus": 200,
+      "contentLength": 711998188
+    },
+    {
+      "label": "macOS (Intel)",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-mac-x64.dmg",
+      "sha256": "23191188b8d4f206c6c5195da33f6c5240443035a3267259d2ae0ec574cdf127",
+      "signing": "Developer ID (notarized)",
+      "httpStatus": 200,
+      "contentLength": 747748218
+    },
+    {
+      "label": "Windows (x64)",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-win-x64-setup.exe",
+      "sha256": "385f52afd93fd68c05a3ba761266d515ece364b3f3b05298054c1bce09947b12",
+      "signing": "unsigned",
+      "httpStatus": 200,
+      "contentLength": 531618025
+    },
+    {
+      "label": "Windows (ARM64)",
+      "version": "2.2.26",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.26/The-Boss-2.2.26-win-arm64-setup.exe",
+      "sha256": "dd40bd769ea6750b4cbe1d428e1265124d66a721e9d4f68ac03045bb6db03efa",
+      "signing": "unsigned",
+      "httpStatus": 200,
+      "contentLength": 494856156
+    }
+  ],
+  "scope": "Apple Silicon2.2.30 published immediately; pending platforms retain exact previous2.2.26 links. This is not all-four2.2.30 publication.",
+  "nativeAcceptance": "pending",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false
+}

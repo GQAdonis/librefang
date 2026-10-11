@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-customer-work-inference",
+  "status": "passed",
+  "startedAt": "2026-10-09T22:51:39.727Z",
+  "stage": "ordinary-work-inference",
+  "isolatedProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-29WEuI",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "installedVersion": "2.2.25",
+    "publicApp": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "scenarioSha256": "276b27eb65efa7a338b1fd2b991145e7a25a01df74689081bc844f62a3924f16",
+    "operationDriverSha256": "d859192a61fc41e66107ceb5832d3364fbb28417565ee9ca57c85bfda6a71634",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0"
+  },
+  "credentialStaging": {
+    "literalDestinationConfirmed": true,
+    "sourceOwnerConfirmed": true,
+    "originalProfileExcluded": true,
+    "closedDestinationConfirmed": true,
+    "privateDestinationPermissionsApplied": true,
+    "sourceOpenedReadOnly": true,
+    "sourceOAuthPresent": true,
+    "sourceAccessPresent": true,
+    "sourceRefreshPresent": true,
+    "onlyAuthorizedProviderColumnsTransferred": true,
+    "credentialValueRecorded": false,
+    "wholeDatabaseCopied": false,
+    "rendererCredentialTransferUsed": false,
+    "supportedProductImportClaimed": false
+  },
+  "launched": true,
+  "functionalAcceptance": "passed",
+  "operatorAcceptance": "pending",
+  "selectedRoutes": [
+    "codex"
+  ],
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false,
+  "preservedPassingEvidence": {
+    "route": "uar",
+    "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-9a197eed-660e-44b6-aebe-5d409ab79570/evidence.json",
+    "evidenceSha256": "2346b6e980edea6f61ee138ea62310b77ab6bffc99abee14467225395833b7b1",
+    "installedSourceAndBytesMatch": true,
+    "repeated": false
+  },
+  "nativeModelPrerequisites": {
+    "sourceReadOnly": true,
+    "userModelRowsCopied": false,
+    "enabledConfiguredIds": {
+      "openai-codex": [
+        "openai-codex::gpt-5.6-luna",
+        "openai-codex::gpt-5.6-sol",
+        "openai-codex::gpt-5.6-terra",
+        "openai-codex::gpt-6-astra",
+        "openai-codex::gpt-5.5",
+        "openai-codex::gpt-5.4-mini",
+        "openai-codex::gpt-6.1-sol",
+        "openai-codex::gpt-6-sol",
+        "openai-codex::gpt-6-luna"
+      ],
+      "claude-code": [
+        "claude-code::claude-fable-5",
+        "claude-code::claude-opus-5",
+        "claude-code::claude-sonnet-5",
+        "claude-code::claude-haiku-4-5"
+      ]
+    }
+  },
+  "results": [
+    {
+      "route": "codex",
+      "status": "passed",
+      "stage": "complete",
+      "auth": {
+        "kind": "app-pkce-oauth",
+        "presence": true
+      },
+      "enabledExistingProvider": true,
+      "requestedModelId": "openai-codex::gpt-6.1-sol",
+      "persistedModelCountBefore": 1,
+      "discoveredCatalogModelCount": 11,
+      "catalogSetup": {
+        "discoveryRoute": "ai.provider.model.list",
+        "resolveRoute": "/providers/openai-codex/models:resolve",
+        "createRoute": "/models",
+        "discoveredModelId": "openai-codex::gpt-6.1-sol",
+        "resolvedModelId": "openai-codex::gpt-6.1-sol",
+        "matchesExistingUserConfiguredModel": true,
+        "importedExistingCatalogModel": true
+      },
+      "selectedModelId": "openai-codex::gpt-6.1-sol",
+      "marker": "CUSTOMER_CODEX_9315DF77",
+      "expectedRuntime": "pi",
+      "expectedModel": {
+        "id": "gpt-6.1-sol",
+        "provider": "openai-codex"
+      },
+      "agentId": "d377a348-6608-4ce7-8ba0-06397b27c7cf",
+      "committedRuntime": "pi",
+      "workspaceId": "0186e536-4600-4fbb-afaa-8ce52f97d90f",
+      "sessionId": "6ae57a5e-6b28-407b-af1c-59458bf6baf3",
+      "admitted": true,
+      "admissionErrorCode": null,
+      "stream": {
+        "done": true,
+        "error": false,
+        "chunks": 6,
+        "errorCode": null,
+        "executionId": "openai-codex::gpt-6.1-sol"
+      },
+      "persisted": {
+        "assistantPresent": true,
+        "status": "success",
+        "exactReply": true,
+        "model": {
+          "id": "gpt-6.1-sol",
+          "provider": "openai-codex"
+        },
+        "exactModel": true
+      }
+    }
+  ],
+  "observedBehavior": "The public installed Boss completed fresh isolated Work turns for selected routes codex; each streamed and persisted its exact assistant reply with the expected runtime/provider/model. Any linked prior passing route remains separate evidence and was not repeated.",
+  "shutdown": {
+    "ownedGroupCreated": true,
+    "groupStopped": true,
+    "pid": 48747,
+    "probe": "kill-negative-owned-pid-zero",
+    "childExitCode": null,
+    "childSignalCode": "SIGKILL"
+  },
+  "finishedAt": "2026-10-09T22:51:59.652Z",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-6ae34cd5-903a-4f37-8df0-a3fc3c1b7a0a/evidence.json",
+  "evidenceSha256": "7b98b7d98ca88a46e940307894170f90f88ee69da970034158ed15797687bc82",
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-6ae34cd5-903a-4f37-8df0-a3fc3c1b7a0a/launch.json"
+}

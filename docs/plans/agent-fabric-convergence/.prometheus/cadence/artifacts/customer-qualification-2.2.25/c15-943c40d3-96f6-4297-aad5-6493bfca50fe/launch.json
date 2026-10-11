@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-10-09T21:27:26.440Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-10-09T16:33:03.416Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-qualification-2.2.25/c15-943c40d3-96f6-4297-aad5-6493bfca50fe/packaged-scenario.mjs",
+  "scenarioDigest": "903c94e6ca6ebf1bdd9622a16d7bd3d87464e53ac4cc12aabe0bdd794c4aa86d",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-p4OP5I",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "not-performed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "status": "failed",
+  "failure": "launch-or-scenario-failed",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-10-09T21:28:38.607Z"
+}

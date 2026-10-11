@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "dispatchedAt": "2026-10-05T23:47:52.405Z",
+  "phaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
+  "backend": "openspec",
+  "sourcePlan": "plan.md",
+  "assignments": [
+    {
+      "taskId": "1",
+      "worker": "/root/recovery_install",
+      "model": "OpenAI/gpt-6.1-sol",
+      "effort": "high",
+      "ownership": "Authored parent plan and coverage prose only"
+    },
+    {
+      "taskId": "2",
+      "worker": "lead",
+      "model": "native-controller",
+      "assignment": "plan.md task2; explicit continuing controller alternative; narrow supported configure, no source implementation"
+    },
+    {
+      "taskId": "3",
+      "worker": "lead",
+      "model": "native-controller",
+      "assignment": "plan.md task3; same canonical/state owner for scoped closeout"
+    }
+  ],
+  "pendingWork": [
+    "1",
+    "2",
+    "3"
+  ],
+  "approval": "Operator execution goal active; separate Reflect review remains required"
+}

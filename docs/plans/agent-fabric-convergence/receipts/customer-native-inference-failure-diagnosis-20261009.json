@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-native-inference-failure-diagnosis",
+  "recordedAt": "2026-10-09T22:48:47.505Z",
+  "status": "diagnosed-not-qualified",
+  "candidate": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "installedVersion": "2.2.25",
+    "publicApp": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "scenarioSha256": "d9b5758216bbb125f492a901c715b30fb5fda834b785058e0ecab9be4a772a77",
+    "operationDriverSha256": "476a254aa22a47cea4d4749152e1fbbdfc49126cc2d0a384e6e2e5a72e8b6f06",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0"
+  },
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-892cad76-a589-4fb0-881c-1693e2446adf/evidence.json",
+  "evidenceSha256": "552397c73808c630bdc6b9284ee0d3c6767c7bc3f00f7822e283bdc9eeb45e89",
+  "results": [
+    {
+      "route": "codex",
+      "sessionId": "a6722d2f-d08c-44ef-971b-e0c67d77b9e1",
+      "selectedModelId": "openai-codex::gpt-5.4-mini",
+      "persistedStatus": "error",
+      "exactModel": true,
+      "error": {
+        "name": "Error",
+        "message": "The 'gpt-5.4-mini' model is not supported when using Codex with a ChatGPT account.",
+        "statusCode": 400,
+        "reasonCode": "unknown",
+        "sourceLayer": "provider",
+        "retryable": false,
+        "originalMessageSha256": "faa5e047be8c6dbb5798ff80e0572d61dbb35b14235363e49dc94899dd652ff4"
+      },
+      "disposition": "retry explicit existing subscription catalog model"
+    },
+    {
+      "route": "claude",
+      "sessionId": "63ff95ab-9a86-4209-be0e-f4284e8f1336",
+      "selectedModelId": "claude-code::claude-fable-5",
+      "persistedStatus": "error",
+      "exactModel": true,
+      "error": {
+        "name": "ClaudeCodeResultError",
+        "message": "Not logged in · Please run /login",
+        "statusCode": null,
+        "reasonCode": "auth",
+        "sourceLayer": "runtime",
+        "retryable": false,
+        "originalMessageSha256": "ddcf5c1f4a3b398837003d800ea793d0a3ebb7ec0a1304b3186393460a7d5bd6"
+      },
+      "disposition": "native login required; no identical retry"
+    }
+  ],
+  "claudeReadOnlyStatus": {
+    "commandArguments": [
+      "auth",
+      "status",
+      "--json"
+    ],
+    "documentedByExactBundledCliHelp": true,
+    "context7PrimaryCredentialSources": [
+      "https://code.claude.com/docs/en/authentication",
+      "https://code.claude.com/docs/en/troubleshoot-install"
+    ],
+    "environment": "minimalEnvironment; no forced API credentials or configuration directory",
+    "bundled": {
+      "exitCode": 1,
+      "loggedIn": false,
+      "authMethod": "none",
+      "configDirectory": "/Users/gqadonis/.claude"
+    },
+    "currentShellCli": {
+      "exitCode": 1,
+      "loggedIn": false,
+      "authMethod": "none",
+      "configDirectory": "/Users/gqadonis/.claude"
+    }
+  },
+  "originalDatabaseModified": false,
+  "isolatedDatabaseModified": false,
+  "newApplicationOperationRun": false,
+  "newCadenceDelivery": false,
+  "rawErrorOrCredentialRecorded": false
+}

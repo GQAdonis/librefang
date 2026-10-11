@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "authority": "Operator-approved customer-usefulness plan, 2026-10-05",
+  "authority": "Operator-approved six-hour convergence recovery, 2026-10-05; Revision 10 reconciles Revision 9 combined Teams + urgent BossFang",
   "phase": "agent-fabric-convergence",
-  "planRevision": 9,
+  "planRevision": 10,
   "baseline": {
     "revision": 500,
     "planRevision": 7,
@@ -64,7 +64,8 @@
         "C09"
       ],
       "dependsOn": [
-        "teams-in-work"
+        "teams-in-work",
+        "bossfang-miniapp"
       ],
       "coverage": "Desktop UAR authoring and applicable full/mini adapters only; broad C15.2 harness qualification and connector-dependent templates remain outstanding.",
       "operation": "Configure and deploy a team, operate it from Work, revise the definition, and observe existing runs retain their pinned definition.",
@@ -77,7 +78,7 @@
     },
     {
       "id": "shared-bossfang-uar",
-      "priority": 3,
+      "priority": 1,
       "outcome": "BossFang delegates to the UAR instance supervised by The Boss without installing or spawning a second UAR.",
       "taskRefs": [
         "C14.4"
@@ -89,7 +90,7 @@
         "C09"
       ],
       "dependsOn": [
-        "reusable-mixed-teams"
+        "teams-in-work"
       ],
       "coverage": "New explicitly approved integrated-desktop profile; no reopening of completed C04/C05/C08. C14.4 includes the pinned BossFang executable, functional dashboard assets, integrity records and main-process supervision needed to operate the packaged shared-runtime profile. C14.3 consumes that payload for Apps/settings embedding and isolated navigation; retain its original packaging acceptance by mapping exact C14.4 receipts.",
       "operation": "Start BossFang from The Boss, delegate a governed run to the same UAR identity, then observe approvals, cancellation and endpoint rebind after restart without duplicate sidecar/effect.",
@@ -101,7 +102,7 @@
     },
     {
       "id": "bossfang-miniapp",
-      "priority": 4,
+      "priority": 1,
       "outcome": "Open the actual BossFang dashboard from Apps and settings using isolated authenticated navigation.",
       "taskRefs": [
         "C14.3"
@@ -221,7 +222,7 @@
       "scope": "Desktop artifact provenance, supported/unsupported status and release/site evidence; broader benchmark remains pending."
     }
   ],
-  "selection": "Use first unfinished applicable delivery scope. Explicit scoped KBD/kbd-apply selection switches changes at delivery handoff. Do not drain C14.3/C14.4 before reusable teams merely because C14 is active. Defer in authored policy; canonical statuses remain pending, not a fabricated deferred enum.",
+  "selection": "After separately requested recovery-child Reflect and parent restoration, select C14.1 through canonical kbd-apply/model-dispatch. Recovery increment 1 combines teams-in-work, shared-bossfang-uar and bossfang-miniapp; increments 2/3 consume reusable-mixed-teams coding then product/design scope. Historical ordering holds are superseded; original IDs and full acceptance remain.",
   "accounting": "Delivery IDs are coverage selectors, not additional canonical changes/tasks. Original task completion requires all original criteria. Count scope additions and cancellations separately.",
   "cadence": {
     "iterationMinutes": 120,
@@ -232,7 +233,24 @@
     ],
     "noLinux": true,
     "sourceFreeze": "Materialize generated payload before candidate freeze; each start supplies candidate-specific launch and feature-operation receipts.",
-    "childClock": "Continuous parent elapsed time and publication obligations survive children."
+    "childClock": "Continuous parent elapsed time and publication obligations survive children.",
+    "reviewEvery": 0,
+    "nextSuccessfulDeliveryAnchor": 7,
+    "fullPublicationSuccessfulCounts": [
+      7,
+      9
+    ],
+    "requiredPlatforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "requiredPublication": [
+      "GitHub assets/checksums/source/signing metadata",
+      "RELEASES.md and release manifest",
+      "https://the-boss.know-me.tools and exact live download identity"
+    ]
   },
   "rescheduledTask": {
     "id": "C10.2",
@@ -255,5 +273,248 @@
     "authority": "operator-approved Make BossFang accessible and connect it to the existing UAR plan",
     "scopeReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
     "wholeTaskCompletionRequiresOriginalAcceptance": true
+  },
+  "recovery": {
+    "revision": 10,
+    "sourcePlan": ".kbd-orchestrator/phases/agent-fabric-convergence/children/six-hour-convergence-recovery/plan.md",
+    "dispatch": ".kbd-orchestrator/phases/agent-fabric-convergence/children/six-hour-convergence-recovery/parent-recovery-dispatch.json",
+    "baseline": {
+      "complete": 33,
+      "skipped": 1,
+      "total": 61,
+      "completeChanges": 11,
+      "totalChanges": 20,
+      "note": "Preserved parent accounting; child paperwork contributes no product completion."
+    },
+    "resume": {
+      "requires": "Separately requested recovery-child Reflect and canonical parent restoration",
+      "command": "/kbd-execute agent-fabric-convergence",
+      "nextTask": "C14.1"
+    },
+    "increments": [
+      {
+        "increment": 1,
+        "targetMinutes": 120,
+        "successfulDeliveryAnchor": 7,
+        "publication": "full",
+        "deliveryIds": [
+          "teams-in-work",
+          "shared-bossfang-uar",
+          "bossfang-miniapp"
+        ],
+        "repairRefs": [
+          "R1",
+          "R2",
+          "R3"
+        ],
+        "taskRefs": [
+          "C14.1",
+          "C14.2",
+          "C14.4",
+          "C14.3",
+          "C16.1",
+          "C16.2",
+          "C18.2",
+          "C18.3"
+        ],
+        "outcome": "Packaged coding worker/reviewer change with truthful approval, artifacts and reopen/cancel; Apps/settings BossFang delegation through the same UAR with authoritative output/completion/cancellation."
+      },
+      {
+        "increment": 2,
+        "targetMinutes": 120,
+        "successfulDeliveryAnchor": 8,
+        "publication": "local-only",
+        "deliveryIds": [
+          "reusable-mixed-teams"
+        ],
+        "taskRefs": [
+          "C15.1",
+          "C15.3",
+          "C16.1",
+          "C16.2",
+          "C16.3",
+          "C14.1"
+        ],
+        "outcome": "Reuse isolated written authoring after ancestry reconciliation: named coding-team create/configure/deploy/launch/revise, retaining existing-run pinned definitions and required UI/strings/persistence/scoped skills.",
+        "publicationCarryover": "Finish outstanding increment-1 publication; no new full-platform dispatch/site update."
+      },
+      {
+        "increment": 3,
+        "targetMinutes": 120,
+        "successfulDeliveryAnchor": 9,
+        "publication": "full",
+        "deliveryIds": [
+          "reusable-mixed-teams"
+        ],
+        "taskRefs": [
+          "C15.1",
+          "C15.3",
+          "C16.1",
+          "C16.2",
+          "C16.3",
+          "C14.1",
+          "C18.2",
+          "C18.3"
+        ],
+        "outcome": "Carry unfinished increment 2 first; reusable product/design configuration with scoped role/model/skill handoff, novice guidance and visible effective bindings.",
+        "publicationIncludes": "Increment-2 source changes."
+      }
+    ],
+    "repairContracts": [
+      {
+        "id": "R1",
+        "owner": "boss-runtime",
+        "library": "cand-001",
+        "files": {
+          "boss": [
+            "src/main/ai/runtime/uar/UarHostToolAdmission.ts",
+            "src/main/ai/runtime/uar/UarTeamWorkAdapter.ts",
+            "directly required shared types/IPC"
+          ],
+          "initiative": [
+            "scripts/c14-operation/approvals.mjs"
+          ],
+          "uar": [
+            "projection only if existing IDs prove insufficient, after explicit ownership coordination"
+          ]
+        },
+        "contract": "Reuse private prepared arguments/digest and protected pending read; correlate admitted run/tool-call/approval identities; lossless target facts and content/edit digests only. Keep raw arguments/credentials/full content private and redacted display separate. Correct raw file_path consumer assumption; fixture content stays in consumer. Preserve ownership/pending identity/hash/cursor. No new endpoint/approval authority or reopening fixed partition/session ownership.",
+        "criteria": [
+          "C14.1",
+          "C14.2",
+          "C16.1 coding",
+          "C16.2 coding"
+        ]
+      },
+      {
+        "id": "R2",
+        "owner": "boss-desktop",
+        "authorization": "Existing explicitly authorized BossFang integration writer",
+        "library": "cand-002",
+        "files": {
+          "bossfang": [
+            "crates/librefang-api/src/routes/uar_delegation.rs",
+            "required storage/client helpers"
+          ],
+          "uar": [
+            "src/uar/api/full_harness/handlers.rs only for observed terminal-replay gap"
+          ]
+        },
+        "contract": "Refresh observation through original admitted-instance run lookup; drain unread output; terminal empty replay never awaits future event. Preserve instance/principal/workspace/cursor/original run. agui.done alone is not success; no timeout inflation. The Boss supervises UAR; stopping BossFang leaves UAR running.",
+        "criteria": [
+          "C14.4",
+          "C14.3"
+        ]
+      },
+      {
+        "id": "R3",
+        "owner": "boss-lead",
+        "supportingOwner": "boss-renderer only for necessary UI/types/locales",
+        "library": "cand-003",
+        "files": {
+          "responsibility": [
+            "Exact corrected Boss/UAR/BossFang source/pins/native payloads/dashboard/skills",
+            "Installer/release metadata with exact execution-handoff claims"
+          ]
+        },
+        "contract": "Freeze corrected inputs preserving unrelated changes/provenance; new public version from actual source/release state and unique local candidate identity. Build changed native payload once per target, reuse checksummed artifacts. Complete production before one serialized build/packaged operation. Separate Teams/BossFang results; reuse only matching input/contract receipts. Changed driver alone does not rebuild unchanged product.",
+        "criteria": [
+          "C18.2 applicable recovery",
+          "C18.3 applicable publication"
+        ]
+      }
+    ],
+    "coverage": [
+      {
+        "taskRefs": [
+          "C14.1",
+          "C14.2"
+        ],
+        "increments": [
+          1,
+          2,
+          3
+        ],
+        "contribution": "Work approval/artifact/reopen/cancel plus supporting authoring administration.",
+        "remainsPending": "All original definition/instance/activation/run/team/workflow fields, task graph/budgets/binding/subscription posture, two-client challenge decisions and distinct supported cancel/detach/drain/stop verbs."
+      },
+      {
+        "taskRefs": [
+          "C14.4",
+          "C14.3"
+        ],
+        "increments": [
+          1
+        ],
+        "contribution": "Same-UAR delegation, authoritative observation/cancellation and usable Apps/settings/dashboard.",
+        "remainsPending": "Original grants/ownership/history/budget/catalog/restart/rebind, isolated instance/account navigation/browser fallback and full native customer-platform packaging/installed acceptance."
+      },
+      {
+        "taskRefs": [
+          "C15.1",
+          "C15.3"
+        ],
+        "increments": [
+          2,
+          3
+        ],
+        "contribution": "Existing four skills, selected desktop/full-mini authoring and scoped role/model/skill handoff.",
+        "remainsPending": "Original complete routing/locks/plugin/host-grant/provenance/required-loss acceptance and later host scope; C15.2 eight-harness/toolchain qualification remains deferred."
+      },
+      {
+        "taskRefs": [
+          "C16.1",
+          "C16.2",
+          "C16.3"
+        ],
+        "increments": [
+          1,
+          2,
+          3
+        ],
+        "contribution": "Coding worker/reviewer then coding/product/design configuration, scoped bindings and novice guidance.",
+        "remainsPending": "Broader specialist/marketing/mobile/design/documentation/feedback representative tasks, independent findings, role rationale/write scopes/model-cost/checklist and original single-agent/role-combination guidance."
+      },
+      {
+        "taskRefs": [
+          "C18.2",
+          "C18.3"
+        ],
+        "increments": [
+          1,
+          3
+        ],
+        "contribution": "Applicable source-bound recovery and actual release/site receipts; local operation remains required in increment 2.",
+        "remainsPending": "Wider operational-mode/upgrade/rollback/outage/retention/revocation matrix and controlled comparative benchmarks; C18.1 remains deferred. Installed acceptance tracked independently."
+      }
+    ],
+    "history": {
+      "failedIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+      "originalStart": "2026-10-05T07:58:36Z",
+      "procedure": "After child return/parent restoration record child return; retain checkpoint-failed attempts/child interval, finalize unrecoverable frozen attempt failed and start supported evidence-linked corrective iteration retaining recovery original start/linkage.",
+      "legacyPublicationObligation": "3aa9f8fd-78d2-462f-9584-4f934cabd914",
+      "debt": "Immutable prior receipts or supported authority-backed replacement proving source/scope coverage; otherwise retain exact blocker/debt. No JSON state edits or dispatch-based publication credit."
+    },
+    "limits": {
+      "maxImplementers": 3,
+      "buildWriters": 1,
+      "publishers": 1,
+      "inFlightReleases": 1,
+      "pendingCandidates": 1,
+      "localBoundaryReserveMinutes": [
+        30,
+        45
+      ],
+      "workAhead": "Only existing authorized isolated scope after local success; not a second active iteration, no promotion over product failure/publisher limits.",
+      "noLinux": true,
+      "note": "Six-hour target is three useful increments, not all remaining requirements. Preserve overrun/failure/remote publication time and separately tracked installed acceptance. Use existing authorized release workflow/manual publisher while automatic adapter capability-blocked."
+    },
+    "configuration": {
+      "outcome": "existing-matching-policy-retained",
+      "configurePrecondition": "Between iterations only",
+      "pending": "After Reflect/child return and failed-attempt finalization, before corrective start: cosmetic explanation request only",
+      "receipt": ".kbd-orchestrator/phases/agent-fabric-convergence/children/six-hour-convergence-recovery/cadence-configure.receipt.json",
+      "newConfigureSuccess": false
+    }
   }
 }

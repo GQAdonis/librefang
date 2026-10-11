@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-skill-redistribution",
+  "completedAt": "2026-10-08T06:16:41.914Z",
+  "sourceRevision": "591857504d14ca855f68f83b623df208d41c75b2",
+  "sourceMergedAs": "3a20cc66a836993ea9112b9212c8c2761ba430c0",
+  "generation": "841e084469545d2927861722840b0264ea47f1006a66fb53304a681236526783",
+  "targets": [
+    {
+      "id": "codex",
+      "path": "/Users/gqadonis/.codex/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.codex/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "claude",
+      "path": "/Users/gqadonis/.claude/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/841e084469545d2927861722840b0264ea47f1006a66fb53304a681236526783/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "kimi-code",
+      "path": "/Users/gqadonis/.kimi-code/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/841e084469545d2927861722840b0264ea47f1006a66fb53304a681236526783/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "minimax",
+      "path": "/Users/gqadonis/.minimax/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.minimax/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "zed",
+      "path": "/Users/gqadonis/.agents/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/841e084469545d2927861722840b0264ea47f1006a66fb53304a681236526783/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "opencode",
+      "path": "/Users/gqadonis/.opencode/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/841e084469545d2927861722840b0264ea47f1006a66fb53304a681236526783/skills/delivery-cadence",
+      "version": "1.2.4"
+    },
+    {
+      "id": "opencode-config",
+      "path": "/Users/gqadonis/.config/opencode/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.config/opencode/skills/delivery-cadence",
+      "version": "1.2.4"
+    }
+  ],
+  "priorGeneration": "2e4cfa6e7e3803615602384e2b7c33522eee428974700870bf9374c1174b34ae",
+  "launcherBackup": "/Users/gqadonis/.prometheus/delivery-cadence/backups/generation-launcher-repair-20261008",
+  "nativeHarnessExecution": "not-inferred",
+  "cadenceMutation": false
+}

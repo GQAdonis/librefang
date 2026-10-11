@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T20:12:36.248Z",
+  "scope": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "reason": "Operator narrowed release-critical platforms; retained excluded native assets in disposable stage rather than uploading them.",
+  "deferredDirectory": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9/build/deferred-platform-assets",
+  "moved": [
+    "bossfang-win32-arm64.exe",
+    "bossfang-win32-arm64.json",
+    "compass-darwin-x64",
+    "compass-win32-arm64.exe",
+    "liter-llm-darwin-x64",
+    "liter-llm-win32-arm64.exe",
+    "pk-darwin-x64",
+    "pk-win32-arm64.exe",
+    "prometheus-darwin-x64",
+    "prometheus-win32-arm64.exe",
+    "rust-mcp-filesystem-darwin-x64",
+    "rust-mcp-filesystem-win32-arm64.exe"
+  ],
+  "tagAbsentBeforePublication": true
+}

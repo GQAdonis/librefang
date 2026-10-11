@@ -110,14 +110,15 @@ async function externalSnapshot(evaluate, signal) {
 }
 
 /** Uses a real externally owned dashboard; never launches it, fabricates credentials, or signals its process. */
-export async function externalBossFang(evaluate, signal, configuration, config, modelId, baselineUar) {
+export async function externalBossFang(evaluate, signal, configuration, config, modelId, baselineUar, privateCredentials) {
   const fixture = configuration.bossfang?.external
-  if (!fixture?.endpoint || !fixture.usernameEnv || !fixture.passwordEnv)
+  if (!fixture?.endpoint || (!privateCredentials && (!fixture.usernameEnv || !fixture.passwordEnv)))
     return {pending: 'C14_BOSSFANG_NO_REAL_EXTERNAL_DASHBOARD_CREDENTIAL_FIXTURE'}
   const credentialReference = /^[A-Za-z_][A-Za-z0-9_]*$/
-  requireFact(credentialReference.test(fixture.usernameEnv) && credentialReference.test(fixture.passwordEnv),
+  if (!privateCredentials) requireFact(credentialReference.test(fixture.usernameEnv) && credentialReference.test(fixture.passwordEnv),
     'C14_BOSSFANG_EXTERNAL_CREDENTIAL_REFERENCE_INVALID')
-  const username = process.env[fixture.usernameEnv], password = process.env[fixture.passwordEnv]
+  const username = privateCredentials?.username ?? process.env[fixture.usernameEnv]
+  const password = privateCredentials?.password ?? process.env[fixture.passwordEnv]
   if (!username?.trim() || !password) return {pending: 'C14_BOSSFANG_EXTERNAL_DASHBOARD_CREDENTIAL_UNAVAILABLE'}
   const endpoint = new URL(fixture.endpoint)
   requireFact(!endpoint.username && !endpoint.password && !endpoint.search && !endpoint.hash &&

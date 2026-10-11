@@ -161,7 +161,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
 
     stage = 'durable-work-reopening'
     const identity = { definition: instance.definition, binding: instance.binding, package: instance.package }
-    await reopen(evaluate, signal, selected, instance.id)
+    evidence.reopening = await reopen(evaluate, signal, selected, instance.id)
     const restored = (await snapshot()).instances.find((item) => item.id === instance.id)
     requireFact(restored && same(identity, { definition: restored.definition, binding: restored.binding, package: restored.package }),
       'C14_REOPEN_CHANGED_DURABLE_IDENTITY')
@@ -206,7 +206,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     evidence.cancellation = { teamId: cancelInstance.id, attemptId: active.id, runId: active.runId,
       status: cancelled.attempt.status, usage: cancelled.attempt.usage, accountingState: cancelled.attempt.accountingState,
       effectDisposition: cancelled.attempt.effectDisposition }
-    await reopen(evaluate, signal, selected, cancelInstance.id)
+    evidence.cancellation.reopening = await reopen(evaluate, signal, selected, cancelInstance.id)
     const reopenedCancellation = await cancelRead()
     await captureAttemptEvents(evaluate, reopenedCancellation, { instance: cancelInstance, texts: peerTexts }, evidence)
     requireFact(reopenedCancellation.attempts.some((item) => item.id === active.id && item.status === 'cancelled'),

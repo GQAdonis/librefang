@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T22:18:54.389Z",
+  "kind": "actual-native-packaging-prerequisite-failure",
+  "source": "74194623b17e5db127534b0f0469f8557794d4bc",
+  "command": "CARGO_BUILD_JOBS=2 cargo build --release --locked --no-default-features --features server-full --bin uar-sidecar --target aarch64-apple-darwin",
+  "exitCode": 101,
+  "observedFailure": "Pinned liter-llm submodule not initialized; Cargo manifest load failed before compilation.",
+  "targetCachePresent": false,
+  "decision": "Use the already-running production Mac ARM64 payload from native run38090581696 as the identical source-pinned local packaging input instead of performing a second cold Rust compilation.",
+  "noLocalNativeCompilationPerformed": true,
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "deferredPlatforms": [
+    "darwin-x64",
+    "win32-arm64"
+  ],
+  "buildOperationPending": true
+}

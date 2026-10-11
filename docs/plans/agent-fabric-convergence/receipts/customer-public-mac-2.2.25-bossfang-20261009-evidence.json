@@ -1,0 +1,658 @@
+{
+  "schemaVersion": 1,
+  "kind": "bossfang-ordinary-bound-workflow-packaged-operation",
+  "creationTaskRef": "C14.4",
+  "complete": true,
+  "startedAt": "2026-10-09T22:09:54.549Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "9a043ae0d5d32e9b2fbcbae39d5f7839cd4a3382",
+    "selectedScenarioSha256": "d85788cd50d665f3e9840f1f7f3ce9b39d9364adec7088865094a38cce8bc3a7",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "bossfang": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+    "bossfangSha256": "310b35204ae3d2ad724992e75e084aa4fab9c2aa9c652a887cb18811de38da8b",
+    "sourcePinsSha256": "4a7538a7788a0e994984941431f9c4289a505598d47fc53ccbea464b315db546"
+  },
+  "previousReceipt": {
+    "file": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/composite-operation-evidence.json",
+    "sha256": "9d66552685c38b73fccb43d7c699e377de96db181d2a2b1ab4094603082d002d",
+    "rerun": false,
+    "wholeC14CompleteAtOriginalBoundary": false,
+    "application": {
+      "sourceCommit": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "appAsarSha256": "645526497709fb98f45949838110c3e00e6b43ae781d48c73895e22c1aeeffe7",
+      "samePackageAsOriginal": true
+    },
+    "retainedOriginalChecks": {
+      "packagedContext": {
+        "status": "passed"
+      },
+      "appsMascot": {
+        "status": "passed"
+      },
+      "dedicatedSettings": {
+        "status": "passed"
+      },
+      "fixedPortConflict": {
+        "status": "passed"
+      },
+      "automaticPortConflict": {
+        "status": "passed"
+      },
+      "managedDefaultAndOwnership": {
+        "status": "passed"
+      },
+      "appsDashboardAuthentication": {
+        "status": "passed"
+      },
+      "scopedSameUarConnection": {
+        "status": "passed"
+      },
+      "nativeFullHarnessDiagnostic": {
+        "status": "passed"
+      },
+      "nativeFullHarnessCancellation": {
+        "status": "cancelled"
+      },
+      "originalRunTransportRetention": {
+        "status": "cancelled"
+      },
+      "endpointChangeAndRestart": {
+        "status": "passed"
+      },
+      "uarRestartAndGenerationFollow": {
+        "status": "passed"
+      },
+      "grantRenewal": {
+        "status": "passed"
+      },
+      "expiredGrantRefusal": {
+        "status": "passed"
+      }
+    },
+    "originalFailure": {
+      "name": "alternateConfiguredUar",
+      "status": "failed",
+      "code": "C14_BOSSFANG_CONNECT_NOT_OBSERVED"
+    },
+    "alternateRecovery": {
+      "operation": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/operation.json",
+        "sha256": "d52f6444a2485edd529227b43fc98efac9f40787992cdd3e3998b049aa80a111",
+        "startedAt": "2026-10-06T20:03:40.179Z",
+        "finishedAt": "2026-10-06T20:06:39.962Z"
+      },
+      "wholeRunComplete": false,
+      "completedCheckStatus": "passed"
+    },
+    "remainingRecovery": {
+      "operation": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/operation.json",
+        "sha256": "09b8739a16c6e6e4aeec4cd39b0b94d5eb2abe921717e5306543f9e87e1ea9a8",
+        "startedAt": "2026-10-06T20:07:42.673Z",
+        "finishedAt": "2026-10-06T20:10:04.655Z"
+      },
+      "complete": true,
+      "checks": {
+        "externalBossFangPreservation": "passed",
+        "stopPreservesUar": "passed",
+        "settingsReopen": "passed"
+      }
+    },
+    "referencedReceipts": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-62230284-b070-410b-aa77-f8f420760ea1/bossfang-operation.json",
+        "sha256": "a23721d6884043177e46cdee2342a64a91e650381b8114b9f39872fbf87f7611",
+        "startedAt": "2026-10-06T19:12:42.628Z",
+        "finishedAt": "2026-10-06T19:30:15.113Z"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/operation.json",
+        "sha256": "d52f6444a2485edd529227b43fc98efac9f40787992cdd3e3998b049aa80a111",
+        "startedAt": "2026-10-06T20:03:40.179Z",
+        "finishedAt": "2026-10-06T20:06:39.962Z"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/operation.json",
+        "sha256": "09b8739a16c6e6e4aeec4cd39b0b94d5eb2abe921717e5306543f9e87e1ea9a8",
+        "startedAt": "2026-10-06T20:07:42.673Z",
+        "finishedAt": "2026-10-06T20:10:04.655Z"
+      }
+    ],
+    "scope": "Retained dashboard/authentication, ownership, ports, supervision, grant/connection and recovery checks at their original source and package only."
+  },
+  "normalProfile": true,
+  "experimentalOptIn": false,
+  "credentialValueRecorded": false,
+  "checks": [
+    "actual-compiled-authenticated-embedded-dashboard",
+    "visible-canvas-bound-target-authoring-and-native-persistence",
+    "visible-ordinary-run-admission-to-original-bound-uar",
+    "native-workflow-step-delegation-task-thread-root-run-correlations",
+    "actual-native-message-output-visible-and-settled-by-ordinary-engine",
+    "visible-original-pending-approval-exact-prepared-write",
+    "canonical-durable-host-human-approval-before-exact-disposable-effect",
+    "visible-original-authoritative-denial-canonical-durable-history-without-effect",
+    "visible-two-step-confirmed-cancel-forwarded-to-original-native-run",
+    "native-cancellation-request-acknowledgment-terminal-cleanup-settled",
+    "pending-approval-cancelled-canonical-history-and-ordinary-engine-without-effect",
+    "work-global-selection-and-original-uar-pid-start-port-preserved"
+  ],
+  "limitations": [
+    "Host resources remain private to the original registered context; opaque context inventory is not effect authority.",
+    "Context expiry/revocation and cross-platform behavior are not operated by this bounded workflow procedure.",
+    "Earlier passing dashboard, ports and ownership scopes retain only their exact original receipts and package identities.",
+    "Native Windows installed acceptance and publication remain independent and unclaimed."
+  ],
+  "modelContextConfiguration": {
+    "schemaVersion": 1,
+    "modelId": "gpt-6.1-sol",
+    "contextWindow": 272000,
+    "sourceRef": {
+      "kind": "exact-codex-model-cache",
+      "path": "/Users/gqadonis/.codex/models_cache.json",
+      "sha256": "e7ceb91cf00e09c12090b209e9a7020184ad90a72b561a6c70a69fe70539181f",
+      "fetchedAt": "2026-10-08T05:20:50.156700Z",
+      "clientVersion": "0.160.1"
+    },
+    "authority": "Approved repair uses existing provider administration for the exact configured proxy model; no catalog identity or price invented",
+    "recordedAt": "2026-10-08T05:22:32.653Z",
+    "declarationSha256": "41ec0ddfec278c57d2bfd9af4c141b2fba2b524502679cbbae196a2b14e0f33b",
+    "route": "prometheus.uar.providers.save",
+    "providerModelId": "boss-team-gateway-fcff971815db60fb/gpt-6.1-sol",
+    "credentialsChanged": false
+  },
+  "effectScope": {
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "workspaceSha256": "7d927be897a8a28eea58015d5f0fc52690be220d446deb197054a150826bec33",
+    "selectedServiceInstanceId": "managed-local",
+    "runtimeId": "managed-local",
+    "generation": 1,
+    "bindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "identitySourceInstanceId": "a8d18d52-182d-4885-9b41-435bd75ae33f",
+    "durableTurnsSubmitted": 0,
+    "durableActivationsSubmitted": 0,
+    "approvalDecisionsSubmitted": 2,
+    "externalEffectsAuthorized": false,
+    "secondUarStarted": false
+  },
+  "initialRuntime": {
+    "state": "running",
+    "processId": 19996,
+    "startedAt": 1791583849370,
+    "port": 1907,
+    "selectedInstanceId": "managed-local"
+  },
+  "definitionIdentitySource": {
+    "route": "prometheus.uar.durable.create_instance",
+    "instanceId": "a8d18d52-182d-4885-9b41-435bd75ae33f",
+    "definitionId": "urn:boss:starter:package",
+    "definitionVersion": "1.0.0",
+    "definitionDigest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff",
+    "bindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "profile": "on_demand",
+    "lifecycle": "dormant",
+    "inferenceSubmitted": false
+  },
+  "dashboard": {
+    "authentication": {
+      "status": 200,
+      "hostIpcExposed": false
+    },
+    "registrationRecoveryRequired": false
+  },
+  "workflow": {
+    "id": "04afe964-e2b4-429a-92f7-5694427cc61d",
+    "stepName": "ordinary-bound-step",
+    "target": {
+      "targetBindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "definition": {
+        "id": "urn:boss:starter:package",
+        "version": "1.0.0",
+        "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+      },
+      "run": {},
+      "delegatedHostContextId": "3ce02562-b9eb-4198-b025-2f017b31317d"
+    },
+    "configuredThroughCanvas": true
+  },
+  "hostContext": {
+    "contextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "binding": {
+      "id": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "revision": 1,
+      "digest": "sha256:e734fccd6f91b72557dc794745478a00cb088a5ae4cbc1d62f6449240a777388"
+    },
+    "expiresAt": "2026-10-09T22:26:22.611025Z"
+  },
+  "approvedPending": {
+    "contextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "bossTaskId": "workflow:428de8f4-78ea-4b9c-bf0a-1ef307afe884:ordinary-bound-step",
+    "taskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-1620b3f9443243eca2ee2f845f4ba9a5",
+    "runId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "rootRunId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "binding": {
+      "id": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "revision": 1,
+      "digest": "sha256:e734fccd6f91b72557dc794745478a00cb088a5ae4cbc1d62f6449240a777388"
+    },
+    "pending": {
+      "approvalId": "4800c546-49d7-44f9-a5c8-48c5a4c20ec3",
+      "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+      "challengeId": "4800c546-49d7-44f9-a5c8-48c5a4c20ec3",
+      "admissionId": "4fd272c4-f4de-45a9-9f64-cae6896af3ae",
+      "toolCallId": "call_K7wXrzLuarTbJZ4ZgOpazYXV",
+      "callIndex": 0,
+      "eventId": "4800c546-49d7-44f9-a5c8-48c5a4c20ec3",
+      "cursor": 13,
+      "rootRunId": "43911558-1253-40ca-b86c-b65f26c3f36b"
+    },
+    "preparedEffect": {
+      "version": 1,
+      "admissionId": "4fd272c4-f4de-45a9-9f64-cae6896af3ae",
+      "invocationId": "fb34a257-273f-48b9-b912-035a004ae8fd",
+      "toolCallId": "call_K7wXrzLuarTbJZ4ZgOpazYXV",
+      "callIndex": 0,
+      "toolName": "filesystem__write",
+      "targetPathSha256": "b316387d259d960f7465294b2a91b504d94fd8d268d836c4ab39cd55fe7e548e",
+      "contentSha256": "2d54bf33046a25963d9c4c5bf7cfb39b571399bcd9ff7ce10d4e3ec9d39d278c",
+      "argumentsSha256": "d88f863fe7ac151f87f8a47aee1f97290814b20f544be6ec6a90b79be2c22a8c",
+      "actionDisplaySha256": "ad964639f17725bb073e0491ca15290fc9d62f0cbf353022ff91f6efb01bcf7b"
+    },
+    "absentBeforeDecision": true,
+    "durableCanonicalPending": true
+  },
+  "approvedHistory": {
+    "durable": true,
+    "runId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+    "challengeId": "4800c546-49d7-44f9-a5c8-48c5a4c20ec3",
+    "admissionId": "4fd272c4-f4de-45a9-9f64-cae6896af3ae",
+    "admissionOwner": "paired-host",
+    "toolCallId": "call_K7wXrzLuarTbJZ4ZgOpazYXV",
+    "rootRunId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "state": "approved",
+    "decision": {
+      "decisionId": "b59e39d0-d5c0-4861-b960-4706d5b8e714",
+      "actor": "v1:s:69:boss.7a5d0da3e5fddc6bae6fd68941f25f525bea267b698d41b6718f5005fa6c5959",
+      "approved": true,
+      "decidedAt": "2026-10-09T22:11:46.172445Z"
+    },
+    "updatedAt": "2026-10-09T22:11:46.172446Z"
+  },
+  "outputRun": {
+    "bossTaskId": "workflow:428de8f4-78ea-4b9c-bf0a-1ef307afe884:ordinary-bound-step",
+    "delegationId": "1a13c0ef-75aa-479b-ac1a-c2b896d8cc15",
+    "targetBindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definitionMode": "bound",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "selectedInstanceId": "managed-local",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "delegatedHostContextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "uarTaskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-1620b3f9443243eca2ee2f845f4ba9a5",
+    "uarRootRunId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "uarRunId": "43911558-1253-40ca-b86c-b65f26c3f36b",
+    "admissionState": "admitted",
+    "executionState": "completed",
+    "cancellationState": "none",
+    "effectState": "not_dispatched",
+    "recoveryState": "available",
+    "bossProjectionRetention": "durable",
+    "revision": 13,
+    "cursor": 45,
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "retention": {
+      "mode": "process_ephemeral",
+      "terminalTtlSeconds": 600,
+      "terminalRecordCap": 1000
+    },
+    "cancellation": {
+      "requested": false,
+      "acknowledged": false,
+      "terminal": false,
+      "cleanupUncertain": false
+    },
+    "detached": false,
+    "createdAt": "2026-10-09T22:11:26.833897Z",
+    "terminalAt": "2026-10-09T22:11:51.486574Z",
+    "workflow": {
+      "workflowId": "04afe964-e2b4-429a-92f7-5694427cc61d",
+      "workflowRunId": "428de8f4-78ea-4b9c-bf0a-1ef307afe884",
+      "stepName": "ordinary-bound-step"
+    },
+    "observationSource": "/api/workflows/runs/428de8f4-78ea-4b9c-bf0a-1ef307afe884",
+    "observationMode": "retained-workflow-projection"
+  },
+  "output": {
+    "sha256": "e6175a5cf9974454eebd5920ce7d39dfb27035186d94d0685ff49bb97034ffed",
+    "length": 45,
+    "expectedMarkerVisible": true
+  },
+  "ordinaryCompletion": {
+    "runId": "428de8f4-78ea-4b9c-bf0a-1ef307afe884",
+    "state": "completed",
+    "outputSha256": "e6175a5cf9974454eebd5920ce7d39dfb27035186d94d0685ff49bb97034ffed",
+    "stepResults": [
+      {
+        "stepName": "ordinary-bound-step",
+        "outputSha256": "e6175a5cf9974454eebd5920ce7d39dfb27035186d94d0685ff49bb97034ffed",
+        "durationMs": 24681
+      }
+    ]
+  },
+  "approvedEffect": {
+    "createdFiles": [
+      "approved.txt"
+    ],
+    "approvedContentSha256": "2d54bf33046a25963d9c4c5bf7cfb39b571399bcd9ff7ce10d4e3ec9d39d278c",
+    "deniedFileAbsent": true,
+    "cancelledFileAbsent": true,
+    "readmeSha256": "7d927be897a8a28eea58015d5f0fc52690be220d446deb197054a150826bec33"
+  },
+  "deniedPending": {
+    "contextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "bossTaskId": "workflow:32488f9a-1455-46ad-819b-97daaac097f8:ordinary-bound-step",
+    "taskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-031a8e19cc8f402c971f494de987cc24",
+    "runId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "rootRunId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "binding": {
+      "id": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "revision": 1,
+      "digest": "sha256:e734fccd6f91b72557dc794745478a00cb088a5ae4cbc1d62f6449240a777388"
+    },
+    "pending": {
+      "approvalId": "08013f02-c636-4259-87f2-899cc2b00341",
+      "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+      "challengeId": "08013f02-c636-4259-87f2-899cc2b00341",
+      "admissionId": "22bbcdee-95bb-449d-9eed-f55d77232e78",
+      "toolCallId": "call_07c2d128c3c7476aa7fa2d3e477fca40",
+      "callIndex": 0,
+      "eventId": "08013f02-c636-4259-87f2-899cc2b00341",
+      "cursor": 13,
+      "rootRunId": "ff53785d-9606-42df-b999-e6c46616515a"
+    },
+    "preparedEffect": {
+      "version": 1,
+      "admissionId": "22bbcdee-95bb-449d-9eed-f55d77232e78",
+      "invocationId": "74c10a76-1b64-464e-bc5f-a133463ff9d6",
+      "toolCallId": "call_07c2d128c3c7476aa7fa2d3e477fca40",
+      "callIndex": 0,
+      "toolName": "filesystem__write",
+      "targetPathSha256": "838296312644e94359b758c3040f0298957814ff3ccc04365ed82392698a97a0",
+      "contentSha256": "2189671daa49117d5e4ab8cc364910ffd536e08c26c9cc9da37d0086b8302e2c",
+      "argumentsSha256": "74bd7fcbbb7920e55a7cd972291933af71fb79c5aea94cff2aab2cca55fa9ca3",
+      "actionDisplaySha256": "f24d1adaa7270a330eddc7cae4a71cde6c21be38d9215aea901a768e59cf53b2"
+    },
+    "absentBeforeDecision": true,
+    "durableCanonicalPending": true
+  },
+  "deniedHistory": {
+    "durable": true,
+    "runId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+    "challengeId": "08013f02-c636-4259-87f2-899cc2b00341",
+    "admissionId": "22bbcdee-95bb-449d-9eed-f55d77232e78",
+    "admissionOwner": "paired-host",
+    "toolCallId": "call_07c2d128c3c7476aa7fa2d3e477fca40",
+    "rootRunId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "state": "denied",
+    "decision": {
+      "decisionId": "4e997b2b-5c15-45d1-8da9-36a573d4fda6",
+      "actor": "v1:s:69:boss.7a5d0da3e5fddc6bae6fd68941f25f525bea267b698d41b6718f5005fa6c5959",
+      "approved": false,
+      "decidedAt": "2026-10-09T22:12:02.171343Z"
+    },
+    "updatedAt": "2026-10-09T22:12:02.171343Z"
+  },
+  "deniedRun": {
+    "bossTaskId": "workflow:32488f9a-1455-46ad-819b-97daaac097f8:ordinary-bound-step",
+    "delegationId": "400c2e37-cb5d-44de-b4d5-38e013c3a995",
+    "targetBindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definitionMode": "bound",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "selectedInstanceId": "managed-local",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "delegatedHostContextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "uarTaskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-031a8e19cc8f402c971f494de987cc24",
+    "uarRootRunId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "uarRunId": "ff53785d-9606-42df-b999-e6c46616515a",
+    "admissionState": "admitted",
+    "executionState": "completed",
+    "cancellationState": "none",
+    "effectState": "not_dispatched",
+    "recoveryState": "available",
+    "bossProjectionRetention": "durable",
+    "revision": 12,
+    "cursor": 21,
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "retention": {
+      "mode": "process_ephemeral",
+      "terminalTtlSeconds": 600,
+      "terminalRecordCap": 1000
+    },
+    "cancellation": {
+      "requested": false,
+      "acknowledged": false,
+      "terminal": false,
+      "cleanupUncertain": false
+    },
+    "detached": false,
+    "createdAt": "2026-10-09T22:11:52.651262Z",
+    "terminalAt": "2026-10-09T22:12:05.488395Z",
+    "workflow": {
+      "workflowId": "04afe964-e2b4-429a-92f7-5694427cc61d",
+      "workflowRunId": "32488f9a-1455-46ad-819b-97daaac097f8",
+      "stepName": "ordinary-bound-step"
+    },
+    "observationSource": "/api/workflows/runs/32488f9a-1455-46ad-819b-97daaac097f8",
+    "observationMode": "retained-workflow-projection"
+  },
+  "ordinaryDenial": {
+    "runId": "32488f9a-1455-46ad-819b-97daaac097f8",
+    "state": "completed"
+  },
+  "cancelPending": {
+    "contextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "bossTaskId": "workflow:ddad3f3a-d3e4-4f5a-adc0-742cc6851399:ordinary-bound-step",
+    "taskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-f8e035147c3f4489a604668faa7990fc",
+    "runId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "rootRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "binding": {
+      "id": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+      "revision": 1,
+      "digest": "sha256:e734fccd6f91b72557dc794745478a00cb088a5ae4cbc1d62f6449240a777388"
+    },
+    "pending": {
+      "approvalId": "a4ba5b7b-09e4-4633-9857-d6f92813ccde",
+      "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+      "challengeId": "a4ba5b7b-09e4-4633-9857-d6f92813ccde",
+      "admissionId": "ab5e2be5-0c42-4652-9822-17f151ceeaff",
+      "toolCallId": "call_1fOIrHx93kAF2O0dqhGbcgK1",
+      "callIndex": 0,
+      "eventId": "a4ba5b7b-09e4-4633-9857-d6f92813ccde",
+      "cursor": 13,
+      "rootRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24"
+    },
+    "preparedEffect": {
+      "version": 1,
+      "admissionId": "ab5e2be5-0c42-4652-9822-17f151ceeaff",
+      "invocationId": "6ee6bd87-72ef-4b09-b072-de38387ef29f",
+      "toolCallId": "call_1fOIrHx93kAF2O0dqhGbcgK1",
+      "callIndex": 0,
+      "toolName": "filesystem__write",
+      "targetPathSha256": "a789195668fce0a1ca6ae680c22c7e4a318eb77efaca96103dd92c88dc6561c2",
+      "contentSha256": "a34bf77f369985d31897eb7d315f2f663a6495885234059815ee9cbd4b868c9c",
+      "argumentsSha256": "92eefa50ab8cdc5378260b7b715fceaf30febc69d8210f3ba73d5b35585d1d95",
+      "actionDisplaySha256": "bc124647ae7aff12d2710da414bd7b68bfa386095fc4fe6cab4104b0d73a1354"
+    },
+    "absentBeforeDecision": true,
+    "durableCanonicalPending": true
+  },
+  "cancelBefore": {
+    "bossTaskId": "workflow:ddad3f3a-d3e4-4f5a-adc0-742cc6851399:ordinary-bound-step",
+    "delegationId": "5da97355-3fc8-4ec7-a85d-5ed5bb178aef",
+    "targetBindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definitionMode": "bound",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "selectedInstanceId": "managed-local",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "delegatedHostContextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "uarTaskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-f8e035147c3f4489a604668faa7990fc",
+    "uarRootRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "uarRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "admissionState": "admitted",
+    "executionState": "input_required",
+    "cancellationState": "none",
+    "effectState": "not_dispatched",
+    "recoveryState": "available",
+    "bossProjectionRetention": "durable",
+    "revision": 7,
+    "cursor": 13,
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "retention": {
+      "mode": "process_ephemeral",
+      "terminalTtlSeconds": 600,
+      "terminalRecordCap": 1000
+    },
+    "cancellation": {
+      "requested": false,
+      "acknowledged": false,
+      "terminal": false,
+      "cleanupUncertain": false
+    },
+    "detached": false,
+    "createdAt": "2026-10-09T22:12:06.611491Z",
+    "workflow": {
+      "workflowId": "04afe964-e2b4-429a-92f7-5694427cc61d",
+      "workflowRunId": "ddad3f3a-d3e4-4f5a-adc0-742cc6851399",
+      "stepName": "ordinary-bound-step"
+    }
+  },
+  "cancelAfter": {
+    "bossTaskId": "workflow:ddad3f3a-d3e4-4f5a-adc0-742cc6851399:ordinary-bound-step",
+    "delegationId": "5da97355-3fc8-4ec7-a85d-5ed5bb178aef",
+    "targetBindingId": "urn:boss:starter:binding:e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "definitionMode": "bound",
+    "workspaceId": "e4cdb5c8-33da-4f5d-b663-880d9852bdf1",
+    "selectedInstanceId": "managed-local",
+    "definition": {
+      "id": "urn:boss:starter:package",
+      "version": "1.0.0",
+      "digest": "sha256:886ab4280a9998c3c3ee3c6b42ce4e94c231c54f27593191f0e74a6875ac6eff"
+    },
+    "delegatedHostContextId": "3ce02562-b9eb-4198-b025-2f017b31317d",
+    "uarTaskId": "fh-4b810f5b0b2f4640886e976dcd05f86d-f8e035147c3f4489a604668faa7990fc",
+    "uarRootRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "uarRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "admissionState": "admitted",
+    "executionState": "cancelled",
+    "cancellationState": "terminal",
+    "effectState": "not_dispatched",
+    "recoveryState": "available",
+    "bossProjectionRetention": "durable",
+    "revision": 11,
+    "cursor": 16,
+    "runtimeEpoch": "4b810f5b0b2f4640886e976dcd05f86d",
+    "retention": {
+      "mode": "process_ephemeral",
+      "terminalTtlSeconds": 600,
+      "terminalRecordCap": 1000
+    },
+    "cancellation": {
+      "requested": true,
+      "acknowledged": true,
+      "terminal": true,
+      "cleanupUncertain": false
+    },
+    "detached": false,
+    "createdAt": "2026-10-09T22:12:06.611491Z",
+    "terminalAt": "2026-10-09T22:12:15.822358Z",
+    "workflow": {
+      "workflowId": "04afe964-e2b4-429a-92f7-5694427cc61d",
+      "workflowRunId": "ddad3f3a-d3e4-4f5a-adc0-742cc6851399",
+      "stepName": "ordinary-bound-step"
+    }
+  },
+  "cancelHistory": {
+    "durable": true,
+    "runId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "issuerId": "a6fb0ae2-f4f0-493a-818a-e6cebf63640a",
+    "challengeId": "a4ba5b7b-09e4-4633-9857-d6f92813ccde",
+    "admissionId": "ab5e2be5-0c42-4652-9822-17f151ceeaff",
+    "admissionOwner": "paired-host",
+    "toolCallId": "call_1fOIrHx93kAF2O0dqhGbcgK1",
+    "rootRunId": "36b7554a-f93b-48e4-944c-a92a7fc62f24",
+    "state": "cancelled",
+    "decision": null,
+    "updatedAt": "2026-10-09T22:12:15.802721Z"
+  },
+  "ordinaryCancellation": {
+    "runId": "ddad3f3a-d3e4-4f5a-adc0-742cc6851399",
+    "state": "cancelled"
+  },
+  "finalEffects": {
+    "createdFiles": [
+      "approved.txt"
+    ],
+    "approvedContentSha256": "2d54bf33046a25963d9c4c5bf7cfb39b571399bcd9ff7ce10d4e3ec9d39d278c",
+    "deniedFileAbsent": true,
+    "cancelledFileAbsent": true,
+    "readmeSha256": "7d927be897a8a28eea58015d5f0fc52690be220d446deb197054a150826bec33"
+  },
+  "identityResourceDisabled": true,
+  "ownedBossFangStopped": true,
+  "finalRuntime": {
+    "state": "running",
+    "processId": 19996,
+    "startedAt": 1791583849370,
+    "port": 1907,
+    "selectedInstanceId": "managed-local"
+  },
+  "finishedAt": "2026-10-09T22:12:17.839Z"
+}

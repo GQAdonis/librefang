@@ -1,0 +1,56 @@
+{
+  "platform": "darwin-x64",
+  "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+  "version": "1.0.0",
+  "packageRun": 38025589879,
+  "workflowHead": "8119fd7c83248cdf0d0cde4496cb33c569761a71",
+  "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.json",
+  "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.tar.gz",
+  "size": 133989919,
+  "sha256": "de6e3486c69285f0ed2cc863aa4f9bf0f4fa81bd4958a0e3e06915b35c0fa7d3",
+  "features": [
+    "server-full",
+    "tract-embeddings"
+  ],
+  "binaries": [
+    "libcrc_fast-83ccf4684c30d646.dylib",
+    "libsevenz_rust2-1192d4db71fe5529.dylib",
+    "LICENSE",
+    "policies/default.cedar",
+    "policies/skill-mutation.cedar",
+    "policies/tool-approval.cedar",
+    "uar-models/bg-small-en-v1.5.onnx",
+    "uar-models/config.json",
+    "uar-models/MODEL-NOTICE.txt",
+    "uar-models/special_tokens_map.json",
+    "uar-models/tokenizer_config.json",
+    "uar-models/tokenizer.json",
+    "uar-sidecar",
+    "payload-manifest.json"
+  ],
+  "schemaVersion": 1,
+  "kind": "published-corrective-native-payload",
+  "recordedAt": "2026-10-10T05:05:11.532Z",
+  "publicAssets": [
+    {
+      "name": "uar-sidecar-darwin-x64.tar.gz",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.tar.gz",
+      "size": 133989919,
+      "sha256": "de6e3486c69285f0ed2cc863aa4f9bf0f4fa81bd4958a0e3e06915b35c0fa7d3",
+      "githubDigest": "sha256:de6e3486c69285f0ed2cc863aa4f9bf0f4fa81bd4958a0e3e06915b35c0fa7d3",
+      "verifiedAt": "2026-10-10T05:01:37.004Z"
+    },
+    {
+      "name": "uar-sidecar-darwin-x64.json",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.json",
+      "size": 838,
+      "sha256": "154870d85972508b10294a55ede2a8b3dbe4cdb89e7456df492f64cdd119d3fd",
+      "githubDigest": "sha256:154870d85972508b10294a55ede2a8b3dbe4cdb89e7456df492f64cdd119d3fd",
+      "verifiedAt": "2026-10-10T05:01:38.478Z"
+    }
+  ],
+  "status": "passed",
+  "limits": [
+    "Native payload publication, not application installer or installed acceptance. Compatibility tag label2.2.29 does not change actual source308aea46 or application2.2.30 provenance."
+  ]
+}

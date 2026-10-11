@@ -1,3 +1,9 @@
 logs/
 inputs/*-result.json
 artifacts/*-kbd-status.json
+# Runtime history is backed up by the immutable CID in ../../cadence-history-ipfs.md.
+# Keep the live files locally; restore the IPFS snapshot before resuming on another machine.
+/events.jsonl
+/state.json
+/event-archives.json
+/archives/

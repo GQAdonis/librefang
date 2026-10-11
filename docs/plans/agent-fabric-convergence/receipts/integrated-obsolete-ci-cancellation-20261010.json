@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "kind": "superseded-owned-ci-cancellation",
+  "recordedAt": "2026-10-10T22:31:16.536Z",
+  "repository": "Prometheus-AGS/prometheus-skills-mini",
+  "source": "90d622cde5a3072b25166d4f305b1ffb0d2abb74",
+  "supersededBy": "6c63c0acec67444e30f65461836e7a943316e242",
+  "mergedPr": 56,
+  "runs": [
+    {
+      "id": 38085021022,
+      "status": "completed",
+      "conclusion": "cancelled"
+    },
+    {
+      "id": 38085023197,
+      "status": "completed",
+      "conclusion": "cancelled"
+    }
+  ],
+  "reason": "Only obsolete runs of this merged PR were cancelled to release runner capacity; required Mac ARM64/Windows x64 native jobs remain active.",
+  "testsRunByThisAction": false,
+  "qualificationCredit": false,
+  "cadenceCredit": false
+}

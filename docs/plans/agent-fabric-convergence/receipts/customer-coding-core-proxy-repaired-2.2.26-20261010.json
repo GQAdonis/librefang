@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "kind": "corrected-customer-coding-core-operation",
+  "status": "partially-passed",
+  "sourceRefs": {
+    "boss": "5b317b64c65928492f913fc41946d55ee099b472",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "appAsarSha256": "ed25868e241ff76b33f35934c1a8b13c6e730be4cbe0847426b14d17672182a8",
+    "sidecarSha256": "05027032aa30d8ae3a4435e5be69a8403a6495d8c6e95dc13c44ecb02132cb60",
+    "installerSha256": "ea6930469906890e9396c30ebf81c93fcc57e87b333d02739549a0355f07481f",
+    "installedVersion": "2.2.26",
+    "operationDriverRevision": "5b317b64c65928492f913fc41946d55ee099b472",
+    "selectedScenarioSha256": "9ef4696b6b3fca829a989bffb81ded4057d3c822f8428aee05900221576bd602",
+    "installationReceiptSha256": "0b5e5d36579df2df5df112b70b50d5d7850d5e7f67682730b3fd0b79d3b1c25b"
+  },
+  "originalOperation": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-team-proxy-repaired-2-2-26-98a32a91-5172-4cf5-81cf-e9e8dbed1751/operation.json",
+  "operationSha256": "99448f7ec4ad942b39cbe61409d4b568b061751b73d168e3217de816a9ab92a2",
+  "passedChecks": [
+    "ordinary-packaged-profile-qualified",
+    "work-selected-model-and-ordinary-coding-preset-deployment",
+    "nl-task-real-worker-and-reviewer-model-attempts",
+    "real-repository-edit-with-exact-bounded-diff",
+    "worker-artifact-handoff-to-reviewer",
+    "work-members-attempts-artifacts-and-authoritative-approval-state"
+  ],
+  "workspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+  "teamId": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+  "attempts": [
+    {
+      "id": "9f4572ea-04b1-4a31-94f9-8d63d8549115",
+      "runId": "23512bfd-d1c9-48f0-9253-32c5ec16819e",
+      "taskId": "readme-marker-worker",
+      "memberId": "bfd716bf-c0e5-4d3a-a2c1-066d1c99175d",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "executionFence": {
+        "catalogId": "uar-collaboration-catalog",
+        "serviceInstanceId": "managed-local",
+        "incarnationId": "c982e5ad-e751-4628-b960-b7be7402562a",
+        "epoch": 1
+      },
+      "outputSha256": "17e9adf0961bf8e53124b385c35d3ea2f6d7734ff1b184b6f63de22a99b7ddac",
+      "contextArtifactIds": [],
+      "usage": null,
+      "accountingState": "reserved-unknown",
+      "effectDisposition": "confirmed",
+      "models": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ]
+    },
+    {
+      "id": "37430fdc-b2c9-4689-83a5-ac8bd2c1bedf",
+      "runId": "ffa5cfc6-3c7b-4340-9cf8-90124169aa12",
+      "taskId": "readme-marker-review",
+      "memberId": "aab6655e-ccaf-4e9c-bb8e-28b8f53b079e",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "executionFence": {
+        "catalogId": "uar-collaboration-catalog",
+        "serviceInstanceId": "managed-local",
+        "incarnationId": "c982e5ad-e751-4628-b960-b7be7402562a",
+        "epoch": 1
+      },
+      "outputSha256": "367cf98d1215f2b118f9cd4976144fd274d338603b003407cba973e1de8e6fce",
+      "contextArtifactIds": [
+        "artifact-9f4572ea-04b1-4a31-94f9-8d63d8549115"
+      ],
+      "usage": null,
+      "accountingState": "reserved-unknown",
+      "effectDisposition": "confirmed",
+      "models": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-fcff971815db60fb",
+            "modelId": "gpt-6.1-sol"
+          },
+          "wireModelAlias": "gpt-6.1-sol",
+          "pricingIdentity": {
+            "providerId": "openai",
+            "modelId": "gpt-6.1-sol",
+            "catalogRevision": "sha256:0d66cebfea1017bcb9b678aab1dc672ba9a9c2d77df41a2a362d1c1d057f734c"
+          },
+          "endpointKind": "openai-compatible-chat",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "requestedReasoning": {
+            "mode": "off"
+          },
+          "effectiveReasoning": {
+            "mode": "off"
+          },
+          "support": "validated",
+          "supportEvidenceRef": "team-profile-0a6a7d120db5efd98200c65b725662b857e688dfacb854f493704e012e9f14a7",
+          "limits": {
+            "source": "unknown"
+          },
+          "fit": {
+            "mode": "settings-only",
+            "guaranteedFit": false,
+            "reason": "count-or-framing-unqualified"
+          }
+        }
+      ]
+    }
+  ],
+  "repository": {
+    "paths": [
+      "README.md"
+    ],
+    "sha256": "756514ebb948cee6bd416168e145a87c006f1381305a73cc97f6204877fcd541",
+    "beforeSha256": "6d941dfe2cc16ab8c5ddb5262511f0e5aa6d18dc3977329218f43ceeb9429c32"
+  },
+  "artifactReceipts": [
+    {
+      "id": "artifact-9f4572ea-04b1-4a31-94f9-8d63d8549115",
+      "attemptId": "9f4572ea-04b1-4a31-94f9-8d63d8549115",
+      "taskId": "readme-marker-worker",
+      "memberId": "bfd716bf-c0e5-4d3a-a2c1-066d1c99175d",
+      "contentSha256": "17e9adf0961bf8e53124b385c35d3ea2f6d7734ff1b184b6f63de22a99b7ddac"
+    },
+    {
+      "id": "artifact-37430fdc-b2c9-4689-83a5-ac8bd2c1bedf",
+      "attemptId": "37430fdc-b2c9-4689-83a5-ac8bd2c1bedf",
+      "taskId": "readme-marker-review",
+      "memberId": "aab6655e-ccaf-4e9c-bb8e-28b8f53b079e",
+      "contentSha256": "367cf98d1215f2b118f9cd4976144fd274d338603b003407cba973e1de8e6fce"
+    }
+  ],
+  "failedStage": "durable-work-reopening",
+  "failureCode": "C14_WORK_WORKSPACE_MENU_UNAVAILABLE",
+  "remaining": [
+    "retained renderer/app reopen",
+    "cancellation and reopen",
+    "two-workspace exclusion"
+  ],
+  "overallOperation": "failed",
+  "newCadenceDelivery": false,
+  "qualificationTaskCompletion": false,
+  "operatorAcceptance": "pending",
+  "externalInferencePrerequisite": {
+    "source": "d269910e45811c8450c7d80004405b6ea3cd9665",
+    "receipt": "receipts/customer-proxy-final-arguments-corrected-stream-20261010.json",
+    "distribution": "configured-external-liter-gateway-and-native-proxy"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T22:24:37.785Z",
+  "kind": "actual-native-payload-dispatch-result",
+  "run": 38091286809,
+  "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38091286809",
+  "producer": "c0a95c3d3b2cc00d8f847882032ede89666cf143",
+  "source": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "intent": "receipts/integrated-bossfang-cancelled-state-native-dispatch-intent-20261010.json",
+  "status": "dispatched-only",
+  "qualification": false,
+  "publication": false
+}

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "kind": "published-release-installer-byte-acceptance",
+  "releaseTag": "v2.2.16",
+  "releaseUrl": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.16",
+  "sourceRunId": "37775569785",
+  "expectedSource": "2b543cd4e7b08df69321666334913494a1dd10fb",
+  "source": "2b543cd4e7b08df69321666334913494a1dd10fb",
+  "platform": "win32",
+  "architecture": "arm64",
+  "version": "2.2.16",
+  "profile": "uar-enabled",
+  "features": {
+    "uar": true
+  },
+  "manifest": {
+    "name": "release-platform-v2.2.16-uar-enabled-win32-arm64-2b543cd4e7b08df69321666334913494a1dd10fb.json",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/release-platform-v2.2.16-uar-enabled-win32-arm64-2b543cd4e7b08df69321666334913494a1dd10fb.json",
+    "assetApiUrl": "https://api.github.com/repos/Prometheus-AGS/the-boss/releases/assets/621829800",
+    "size": 566,
+    "sha256": "a6ed2d9f6f010029f426da39bd549dbed4229903ce50d0957487d77bb81f0624",
+    "declaredGithubDigest": "sha256:a6ed2d9f6f010029f426da39bd549dbed4229903ce50d0957487d77bb81f0624"
+  },
+  "artifacts": [
+    {
+      "name": "The-Boss-2.2.16-win-arm64-setup.exe",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-win-arm64-setup.exe",
+      "declaredSize": 494447884,
+      "declaredSha256": "ac3c5eb923dd23960bbf52d8c3e7de934b58f9a405fcdd9244f09052dfeb220c",
+      "size": 494447884,
+      "sha256": "ac3c5eb923dd23960bbf52d8c3e7de934b58f9a405fcdd9244f09052dfeb220c",
+      "sizeMatches": true,
+      "sha256Matches": true,
+      "signing": {
+        "declared": "unsigned",
+        "verification": "publisher-manifest declaration; signature not executed"
+      },
+      "streamStartedAt": "2026-10-08T12:54:46.016Z",
+      "checkedAt": "2026-10-08T12:55:03.927Z",
+      "httpStatus": 200,
+      "finalHost": "release-assets.githubusercontent.com"
+    }
+  ],
+  "checks": {
+    "recordSizeMatches": true,
+    "recordSha256Matches": true,
+    "sourceMatches": true,
+    "versionMatches": true,
+    "artifactCountMatches": true,
+    "installerBytesMatch": true
+  },
+  "result": "pass",
+  "startedAt": "2026-10-08T12:54:45.595Z",
+  "checkedAt": "2026-10-08T12:55:03.927Z",
+  "verificationMethod": "Public HTTPS installer response consumed incrementally into SHA-256 and byte count; no installer file or full installer buffer created"
+}

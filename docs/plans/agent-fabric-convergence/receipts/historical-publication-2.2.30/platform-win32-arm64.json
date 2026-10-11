@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "platform",
+  "status": "success",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "verifiedAt": "2026-10-10T05:17:15.948Z",
+  "evidenceRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-win32-arm64-2.2.30-20261010.json",
+      "sha256": "4106643d80a58d091e351607556fcf2c70afd572f7dc62633aba691f3e9a5fb0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-release-metadata-2.2.30-2026-10-10T05-49-33-187Z-05573d3f.json",
+      "sha256": "14635d8f6c390c25172dfdd07f14907867c3d6acbc66e91a862d74e0ce45dcc2"
+    }
+  ],
+  "platform": "win32-arm64",
+  "architecture": "arm64",
+  "sha256": "62ad26e49dadc5f3979802d68ab4eb82234855d284bd8fb906a2ac3a159405fc",
+  "size": 494915696,
+  "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-arm64-setup.exe",
+  "signingStatus": "unsigned",
+  "signingEvidence": "Retained fully hashed NSIS setup certificate-table evidence; bootstrap does not identify application payload architecture",
+  "installedAcceptance": "pending-final-candidate-operator-acceptance",
+  "architectureEvidence": "Exact immutable platform record, successful selected native packaging job and canonical setup name; NSIS bootstrap machine does not establish payload architecture"
+}

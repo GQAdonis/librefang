@@ -6851,9 +6851,9 @@ export function getUarDelegation(bossTaskId: string): Promise<UarDelegatedRunPro
   return get(`/api/uar/delegations/${encodeURIComponent(bossTaskId)}`);
 }
 
-export function approveUarDelegation(input: { bossTaskId: string; approvalId: string; approved: boolean }): Promise<UarDelegatedRunProjection> {
+export function approveUarDelegation(input: { bossTaskId: string; approvalId: string; expectedRevision: number; approved: boolean }): Promise<UarDelegatedRunProjection> {
   return post(`/api/uar/delegations/${encodeURIComponent(input.bossTaskId)}/approve`, {
-    approvalId: input.approvalId, approved: input.approved,
+    approvalId: input.approvalId, expectedRevision: input.expectedRevision, approved: input.approved,
   });
 }
 

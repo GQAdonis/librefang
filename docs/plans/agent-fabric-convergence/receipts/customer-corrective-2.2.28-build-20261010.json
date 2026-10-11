@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-corrective-production-build-evidence",
+  "recordedAt": "2026-10-10T02:55:23.719Z",
+  "version": "2.2.28",
+  "platform": "darwin-arm64",
+  "sources": {
+    "boss": "6de6477cdddb0886387dcb752913c43bf3ec3de2",
+    "uar": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4"
+  },
+  "nativeBuild": {
+    "status": "passed",
+    "sourceAfter": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4",
+    "startedAt": "2026-10-10T02:20:13.253Z",
+    "finishedAt": "2026-10-10T02:47:22.505Z",
+    "elapsedMs": 1629252,
+    "commands": [
+      {
+        "command": "/Users/gqadonis/.cargo/bin/cargo",
+        "args": [
+          "+1.97.1",
+          "build",
+          "--locked",
+          "--no-default-features",
+          "--features",
+          "server-full",
+          "--target",
+          "aarch64-apple-darwin",
+          "--bin",
+          "uar-sidecar",
+          "--release",
+          "--jobs",
+          "1"
+        ],
+        "startedAt": "2026-10-10T02:20:13.254Z",
+        "finishedAt": "2026-10-10T02:47:12.178Z",
+        "exitCode": 0
+      },
+      {
+        "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+        "args": [
+          "scripts/package-boss-sidecar.mjs",
+          "darwin-arm64",
+          "aarch64-apple-darwin"
+        ],
+        "startedAt": "2026-10-10T02:47:12.178Z",
+        "finishedAt": "2026-10-10T02:47:22.505Z",
+        "exitCode": 0
+      }
+    ],
+    "payload": {
+      "asset": "uar-sidecar-darwin-arm64.tar.gz",
+      "sha256": "7626fdf83621c8d1a99623d7ac47f4c9144887392c320f33cce8963d7fded37f",
+      "platform": "darwin-arm64",
+      "source": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4",
+      "features": [
+        "server-full"
+      ]
+    },
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-native-2.2.28-127de281-17a0-4ea6-964a-997487688baa/build.json",
+      "sha256": "00f5d959f9a2cb5bc7c316bc06aee9b9a9044be1a6f1e47a13c920ddf073e34f"
+    }
+  },
+  "macBuild": {
+    "status": "passed",
+    "sourceAfter": "6de6477cdddb0886387dcb752913c43bf3ec3de2",
+    "workingDirectory": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "startedAt": "2026-10-10T02:47:29.044Z",
+    "finishedAt": "2026-10-10T02:53:32.999Z",
+    "elapsedMs": 363955,
+    "exitCode": 0,
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-build-2.2.28-2c37d673-cee6-4bfe-b631-9cfb134b1373/build.json",
+      "sha256": "1ee44452439776847a5ab6ff65b013fccf52df762d1fed99580b4881054eb74a"
+    },
+    "localNotarization": {
+      "status": "skipped",
+      "evidence": "Build log records explicit notarize=false and HAS_NOTARIZATION not true; no local notarization success claimed."
+    }
+  },
+  "qualification": {
+    "build": "passed",
+    "launch": "pending at build boundary; not performed by this evidence agent",
+    "featureOperation": "pending at build boundary; no functional success inferred",
+    "installedAcceptance": {
+      "darwinArm64": "pending for identified final candidate",
+      "win32X64": "pending for identified final candidate"
+    },
+    "publicInstallers": "not established by local build receipts"
+  },
+  "cadence": {
+    "newSuccessfulDeliveryCount": false,
+    "reason": "Build evidence alone does not finalize a usable delivery; clocks, history and publication debt remain untouched."
+  },
+  "verification": {
+    "boundary": "Actual completed corrective native and Mac packaging builds owned by root",
+    "testSuitesRun": [],
+    "additionalBuildsRun": [],
+    "applicationOperationsRun": []
+  },
+  "limits": [
+    "This receipt selects fields from actual passed build records; it does not inspect raw environment or publish build logs.",
+    "No Windows build, installed-operation, public notarization or website claim is made.",
+    "Source receipts and earlier failed attempts remain immutable."
+  ]
+}

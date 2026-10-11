@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-proxy-final-arguments-corrected-stream",
+  "startedAt": "2026-10-10T00:37:51.818Z",
+  "proxySource": "d269910e45811c8450c7d80004405b6ea3cd9665",
+  "proxyBinarySha256": "1a7a708312048d4c84166cf257795647d666c613e8d2d9075567f7faa01238f6",
+  "model": "gpt-6.1-sol",
+  "endpoint": "http://localhost:4000/v1/chat/completions",
+  "authentication": "existing-subscription-through-selected-gateway; secrets excluded",
+  "scope": "Only affected real subscription/proxy/gateway streaming operation; synthetic tool schemas without tool execution.",
+  "noToolExecution": true,
+  "noAppOperation": true,
+  "noSharedGatewayRestart": true,
+  "launchagent": {
+    "label": "dev.prometheusags.openai-proxy",
+    "state": "running",
+    "pid": 1171
+  },
+  "finishedAt": "2026-10-10T00:37:57.432Z",
+  "httpStatus": 200,
+  "contentType": "text/event-stream",
+  "openingElapsedMs": 4696,
+  "totalElapsedMs": 5616,
+  "done": true,
+  "events": [
+    {
+      "n": 1,
+      "elapsedMs": 4697,
+      "choice": 0,
+      "finishReason": null
+    },
+    {
+      "n": 2,
+      "elapsedMs": 5605,
+      "choice": 0,
+      "finishReason": null,
+      "toolCalls": [
+        {
+          "index": 0,
+          "idPresent": true,
+          "name": "filesystem__read",
+          "argumentsLength": 0,
+          "argumentsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "n": 3,
+      "elapsedMs": 5610,
+      "choice": 0,
+      "finishReason": null,
+      "toolCalls": [
+        {
+          "index": 0,
+          "idPresent": false,
+          "argumentsLength": 42,
+          "argumentsSha256": "94abd17a58decd4b90b1ba9749b65edf303c00cef5b80e3e49e72dbe7c2a423b"
+        }
+      ]
+    },
+    {
+      "n": 4,
+      "elapsedMs": 5611,
+      "choice": 0,
+      "finishReason": null,
+      "toolCalls": [
+        {
+          "index": 1,
+          "idPresent": true,
+          "name": "filesystem__ls",
+          "argumentsLength": 0,
+          "argumentsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "n": 5,
+      "elapsedMs": 5611,
+      "choice": 0,
+      "finishReason": null,
+      "toolCalls": [
+        {
+          "index": 1,
+          "idPresent": false,
+          "argumentsLength": 42,
+          "argumentsSha256": "849b74d11a9594e4a6d6f30ced43e4a2fabf59c16acb19178b68e74618c1b635"
+        }
+      ]
+    },
+    {
+      "n": 6,
+      "elapsedMs": 5612,
+      "choice": 0,
+      "finishReason": "tool_calls"
+    },
+    {
+      "n": 7,
+      "done": true,
+      "elapsedMs": 5615
+    }
+  ],
+  "assembledArgumentMetrics": [
+    {
+      "index": 0,
+      "totalArgumentBytes": 42,
+      "argumentChunkCount": 1,
+      "name": "filesystem__read"
+    },
+    {
+      "index": 1,
+      "totalArgumentBytes": 42,
+      "argumentChunkCount": 1,
+      "name": "filesystem__ls"
+    }
+  ],
+  "finishMarkerCount": 1,
+  "passed": true
+}

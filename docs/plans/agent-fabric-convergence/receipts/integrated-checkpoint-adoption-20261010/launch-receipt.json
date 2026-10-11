@@ -1,0 +1,216 @@
+{
+  "producer": "lead.packaging:actual-process-and-existing-package-evidence",
+  "candidateId": "02c4dd1a-3344-4b97-9f49-08f7a84bb2ab",
+  "contentManifestDigest": "db0d10a5965863a42d3d98dbfcd3eeffab174bde494396333216d986627fc1da",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "revision": "d9bbf5a044b3c39800a212959836677ca3173eea",
+      "fingerprint": "d7f448bb7a8bf0d90f6a0424c63fc3851bcb8c2861611d131bf76abdae47a9d9",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini",
+          "revision": "90bcd46763175c8439968d4b7080963e62b18eea",
+          "fingerprint": "5790835df72ca749186236d7f6c9bdc2b66b2700bc38ed0056cca9d5ab7cfe20",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/liter-llm",
+              "name": "tools/liter-llm",
+              "initialized": false,
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+              "name": "tools/prometheus-knowledge",
+              "initialized": false,
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/surreal-memory-server",
+              "name": "tools/surreal-memory-server",
+              "initialized": false,
+              "revision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "resources/prometheus-skills-mini"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+      "revision": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2",
+      "fingerprint": "5da2bad1f0b0c3d765fab8c4a6c06cb28611c63b5d4d92fcdc0aa44014a249e2",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner",
+          "revision": "18d000f3e46952418f682159b227dbf71ce61dcb",
+          "fingerprint": "d8c13b81ed53934d4329c884621b561d27174126d4a19f5ecdbe907890019b69",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner/shared/sycophancy-correction",
+              "name": "shared/sycophancy-correction",
+              "initialized": false,
+              "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/artifact-refiner/tools/rust-mcp-filesystem",
+              "name": "tools/rust-mcp-filesystem",
+              "initialized": false,
+              "revision": "ef808b7d0ccf7f56c4e8d125091d8d0115725a60",
+              "workingTree": "unobserved"
+            }
+          ],
+          "name": "skills/imported/artifact-refiner"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/prometheus-entity-management",
+          "name": "skills/imported/prometheus-entity-management",
+          "initialized": false,
+          "revision": "34a211563fe7f06118996a40cc398c4c3af953ef",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/imported/sycophancy-correction",
+          "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+          "fingerprint": "dbd3590f817ab41cdb97d6347ed787897c0afed6dbc35abbc09104c98cc897a6",
+          "name": "skills/imported/sycophancy-correction"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/cowork-skills",
+          "name": "tools/cowork-skills",
+          "initialized": false,
+          "revision": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/disk-space-guardian",
+          "name": "tools/disk-space-guardian",
+          "initialized": false,
+          "revision": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/liter-llm",
+          "name": "tools/liter-llm",
+          "initialized": false,
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/openai-proxy",
+          "revision": "b68861e0a6672f5ece900c58fd44b9e23a6b5691",
+          "fingerprint": "d3f6d2485fa27c1c1faeb99aa5bdf17d6bc64fa10f275b1c3c3dc72780ecf7aa",
+          "name": "tools/openai-proxy"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/prometheus-knowledge",
+          "name": "tools/prometheus-knowledge",
+          "initialized": false,
+          "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/tools/surreal-memory-server",
+          "name": "tools/surreal-memory-server",
+          "initialized": false,
+          "revision": "63eb413ebf520a4a525ffd3b8d1d07f1389d48d4",
+          "workingTree": "unobserved"
+        }
+      ]
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902",
+      "revision": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+      "fingerprint": "388d661d593671e1ad639668b19ea718406f62e2c8c9143364f1a8036d93e27c",
+      "submoduleRefs": [
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/crates/prometheus-skill-system",
+          "name": "crates/prometheus-skill-system",
+          "initialized": false,
+          "revision": "f4bef4556a83ac22bf204bf69a01ddf0f9e007f2",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/frontend/packages/prometheus-entity-management",
+          "name": "frontend/packages/prometheus-entity-management",
+          "initialized": false,
+          "revision": "34a211563fe7f06118996a40cc398c4c3af953ef",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/models.dev",
+          "name": "models.dev",
+          "initialized": false,
+          "revision": "4a0154da2410bca18e97be812fecb9e8f85466e8",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/vendor/git/liter-llm",
+          "name": "vendor/git/liter-llm",
+          "initialized": false,
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+          "workingTree": "unobserved"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/vendor/git/rust-mcp-filesystem",
+          "name": "vendor/git/rust-mcp-filesystem",
+          "initialized": false,
+          "revision": "01ae76b99db4b818458efe2dc5d76e70fa5eadb4",
+          "workingTree": "unobserved"
+        }
+      ]
+    }
+  ],
+  "status": "success",
+  "exitCode": 0,
+  "platform": "darwin-arm64",
+  "architecture": "arm64",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.31-mac-arm64.dmg",
+      "sha256": "f169f8f165a63b87852a3c429c85abf459567338cb3e62847ae69755a8767612",
+      "size": 708596993,
+      "platform": "darwin-arm64"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "sha256": "5177ed32895ea2cd9342e387b918f9df28cb0219c6e0b98389020ca1b2cda2d8",
+      "size": 347644670,
+      "platform": "darwin-arm64"
+    }
+  ],
+  "authorityRef": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md",
+  "receiptId": "integrated-runtime-2.2.31-actual-launch-20261010",
+  "checkpointId": "mac-functional-launch",
+  "startedAt": "2026-10-10T20:29:04.212Z",
+  "finishedAt": "2026-10-10T20:29:09.421Z",
+  "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-checkpoint-adoption-20261010/launch-original-evidence.json",
+  "logSha256": "812dc8e9d0d6c5d0ba20d0ff8d1a1ba0713ddaa1bcfffcff146fce6f591be57a",
+  "command": {
+    "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+      "--repository",
+      "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "--scenario",
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+      "--require-scenario",
+      "--receipt",
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-launch-20261010.json"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance"
+  },
+  "recipeDigest": "7cfdeb5c3ef434610025f163a63d084f16ec3397edac8b858ad3cecdc732e362",
+  "actualLaunch": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-launch-20261010.json",
+    "sha256": "812dc8e9d0d6c5d0ba20d0ff8d1a1ba0713ddaa1bcfffcff146fce6f591be57a",
+    "launch": "renderer-ready",
+    "functionalAcceptance": "scenario-confirmed",
+    "scenarioDigest": "fb9d16c97ac9ea2798a110ac1d0fd7f10ee444ed6bdd5a5c5f97755d676ac9e8"
+  },
+  "scope": "Renderer-ready packaged launch and observed provider setup scenario only; no model connection, inference, BossFang feature operation or delivery credited."
+}

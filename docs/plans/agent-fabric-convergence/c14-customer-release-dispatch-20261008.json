@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-08T09:56:51.245Z",
+  "status": "dispatched-not-published",
+  "version": "2.2.15",
+  "source": "997247b431593e4339d73398ac1409fdf4332e50",
+  "candidateId": "e4444615-c45d-4d4c-ab6e-a00118159d2b",
+  "contentManifestDigest": "833ba85576b8973ca0def6151c48daebb41a6ba2a3fd6022ab53e32eae6e2ad4",
+  "publicationObligationId": "99a9d56d-7212-46da-98dd-de2854ff6420",
+  "runs": [
+    {
+      "id": 37759285987,
+      "platforms": [
+        "darwin-arm64",
+        "win32-x64"
+      ],
+      "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37759285987",
+      "observedPrepareRelease": "success"
+    },
+    {
+      "id": 37759737653,
+      "platforms": [
+        "darwin-x64",
+        "win32-arm64"
+      ],
+      "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37759737653",
+      "observedPrepareRelease": "success"
+    }
+  ],
+  "mergedDependencies": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "pr": 46,
+      "mergeCommit": "e2c2c32d9bfdffd702c9cb015e2b258d5b682c49",
+      "packagedCommit": "997247b431593e4339d73398ac1409fdf4332e50"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "pr": 363,
+      "mergeCommit": "8f9f08630f951e5c30ddff75059f7eb91c538f20",
+      "packagedCommit": "3daa3ef89aaebe0da379ca42b1582172d21f127a"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "pr": 153,
+      "mergeCommit": "1a9c62d5e58d32b4a96083079d7f1d0559195f8a",
+      "packagedCommit": "0899e4993ebfede3f91366b22cfe9310b2e58f69"
+    }
+  ],
+  "localOperationReceipt": "c14-successful-workflow-boundary-20261008.json",
+  "publicationPending": [
+    "all-four-installer-assets",
+    "committed-release-metadata",
+    "landing-source-sync-and-deployment",
+    "live-byte-verification"
+  ],
+  "installedAcceptance": {
+    "windowsX64": "pending",
+    "macArm64": "local-packaged-operation-passed; operator-installed-acceptance-pending"
+  },
+  "limitations": [
+    "Workflow dispatch and preparation do not prove installer build or publication.",
+    "Frozen application source stays unchanged while native jobs import their selected checksummed UAR records.",
+    "Earlier Cadence publication obligation remains pending; completed task credit is not awarded again."
+  ]
+}

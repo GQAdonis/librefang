@@ -437,24 +437,24 @@ SurrealDB-native memory substrate with semantic search, knowledge graphs, and ta
 
 ### 3. Universal Agent Runtime (UAR) as a Runtime Provider
 
-BossFang adds the Universal Agent Runtime (Prometheus-AGS/universal-agent-runtime) as
-a first-class LLM/runtime provider, giving agents access to 142+ LLM providers through
-a unified liter-llm interface.
+BossFang borrows an authenticated configured Universal Agent Runtime (Prometheus-AGS/universal-agent-runtime) through remote model/runtime transport.
+BossFang never bundles, installs, spawns, stops or supervises UAR.
+The Boss owns its managed UAR lifecycle independently; external UAR remains externally owned.
+New admissions use the selected connection; admitted runs retain their original instance, workspace, endpoints and runtime epoch without migration or replay.
 
 **Crates**:
 - `librefang-uar-spec` (`crates/librefang-uar-spec/`) — spec types and AgentManifest translator
 - `librefang-llm-drivers/src/drivers/uar.rs` — `UarDriver` LLM driver implementation
 
 **Feature flags**:
-`uar-driver` is **off by default and opt-in**, and forwards down an unbroken chain so that
-enabling it on any crate in the chain reaches the dependency:
+`uar-driver` is **off by default and opt-in**; preserve the existing compatibility feature chain:
 
 - `librefang-cli`: `uar-driver` → `librefang-api/uar-driver`
 - `librefang-api`: `uar-driver` → `librefang-kernel/uar-driver`
 - `librefang-kernel`: `uar-driver` → `librefang-runtime/uar-driver`
 - `librefang-runtime`: `uar-driver` → `librefang-llm-drivers/uar-driver`
-- `librefang-llm-drivers`: `uar-driver` → `dep:universal-agent-runtime`
-- When `uar-driver` is enabled, pass `surreal-backend` to UAR so it shares our SurrealDB version
+- `librefang-llm-drivers`: `uar-driver` is an empty compatibility feature.
+- No link enables `dep:universal-agent-runtime` or forwards `surreal-backend` to UAR; UAR owns its dependencies and storage independently.
 
 **Every crate in that chain must declare the feature.** `--features` names are resolved
 against the *selected package*, so the production image's
@@ -462,7 +462,7 @@ against the *selected package*, so the production image's
 (`Dockerfile`) resolves `uar-driver` against **`librefang-cli`**. If any link is missing, the
 image build fails with *"none of the selected packages contains these features"*.
 
-History worth knowing (fixed 2026-07-11, #C-001): the claim above used to be false.
+Historical in-process integration (fixed 2026-07-11, #C-001; not the current connection-only architecture):
 `librefang-kernel/Cargo.toml` carried a hardcoded
 `librefang-runtime = { …, features = ["uar-driver"] }`, and since cargo unions features
 across the graph and `librefang-cli → librefang-kernel` is not feature-gated, **every** build
@@ -486,6 +486,7 @@ paper over a missing feature declaration — declare the feature and forward it.
 2. If upstream changes `AgentManifest` shape, update `librefang-uar-spec/src/types.rs`
 3. Never remove `librefang-uar-spec` from the workspace
 4. Ensure `provision_uar_namespace()` in `librefang-storage` is still called at boot
+5. Preserve selected-instance borrowing and original admitted-run authority; never reintroduce UAR bundling, installation, spawning, stopping or supervision.
 
 ### Shared SurrealDB Version Pin
 
@@ -503,7 +504,7 @@ Verify with `cargo tree -i surrealdb`, `-i surrealdb-core`, `-i surrealdb-types`
 What each system demands, as of the 3.3.0 bump:
 
 - `surreal-memory` (rev `b7e2093`) pins an **exact** `surrealdb = "=3.3.0"` and `surrealdb-types = "=3.3.0"` — rigid, so its rev and our pin must move in step.
-- `universal-agent-runtime` also pins `=3.3.0`, but it is no longer linked in-process: `uar-driver` in `librefang-llm-drivers` is an empty feature and UAR runs as a sidecar, so its pin does not bind this workspace.
+- `universal-agent-runtime` is not linked in-process: the terminal `uar-driver` feature is empty and BossFang connects to an independently owned UAR service, so UAR dependency/storage pins do not bind this workspace.
 - The remote SurrealDB server (`k8s/base/surrealdb-statefulset.yaml`) runs `surrealdb/surrealdb:v3.3.0`, the same minor as the client.
 - Embedded (RocksDB) datastores are migrated in place, one way, the first time a 3.3.0 client opens them; take a copy of the embedded `librefang.surreal` / `librefang-memory.surreal` directories under the configured storage data dir before the first 3.3.0 boot if a rollback to 3.2.x must stay possible.
 

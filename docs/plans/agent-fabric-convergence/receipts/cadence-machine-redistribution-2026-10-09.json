@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "cadence-machine-redistribution",
+  "recordedAt": "2026-10-09T23:27:24.882Z",
+  "status": "pending-ownership-compatible-install",
+  "source": {
+    "root": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full",
+    "commit": "bb8950b254825079ab382119a8c425d645a081ae",
+    "preservesUSER": true,
+    "processSha256": "a8e3d31ba65fcd9d2ca4bc7c715d36b15da7c4e7a5a65041bd6ace2e27cd72d3"
+  },
+  "installedCodex": {
+    "root": "/Users/gqadonis/.codex/skills/delivery-cadence",
+    "generation": "6d017e41ae80e34101146cd060e8a14e34361b066e7263d3074466e7c414820d",
+    "preservesUSER": false,
+    "processSha256": "c04f245e214af823c401660116881918f6455c79e143b4bdc4628859a321116b"
+  },
+  "commands": [
+    {
+      "command": "node scripts/distribute-delivery-cadence.mjs --targets all --dry-run",
+      "exitCode": 1,
+      "result": "Shared physical generation destination across Claude, Kimi and Zed targets refused."
+    },
+    {
+      "command": "node scripts/distribute-delivery-cadence.mjs --targets codex --dry-run",
+      "exitCode": 1,
+      "result": "Unmanaged destination under targeted receipt contract; Codex is signed-generation owned."
+    }
+  ],
+  "constraints": "Existing generation installer selects targets but not individual skills and activates a whole signed generation; targeted Cadence installer does not migrate signed-generation ownership. Preserve current signed generation and machine copies. No broad activation, installer change, hook execution, services, builds, tests or application operation performed.",
+  "filesChangedByInstaller": 0,
+  "disposition": "Machine-wide refresh remains explicitly pending. Corrected application source pins are separate; application operations continue without waiting on this refresh."
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:32:16.745Z",
+  "authority": "Operator implementation completion separated from intervening qualification gates",
+  "implementation": "complete",
+  "label": "C17",
+  "id": "afc-c17-executive-assistants-and-consented-human-representation",
+  "sources": {
+    "uar": "1cdd8eb6755f0edefefeb27c95e44cb430cbcc42",
+    "boss": "ed42b41535"
+  },
+  "capabilities": [
+    "Seven deployable executive role packages plus custom office authoring",
+    "Office role definitions distinct from represented humans",
+    "Current issuer-owned immutable revisioned grant plus Cedar at effects",
+    "Bounded readonly disclosed representation, revocation, history and settings in13locales"
+  ],
+  "limits": [
+    "Owner attestation, not organization-issued certification",
+    "Financial/provider mutations and subdelegation unsupported",
+    "No hidden credential or grant in portable definitions"
+  ],
+  "qualification": "New-source grant/office deployment and packaged operation pending",
+  "testsRun": [],
+  "buildsRun": [],
+  "certification": "pending"
+}

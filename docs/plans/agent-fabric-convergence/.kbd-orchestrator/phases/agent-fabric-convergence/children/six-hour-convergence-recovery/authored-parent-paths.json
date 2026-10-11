@@ -1,0 +1,14 @@
+[
+  ".kbd-orchestrator/phases/agent-fabric-convergence/plan.md",
+  ".kbd-orchestrator/phases/agent-fabric-convergence/execution.md",
+  "customer-delivery-order.md",
+  "customer-delivery-map.json",
+  "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+  "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/proposal.md",
+  "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+  "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/proposal.md",
+  "openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/design.md",
+  "openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/proposal.md",
+  "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+  "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/proposal.md"
+]

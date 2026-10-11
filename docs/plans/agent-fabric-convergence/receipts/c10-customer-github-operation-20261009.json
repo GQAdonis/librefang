@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-github-feedback-production-delivery",
+  "recordedAt": "2026-10-09T12:42:00.976Z",
+  "disposition": "implemented-built-and-operated-publication-in-progress",
+  "customerSubsetOf": [
+    "C10.2",
+    "C10.3",
+    "C18.2",
+    "C18.3"
+  ],
+  "wholeTaskCredit": {
+    "tasks": [],
+    "changes": [],
+    "phases": []
+  },
+  "sourceRefs": {
+    "boss": "e4addba828f4b0f67caef1bdd49925f1f9c767f2",
+    "uar": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
+    "bossDiffSha256": "a0efa6f935a6b37b80a42206d4134eec112277503eb10a421d0f408a94879759",
+    "appAsarSha256": "a71d81ed59f4ca16b48812b66b90a96ac808a2d29cc1e1af9f145bbd98933a3c",
+    "sidecarSha256": "b1c623611277671ee5e817b5e0a9f827a172bc26371bd9eb3ec8356d3c6b4a29",
+    "sourcePinSha256": "41e6887470169a8a9f1933ab174ca4905ea512aa7d82fb1cd5001e429f86b5b3",
+    "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+    "operationSources": {
+      "operate-github-feedback.mjs": "2c70231a38aa6383109344b05cc2fe65f4800b08a10e2a62445514803cee3618",
+      "github-feedback-operation/author.mjs": "cdfbaae08744ff659e8d25972d9fac723b2cf9b2fa6e3e8b64e14b08265d1638",
+      "github-feedback-operation/client.mjs": "00ff5d29e0b91f2db2fe09c4df4b2c1f936c15dc4095aa2e4ded786567199e27",
+      "github-feedback-operation/prepare.mjs": "c6c20eaac1635a8770e847344fa438d4e1c122ddf607d0cf6b7513e64251b5df",
+      "github-feedback-operation/resume.mjs": "272071036a97dc7bcddcb414a80cb420d5c82a41d41d0d6ac382b137af204fb2",
+      "github-feedback-operation/scenario.mjs": "d42519480f4d5f1258b25194bf7e83bf01e4b8a3919f4b9f29bbd05b8f780768",
+      "github-feedback-operation/skill-evidence.mjs": "824d2cd88bff1bdf42d00946e7b103dfaad37e44f04f9818608ae0d242633b14",
+      "github-feedback-operation/ui.mjs": "5eb8fff56b95dcee57163e53c1009448c832782f87f7d44dfb914c05b4478c1b",
+      "operate-reusable-team.mjs": "72c68322a91ca00b2bb616249d1de38284a47387320ddd3adac458c5d1df46a0",
+      "reusable-team-operation/io.mjs": "6e74174d4f18b3bd1c6a7e41df0c127f9379cc77b5296504116b241cfbc18b4c",
+      "reusable-team-operation/scenario.mjs": "49745ac727bf8407fc27b7dfc32549963cb6e4d39d28b30b713b7fc4358ff735",
+      "reusable-team-operation/approvals.mjs": "425db6c15d77899f07f3ce747c5dce6cd7e07e08f39006b341ae88f7767eb5f9",
+      "practical-team-presets-operation/contracts.mjs": "309d0d1ec07114ae3c50454eb5cc304b403e3edf8eed4df29616b76061c4d82e"
+    }
+  },
+  "operation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-approved-retry-get-reconciled-20261009/c10-beb3bd09-c1d0-4ec4-a205-18615cbcdbad/operation.json",
+    "sha256": "edf24d00c2e1e1ab97b0ba7eebdaa015202cbe42092596c21294d2fe6d6d64fa"
+  },
+  "evidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-approved-retry-get-reconciled-20261009/c10-beb3bd09-c1d0-4ec4-a205-18615cbcdbad/evidence.json",
+    "sha256": "98725eaaa218a51c67dd1d49f23ac09e6bd0f3689a3b8796fde7ac9b06952c91"
+  },
+  "prepare": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-feedback-operation-2.2.24-host-attached/c10-51eeab4c-a135-4e09-904e-d56b1b60ea80/operation.json",
+    "sha256": "93f525fa2ac8669c6396b4d4cd462d651c8daf6cb050981d168f5f321d95bc87"
+  },
+  "exactApproval": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-exact-draft-operator-approval-20261009.json",
+    "sha256": "4fa850f0e0a1795a47b5833b1c4d844b446faf547b3d6531b31a60697ec7c622"
+  },
+  "interruption": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c18-approved-github-interruption-retry/unknown-3756d485-d1e9-43bb-a093-505de65b1558/operation.json",
+    "sha256": "7fab45a3de1d688f2f798e6892be787792af47aaf99d1c6f3e1a5537d0debf7a"
+  },
+  "build": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-retry-local-dmg-receipt-r3.json",
+    "sha256": "7ca8406701a1a6ec7cc0f2b64a8e06e60659eaa54a865d8488d3ecf9fbc0612a"
+  },
+  "launch": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-retry-baseline-launch-checkpoint-20261009.json",
+    "sha256": "feee6bbee2fe3247e15dd130409a0db21cd604713c20e3f8a520cea133dd7b30"
+  },
+  "cadence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-customer-local-delivery-finish-20261009.json",
+    "sha256": "bf942fef9892dc05a9e5b5dd62d031264cf5fa39b97657ac6c00a9cd4740c55a"
+  },
+  "externalEffect": {
+    "target": "Prometheus-AGS/the-boss",
+    "issueUrl": "https://github.com/Prometheus-AGS/the-boss/issues/63",
+    "id": "3df1f737-61a3-4429-be23-868461965999",
+    "dispatchId": "623e64bf-2fc8-47b2-be95-ad7261241559",
+    "receipt": {
+      "disposition": "confirmed",
+      "externalId": "63",
+      "evidenceRef": "https://github.com/Prometheus-AGS/the-boss/issues/63",
+      "recordedAt": "2026-10-09T12:38:40.735432Z"
+    },
+    "originalRejectionPreserved": true,
+    "oldApprovalHistoryLength": 1,
+    "creationRequests": {
+      "definitivelyRejectedOriginal": 1,
+      "approvedSuccessfulRetry": 1,
+      "afterInterruption": 0
+    },
+    "recovery": "GET-only exact-content reconciliation; same effect and dispatch persisted across restart and renderer reopening"
+  },
+  "trustBoundaries": [
+    "Host-authenticated revision-bound fresh approval of exact artifact/payload/target; old rejection and approval remain immutable",
+    "GitHub credential stored through protected main-process IPC; no token in receipts or URLs",
+    "Only independently identified owned application/native process groups were interrupted",
+    "Issue creation grants no implementation authority"
+  ],
+  "cadenceAccounting": {
+    "iterationId": "f9798578-e90d-4ccc-9c24-49128f41a96b",
+    "startedAt": "2026-10-09T06:08:37.669Z",
+    "finishedAt": "2026-10-09T12:40:22.383Z",
+    "elapsedMs": 23504714,
+    "iterationMinutes": 120,
+    "successfulDeliveryNumber": 15,
+    "publicationDebt": "preserved unresolved historical C14 obligation; not relabeled as current C10 source"
+  },
+  "mergedPRs": [
+    {
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/365",
+      "mergeCommit": "52e97ffdceec1b6d718c220cd47ac8ba0f606228"
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/pull/61",
+      "mergeCommit": "91f665d3a078cf1a4cf8f7e3b9d3e13b6aaa07e8"
+    }
+  ],
+  "installerRelease": {
+    "version": "2.2.24",
+    "runId": 37931458976,
+    "source": "e4addba828f4b0f67caef1bdd49925f1f9c767f2",
+    "status": "dispatched-not-yet-published",
+    "platforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ]
+  },
+  "installedAcceptance": {
+    "darwin-arm64": "pending operator-installed acceptance; owned packaged operation passed",
+    "win32-x64": "pending",
+    "darwin-x64": "pending",
+    "win32-arm64": "pending"
+  },
+  "verification": {
+    "boundary": "Complete customer GitHub production increment",
+    "actualBuild": "pnpm build:mac:arm64; mounted DMG, package integrity, deep signature and native payload checks passed",
+    "operation": "Real inference/draft, retained-profile package upgrade, approved real201 interruption and same-effect GET recovery",
+    "testSuitesRun": []
+  },
+  "limits": [
+    "Parent remains revision597:42 completed/61;1 duplicate cancelled;18 unfinished. Deferred connectors/standing policy/broad C18 matrices not completed.",
+    "Local DMG Developer ID signed; local notarization skipped. Public installer signing/notarization not yet observed.",
+    "Public release and deployed site remain previous complete platform until actual publication.",
+    "Timing coverage incomplete; no demonstrated cadence velocity improvement is claimed."
+  ]
+}

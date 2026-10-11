@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:32:12.649Z",
+  "authority": "Operator implementation completion separated from intervening qualification gates",
+  "implementation": "complete",
+  "label": "C12",
+  "id": "afc-c12-personal-peer-sovereignty-and-consent",
+  "sources": {
+    "fabric": "f67f93e4520fa1775851441c1178a7c4a06e7ae3",
+    "system": "acebf05b7077cfd69b675673aa9720ef65229aec",
+    "app": "3700864"
+  },
+  "capabilities": [
+    "Mutually authenticated native QUIC peer transport",
+    "Current endpoint-bound personal consent, offline expiry and per-frame authority",
+    "Durable Loro/Redb/Surreal replication, revocation and inspectable immutable consent history",
+    "Settings, explicit unlock/recovery, document operations and manual synchronization"
+  ],
+  "limits": [
+    "Direct native/manual route",
+    "Session credentials memory-only; no automatic keychain recovery",
+    "Personal classes only; no organization/runtime authority replication",
+    "No background discovery/gossip/browser peer transport/large-frame chunking"
+  ],
+  "qualification": "Native paired-device, offline and physical recovery operation pending",
+  "testsRun": [],
+  "buildsRun": [],
+  "certification": "pending"
+}

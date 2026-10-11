@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "cadence-installed-distribution",
+  "recordedAt": "2026-10-08T11:33:51.756Z",
+  "generation": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/c7f7cc51298dc02a0d88efb98c6cf30e009d4f6ad50c4d9a5d114054a3f8fa1a",
+  "version": "1.2.5",
+  "status": "copied-and-hashed",
+  "targets": [
+    {
+      "id": "codex",
+      "path": "/Users/gqadonis/.codex/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.codex/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    },
+    {
+      "id": "claude",
+      "path": "/Users/gqadonis/.claude/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/c7f7cc51298dc02a0d88efb98c6cf30e009d4f6ad50c4d9a5d114054a3f8fa1a/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    },
+    {
+      "id": "kimi-code",
+      "path": "/Users/gqadonis/.kimi-code/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/c7f7cc51298dc02a0d88efb98c6cf30e009d4f6ad50c4d9a5d114054a3f8fa1a/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    },
+    {
+      "id": "minimax",
+      "path": "/Users/gqadonis/.minimax/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.minimax/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    },
+    {
+      "id": "zed",
+      "path": "/Users/gqadonis/.agents/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.prometheus/plugins/prometheus-skill-pack/generations/c7f7cc51298dc02a0d88efb98c6cf30e009d4f6ad50c4d9a5d114054a3f8fa1a/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    },
+    {
+      "id": "opencode",
+      "path": "/Users/gqadonis/.config/opencode/skills/delivery-cadence",
+      "physical": "/Users/gqadonis/.config/opencode/skills/delivery-cadence",
+      "version": "1.2.5",
+      "repairSha256": "e460b05fd33459b966dee7fb29d459d3787afb48d515f110f77adf3ec0d143bc"
+    }
+  ],
+  "nativeHarnessInvocation": "not-exercised",
+  "originalGenerationManifestedBytes": "unchanged",
+  "recovery": "One unmanifested Python bytecode cache and its empty containing directory preserved outside prior generation before retry."
+}

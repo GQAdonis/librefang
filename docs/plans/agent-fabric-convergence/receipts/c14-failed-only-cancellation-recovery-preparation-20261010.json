@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T00:58:01.643Z",
+  "kind": "C14 failed-only cancellation and isolation recovery preparation",
+  "priorOperation": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-retained-recovery-355f8c8c-26d0-4f6f-9ca4-979b233bbabf/operation.json",
+  "observation": "Whole-process reopening passed; cancellation control unavailable after accepting any yielded native attempt.",
+  "sourceContract": "UarTeamExecutionPanel exposes cancel for queued/running, or yielded with an actual waiting/blocked wait; native summary and renderer refresh are asynchronous; reason is React-controlled.",
+  "certainty": "Source/driver condition mismatch confirmed. No claim that a product cancellation defect has been reproduced.",
+  "repair": "--remaining-only retains exact existing successful coding and process-reopening receipts, checks prior cancellation team eligibility, admits at most one required read-only turn if none eligible, records native/DOM eligibility and reason/button state, then operates cancellation and workspace isolation only.",
+  "driver": ".prometheus/cadence/inputs/customer-coding-retained-recovery-20261010.mjs",
+  "operationRun": false,
+  "appSourceChanged": false,
+  "rootOwnsExecution": true
+}

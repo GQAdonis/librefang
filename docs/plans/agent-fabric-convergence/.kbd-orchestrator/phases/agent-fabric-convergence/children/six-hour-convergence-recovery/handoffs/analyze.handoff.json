@@ -1,0 +1,14 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-10-05T23:29:06.849Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json",
+    "decision-log.md",
+    "review/analyze/findings.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Two localized repairs: typed prepared-effect inspection and authoritative BossFang terminal observation. Four candidates: two adapt, one adopt, one reject. Preserve approved combined revision 9 delivery, source/receipt identity, no runtime rewrite. Six-hour budget is not all-backlog guarantee. Fresh-context review no findings; cross-model independence unverified. Stop for operator review before Plan. No product edits/builds/tests.",
+  "skipped": false,
+  "skipReason": null
+}

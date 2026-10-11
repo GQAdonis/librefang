@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-coding-retained-cancellation-and-isolation",
+  "status": "passed",
+  "startedAt": "2026-10-10T01:04:55.848Z",
+  "finishedAt": "2026-10-10T01:05:39.291Z",
+  "sourceRefs": {
+    "boss": "5b317b64c65928492f913fc41946d55ee099b472",
+    "uar": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+    "appAsarSha256": "ed25868e241ff76b33f35934c1a8b13c6e730be4cbe0847426b14d17672182a8",
+    "sidecarSha256": "05027032aa30d8ae3a4435e5be69a8403a6495d8c6e95dc13c44ecb02132cb60",
+    "installerSha256": "ea6930469906890e9396c30ebf81c93fcc57e87b333d02739549a0355f07481f",
+    "installedVersion": "2.2.26",
+    "operationDriverRevision": "5b317b64c65928492f913fc41946d55ee099b472",
+    "selectedScenarioSha256": "9ef4696b6b3fca829a989bffb81ded4057d3c822f8428aee05900221576bd602",
+    "installationReceiptSha256": "0b5e5d36579df2df5df112b70b50d5d7850d5e7f67682730b3fd0b79d3b1c25b",
+    "codingProcedureFiles": {
+      "scripts/c14-operation/scenario.mjs": "46607669b5f4ef8dd98c7e7838c423e37dcb188129dec216000407ce9b64d7c3",
+      "scripts/c14-operation/setup.mjs": "b9ded5f8f8b2e8331cad3f628dbc0205eddadf1db3df1a070c7b4528ff551ecf",
+      "scripts/c14-operation/controls.mjs": "57a6bac6427d0967c82f8da422533d847c57a6dd73a25885f5c39ddfb9264337",
+      "scripts/c14-operation/approvals.mjs": "dc172ce533d379baca72fa86d13954405a9a6994acbf5edb0ff3e747135c5ed9",
+      "scripts/c14-operation/diagnostics.mjs": "79d60c573d9c2fa9d5ebd66b142edf0c49c6dd4a44fd5011471c62e4453a0d17",
+      "scripts/c14-operation/io.mjs": "e91c8f9ad6aab85fc7be09cd030361493fe1f083a3969b3d7eff0a9f4d6c0134"
+    },
+    "ordinaryTeamToolsSha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-retained-recovery-aea8c7ae-f9d6-4295-8a7b-8f5c0b833436/operation.json",
+    "sha256": "3c888b52e0a91632a24b2b00cf027c9fd812bdfde2a832cc558712e66ac996a3"
+  },
+  "retainedPassingEvidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-team-proxy-repaired-2-2-26-98a32a91-5172-4cf5-81cf-e9e8dbed1751/coding-evidence.json",
+    "sha256": "66c188179de204c7d8eb936a02edcd5a84c571db2d33b29f93b4e13715706e4c",
+    "retainedPassingChecks": [
+      "ordinary-packaged-profile-qualified",
+      "work-selected-model-and-ordinary-coding-preset-deployment",
+      "nl-task-real-worker-and-reviewer-model-attempts",
+      "real-repository-edit-with-exact-bounded-diff",
+      "worker-artifact-handoff-to-reviewer",
+      "work-members-attempts-artifacts-and-authoritative-approval-state"
+    ],
+    "failureCode": "C14_WORK_WORKSPACE_MENU_UNAVAILABLE",
+    "failureStage": "durable-work-reopening"
+  },
+  "retainedWholeProcessReopening": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/coding-retained-recovery-355f8c8c-26d0-4f6f-9ca4-979b233bbabf/operation.json",
+    "sha256": "497530cee1df580a44ef3aceabb9abcae237f84dbb14ac20b03850ce8d2806a3",
+    "checks": [
+      "same-disposable-profile-whole-process-reopen-preserves-identity-attempts-artifacts-and-readme"
+    ],
+    "repeated": false
+  },
+  "checks": [
+    "work-read-only-cancel-and-renderer-reopen-preserve-cancelled-state",
+    "two-real-workspaces-exclude-foreign-instance-and-refuse-foreign-execution-artifact-approval-reads",
+    "workspace-ui-selection-restored-with-original-attempts-and-exact-readme-unchanged"
+  ],
+  "cancelControl": {
+    "attemptId": "5702d04e-cf53-41c7-a849-b99c5ac0e2dc",
+    "status": "running",
+    "renderedDataUi": "teams-stop-executor part:button",
+    "reasonPresent": true,
+    "nativeAttemptId": "5702d04e-cf53-41c7-a849-b99c5ac0e2dc",
+    "nativeStatus": "running"
+  },
+  "cancellation": {
+    "teamId": "733f5888-2dc5-4ff5-b9f4-fbcc267faa3f",
+    "attemptId": "5702d04e-cf53-41c7-a849-b99c5ac0e2dc",
+    "runId": "66144c7a-b21e-46f0-a6d2-08f7647d621e",
+    "status": "cancelled",
+    "freshTurnPurpose": "only missing read-only cancellation operation; original successful inference never replayed",
+    "reopening": {
+      "previousTimeOrigin": 1791594298607.3,
+      "reloadedTimeOrigin": 1791594327112.1,
+      "beforeRoute": {
+        "readyState": "complete",
+        "sidebar": true,
+        "visibleWorkModes": [],
+        "visibleTeamRoots": [],
+        "visibleWorkspaceControls": 0,
+        "visibleRuns": []
+      },
+      "afterRoute": {
+        "readyState": "complete",
+        "sidebar": true,
+        "visibleWorkModes": [
+          {
+            "pressed": "true"
+          }
+        ],
+        "visibleTeamRoots": [
+          {
+            "workspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3"
+          }
+        ],
+        "visibleWorkspaceControls": 1,
+        "visibleRuns": [
+          "733f5888-2dc5-4ff5-b9f4-fbcc267faa3f"
+        ]
+      },
+      "navigation": "existing typed /app/agents?mode=teams route, followed by ordinary selectors"
+    }
+  },
+  "isolation": {
+    "workspaceA": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+    "teamA": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+    "workspaceB": "afe6d183-6063-43d8-ae86-c0efb59b40ed",
+    "teamB": "53fca8fd-ee72-4ffa-95a1-88282125f0ab",
+    "refusals": [
+      {
+        "teamInstanceId": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+        "requestedWorkspaceId": "afe6d183-6063-43d8-ae86-c0efb59b40ed",
+        "operation": "execution",
+        "refused": true
+      },
+      {
+        "teamInstanceId": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+        "requestedWorkspaceId": "afe6d183-6063-43d8-ae86-c0efb59b40ed",
+        "operation": "artifacts",
+        "refused": true
+      },
+      {
+        "teamInstanceId": "cca579b5-ecfc-4658-b4ca-31dabfd7a398",
+        "requestedWorkspaceId": "afe6d183-6063-43d8-ae86-c0efb59b40ed",
+        "operation": "approvals",
+        "refused": true
+      },
+      {
+        "teamInstanceId": "53fca8fd-ee72-4ffa-95a1-88282125f0ab",
+        "requestedWorkspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+        "operation": "execution",
+        "refused": true
+      },
+      {
+        "teamInstanceId": "53fca8fd-ee72-4ffa-95a1-88282125f0ab",
+        "requestedWorkspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+        "operation": "artifacts",
+        "refused": true
+      },
+      {
+        "teamInstanceId": "53fca8fd-ee72-4ffa-95a1-88282125f0ab",
+        "requestedWorkspaceId": "6719368a-f767-46c3-8a69-f551d79cd2e3",
+        "operation": "approvals",
+        "refused": true
+      }
+    ],
+    "originalAttemptsUnchanged": true,
+    "modelCallsInWorkspaceB": 0
+  },
+  "originalSuccessfulInferenceReplayed": false,
+  "originalUserProfileTouched": false,
+  "shutdown": {
+    "pid": 80946,
+    "processGroup": 80946,
+    "startedAt": "2026-10-10T01:05:38.344Z",
+    "gracefulQuitConfirmed": false,
+    "forceUsed": false,
+    "signals": [
+      {
+        "pid": 80946,
+        "signal": "SIGTERM"
+      }
+    ],
+    "ownedProcessesStopped": true,
+    "foreignUidGroupMembers": [],
+    "remainingOwnedGroupMembers": [],
+    "finishedAt": "2026-10-10T01:05:39.291Z"
+  },
+  "operatorAcceptance": "pending",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false
+}

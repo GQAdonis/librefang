@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "phaseId": "agent-fabric-convergence",
+  "governingRevision": "parent authored Revision10 after child Reflect",
+  "sourcePlan": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/six-hour-convergence-recovery/plan.md",
+  "activation": "After operator-requested Reflect completes canonical child and restores parent; not activated by dispatch",
+  "canonicalNextTask": "C14.1",
+  "repairs": [
+    {
+      "id": "R1",
+      "owner": "boss-runtime",
+      "model": "OpenAI/gpt-6.1-sol",
+      "effort": "high",
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+      "files": [
+        "src/main/ai/runtime/uar/UarHostToolAdmission.ts",
+        "src/main/ai/runtime/uar/UarTeamWorkAdapter.ts",
+        "required shared IPC/types",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/approvals.mjs"
+      ],
+      "contract": "Protected correlated lossless target/effect digests; display remains redacted; no raw content or new authority"
+    },
+    {
+      "id": "R2",
+      "owner": "boss-desktop",
+      "model": "OpenAI/gpt-6.1-sol",
+      "effort": "high",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/bossfang-selected-uar-release",
+      "files": [
+        "crates/librefang-api/src/routes/uar_delegation.rs",
+        "directly required storage/client helpers",
+        "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/src/uar/api/full_harness/handlers.rs only observed terminal replay"
+      ],
+      "contract": "Observe authoritative original-instance run state, drain terminal replay without future wait; no timeout-only repair; never manage UAR"
+    },
+    {
+      "id": "R3",
+      "owner": "boss-lead",
+      "contributors": [
+        "boss-renderer only necessary UI/locale effects"
+      ],
+      "contract": "Freeze corrected sources/assets/pins, build once, operate Teams and BossFang, publish immutable candidate"
+    }
+  ],
+  "cadence": {
+    "minutes": 120,
+    "localEveryDelivery": [
+      "pnpm build:mac:arm64",
+      "packaged launch",
+      "new feature operation"
+    ],
+    "recoverySequence": [
+      "full",
+      "local",
+      "full"
+    ],
+    "nextGlobalSuccessfulDelivery": 7,
+    "fullPlatforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "website": "https://the-boss.know-me.tools",
+    "acceptance": "separate; pending until actual native evidence"
+  },
+  "limits": {
+    "implementers": 3,
+    "sharedBuildWriters": 1,
+    "publishers": 1,
+    "workAhead": 1
+  },
+  "completionAuthority": "kbd-apply only; unchanged parent task IDs/full criteria; no child setup credit to parent"
+}

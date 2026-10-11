@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T03:02:02.227Z",
+  "version": "2.2.28",
+  "platform": "darwin-arm64",
+  "qualificationLedgerMutated": false,
+  "newCadenceDelivery": false,
+  "installedAcceptance": {
+    "darwinArm64": "pending for identified final customer candidate",
+    "win32X64": "pending for identified final customer candidate"
+  },
+  "verification": {
+    "scope": "Read actual completed packaged-operation evidence; no new operations or suites run",
+    "testSuitesRun": [],
+    "additionalBuildsRun": [],
+    "additionalApplicationOperationsRun": []
+  },
+  "kind": "customer-gateway-outage-restoration-evidence",
+  "sources": {
+    "boss": "6de6477cdddb0886387dcb752913c43bf3ec3de2",
+    "uar": "66b36bb54feb24bb1bd660c5f1e6a50bdf7d4ad4",
+    "appAsarSha256": "d931ccf8aef130192bec9de4ea9bf7c11dc478e191aef89449fce8ff55df4386",
+    "sidecarSha256": "50f8365ed86545502345687e0dac253cbc044752f227fa8766897e00dc8d60bb",
+    "installerSha256": "d4bd7a51715b2e6c53d0162a97a5094245fb77e549f33e34fafbbbb273d30a94",
+    "installedVersion": "2.2.28",
+    "operationDriverRevision": "ba75d50141b821adf4302aa5d1507c3761c532a2",
+    "selectedScenarioSha256": "29972b7a514584b582a678f8f4cdd3c71f637c82abb4e11ef532b3c5c3805912",
+    "installationReceiptSha256": "474006412ec810ed6f138bfafb5d933228f7c05a0fa541dc7ecd968cf7104584"
+  },
+  "startedAt": "2026-10-10T02:58:42.023Z",
+  "finishedAt": "2026-10-10T02:59:20.183Z",
+  "featureOperation": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "checks": [
+      "ordinary-work-shows-persisted-classified-selected-gateway-outage",
+      "normal-typed-settings-restore-exact-endpoint-and-provider-bindings-without-secret-mutation",
+      "restored-same-agent-session-streams-and-persists-fresh-no-tools-response"
+    ],
+    "turns": [
+      {
+        "kind": "unavailable-gateway",
+        "status": "passed",
+        "startedAt": "2026-10-10T02:58:59.029Z",
+        "finishedAt": "2026-10-10T02:58:59.376Z",
+        "persistedStatus": "error",
+        "stream": {
+          "done": false,
+          "error": true,
+          "textChunks": 0,
+          "anchorMessageId": "01a123bf-dd5c-7394-abb5-5c2d38ef89d1"
+        },
+        "failure": {
+          "name": "TypeError",
+          "category": "network",
+          "classifierContract": "src/shared/utils/errorCategory.ts:network",
+          "rawErrorRecorded": false
+        },
+        "effectiveModel": null
+      },
+      {
+        "kind": "restored-fresh-followup",
+        "status": "passed",
+        "startedAt": "2026-10-10T02:58:59.512Z",
+        "finishedAt": "2026-10-10T02:59:20.175Z",
+        "persistedStatus": "success",
+        "stream": {
+          "done": true,
+          "error": false,
+          "textChunks": 3,
+          "anchorMessageId": "01a123bf-df3f-7273-ad56-c93a52d9e2d3"
+        },
+        "failure": null,
+        "effectiveModel": {
+          "id": "gpt-6.1-sol",
+          "provider": "the-boss-gateway"
+        }
+      }
+    ],
+    "settingsRestoration": {
+      "route": "prometheus.integration.configure",
+      "originalServicesSha256": "e5a97f64dcac2a15de24626188fd2b6bd9ec28d5b49c8b7a44860e8f9968128f",
+      "restoredServicesSha256": "e5a97f64dcac2a15de24626188fd2b6bd9ec28d5b49c8b7a44860e8f9968128f",
+      "exactMatch": true,
+      "secretMutation": "none"
+    }
+  },
+  "launcherReport": {
+    "status": "failed",
+    "operationStatus": "failed",
+    "reason": "Missing required observedBehavior result field despite separate actual feature evidence passing all three checks.",
+    "authority": "Root-confirmed observed launcher report-contract defect",
+    "repair": {
+      "driverSummaryCommit": "cd5e47d53",
+      "status": "implemented; prior raw launch and operation records remain failed and unchanged"
+    },
+    "wholeDeliverySuccessClaimed": false
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/gateway-outage-restoration-d6433ddf-682b-4198-8e5e-53d66b17fc52/evidence.json",
+    "sha256": "680a9e8826d68290b5fe8943e7505d0b89bfe381e243b1f50f2a4e4c96e4b8e9"
+  },
+  "launch": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/gateway-outage-restoration-d6433ddf-682b-4198-8e5e-53d66b17fc52/launch.json",
+    "sha256": "9bea6225793858ec57e331f3b34ded70a130efb6d1cbe43b55e8d1959d258355"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.28/gateway-outage-restoration-d6433ddf-682b-4198-8e5e-53d66b17fc52/operation.json",
+    "sha256": "9372c32996d08b860ba2b97d539cc1f49e6c1b3469dc27698166f5f3984e6fd1"
+  },
+  "limits": [
+    "Disposable selected-endpoint outage/restoration only; not global gateway shutdown or owned runtime loss with pending approval.",
+    "No prior or uncertain external effects replayed.",
+    "Passing feature evidence does not retroactively turn the failed generic launcher report into a successful delivery."
+  ]
+}

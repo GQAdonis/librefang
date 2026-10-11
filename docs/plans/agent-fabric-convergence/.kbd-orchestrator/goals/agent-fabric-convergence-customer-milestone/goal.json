@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "slug": "agent-fabric-convergence-customer-milestone",
+  "status": "complete",
+  "createdAt": "2026-10-09T05:57:14.469Z",
+  "phases": [
+    "creation"
+  ],
+  "existingPhase": "agent-fabric-convergence",
+  "scope": [
+    "C15.1",
+    "C10.2:GitHub-customer-subset",
+    "C10.3:customer-feedback",
+    "C18.2:desktop-recovery",
+    "C18.3:desktop-release-evidence"
+  ],
+  "deferredRequirementsRetained": true,
+  "stopCondition": "Approved customer milestone implemented, built, operated, committed, pushed and published; installed acceptance explicitly recorded.",
+  "loop_controller": {
+    "owner": "codex-native-goal",
+    "threadId": "01a0cb90-3993-7592-9779-f80c3f53be07",
+    "cadence": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+      "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+      "iterationMinutes": 120,
+      "publicationEverySuccessfulDeliveries": 2,
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "win32-x64",
+        "win32-arm64"
+      ]
+    }
+  },
+  "authority": "Operator /kbd-goal approval 2026-10-09; preserve existing architecture approvals and KBD completion authority",
+  "startingCanonicalRevision": 590,
+  "historyPreserved": true,
+  "installedAcceptanceSeparate": true,
+  "completedAt": "2026-10-09T13:44:28.154Z",
+  "evidenceRef": "receipts/c10-customer-release-2.2.24-20261009.json",
+  "releaseVersion": "2.2.24",
+  "installedAcceptance": {
+    "darwin-arm64": {
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
+    },
+    "darwin-x64": {
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
+    },
+    "win32-x64": {
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
+    },
+    "win32-arm64": {
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
+    }
+  },
+  "parentPhaseStatus": "open",
+  "cadencePublicationLedger": {
+    "status": "pending",
+    "obligationIds": [
+      "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "4077df19-c67c-4059-9665-55988c70e012"
+    ],
+    "evidenceRef": "receipts/c10-customer-release-2.2.24-20261009.json"
+  }
+}

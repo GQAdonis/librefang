@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-native-default-payload-pins",
+  "recordedAt": "2026-10-10T05:05:11.534Z",
+  "status": "merged",
+  "repository": "Prometheus-AGS/the-boss",
+  "pr": "https://github.com/Prometheus-AGS/the-boss/pull/69",
+  "commit": "175e57c516d6cddade19ff6b155b91f312fe38db",
+  "mergeCommit": "2b5f308f963ed1cda980ae91ca79bab08590346d",
+  "mergeSignatureVerified": true,
+  "source": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "platformRevisions": {
+      "win32-x64": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "win32-arm64": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "darwin-arm64": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "darwin-x64": "308aea46ff26e7f61340281bb51f67ebe5351569"
+    }
+  },
+  "toolVersion": "1.0.0",
+  "packages": {
+    "win32-x64": {
+      "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-x64.tar.gz",
+      "sha256": "5c69177131412bf11dcebae50efb1d7e801e5ceb306d4dd1854fb39eb0284228"
+    },
+    "win32-arm64": {
+      "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.29-308aea46/uar-sidecar-win32-arm64.tar.gz",
+      "sha256": "cf83c9854ed5a4bdd3d10e8a936a3b4f4321c94d1371d48f68fc814e1b170064"
+    },
+    "darwin-arm64": {
+      "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.30-308aea46-local/uar-sidecar-darwin-arm64.tar.gz",
+      "sha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893"
+    },
+    "darwin-x64": {
+      "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.tar.gz",
+      "sha256": "de6e3486c69285f0ed2cc863aa4f9bf0f4fa81bd4958a0e3e06915b35c0fa7d3"
+    }
+  },
+  "generator": "scripts/import-uar-sidecar-payloads.cjs",
+  "changedPaths": [
+    "build/integration-artifacts.json"
+  ],
+  "scope": "Generated defaults now match the already published native308aea46 payloads consumed by frozen2.2.30 release jobs. No application source, installer bytes, cadence counters, publication debt or installed acceptance is changed."
+}

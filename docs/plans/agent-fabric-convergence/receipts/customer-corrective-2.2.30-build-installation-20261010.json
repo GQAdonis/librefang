@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-corrective-local-build-installation",
+  "recordedAt": "2026-10-10T03:44:22.493Z",
+  "version": "2.2.30",
+  "platform": "darwin-arm64",
+  "sources": {
+    "boss": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "uar": "308aea46ff26e7f61340281bb51f67ebe5351569"
+  },
+  "macBuild": {
+    "status": "passed",
+    "sourceAfter": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "startedAt": "2026-10-10T03:33:13.910Z",
+    "finishedAt": "2026-10-10T03:39:04.474Z",
+    "elapsedMs": 350564,
+    "workingDirectory": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "exitCode": 0,
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-build-2.2.30-6646519e-7d41-4b83-85a5-e86c79671174/build.json",
+      "sha256": "bec387886a0959d836053a4e644c47f8fd66ae82894124c87a9514035f92c9e9"
+    },
+    "localNotarization": {
+      "status": "skipped",
+      "evidence": "Actual build log explicitly records notarize=false and HAS_NOTARIZATION not true; no public notarization claim."
+    }
+  },
+  "reusedNativePayload": {
+    "status": "previously-built-actual-payload",
+    "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "archiveSha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893",
+    "originalNativeBuildSource": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "originalArchiveSha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893",
+    "exactSourceAndArchiveMatch": true,
+    "nativeBuildRepeated": false,
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-native-2.2.29-042437a2-191e-48ad-b502-5d2d8c8811ad/build.json",
+      "sha256": "4d16a832d724caf55e3dd72adb2e0e2f64690de46cdf2ca370b8269e549acb31"
+    }
+  },
+  "installation": {
+    "status": "passed",
+    "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "uarSource": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "startedAt": "2026-10-10T03:39:27.374Z",
+    "finishedAt": "2026-10-10T03:39:41.365Z",
+    "method": "copied-from-actual-local-DMG-into-disposable-directory",
+    "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.30-mac-arm64.dmg",
+    "size": 703191794,
+    "sha256": "1afe14f2b97b1b96ba8d38699ee027568d07ee02bb3ab419e715be250bc31440",
+    "appAsarSha256": "d95d06d51b589e25d204d4c3235c3b40b5e389619315e008640fe3b5a90ce877",
+    "sidecarSha256": "959cbb3294b32fb24e2b0a35c21cd00159c71988e9ff6e99a00bb83b006c8f1b",
+    "nativeRecordSha256": "ddd69d0b92b1e76caec26ca19a07c05f85f736a1f4bfad045478b784c52255c9",
+    "nativeIntegrity": {
+      "method": "production-signature-aware-payload-validator",
+      "originalPayloadSha256": "ef43279c1dd81c2a0bcf1136b86caad4beeaab9b1ce8d81245cd2ba9659acf58",
+      "installedSignedSha256": "959cbb3294b32fb24e2b0a35c21cd00159c71988e9ff6e99a00bb83b006c8f1b"
+    },
+    "signature": "passed",
+    "gatekeeper": "passed",
+    "receipt": {
+      "path": ".prometheus/cadence/artifacts/customer-local-mac-2.2.30-60caa4d1-664d-4b61-877d-46e172ba2a2a/installation.json",
+      "sha256": "057d7a415511d0745ed30c1ccaa6359aa3914d5b8a7dfa496ea7cd4282684880"
+    }
+  },
+  "qualification": {
+    "build": "passed",
+    "disposableInstallation": "passed",
+    "pendingRestartReaderOperation": "pending; root owns actual operation",
+    "representedRead": "not qualified; root reports old challenge expired without a submitted decision",
+    "operatorAcceptance": {
+      "darwinArm64": "pending final identified candidate",
+      "win32X64": "pending final identified candidate"
+    },
+    "publication": "local installer only; final four-platform public release and website pending"
+  },
+  "cadence": {
+    "newSuccessfulDelivery": false,
+    "qualificationLedgerMutated": false,
+    "historyAndDebt": "unchanged"
+  },
+  "verification": {
+    "newBuildsByEvidenceAgent": [],
+    "testSuitesRun": [],
+    "applicationOperationsByEvidenceAgent": []
+  },
+  "limits": [
+    "Build/install do not prove corrected historical approval/effect reader operation.",
+    "Expired undecided C17 challenge does not certify a represented read, human consent or denied-effect matrix.",
+    "No native rebuild, public notarization, Windows package/operation or final acceptance is inferred.",
+    "Prior builds, mount attempts, operation passes and failures remain immutable."
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T22:08:29.349Z",
+  "status": "prepared-not-applied",
+  "source": {
+    "repository": "Prometheus-AGS/the-boss",
+    "revision": "58eb4058b96bebef61ab502ea48fc062c7982371",
+    "path": "scripts/release-platforms.cjs",
+    "sha256": "f276ea8708c74a267c5070b57eaefaedcdf3ae4674eef4ee68b4ffc34745e8b5"
+  },
+  "patch": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/release-platforms-selected-native-prerequisites-20261010.patch",
+    "sha256": "8eb2a2902d3570db3b9525ba06ea19e766a6ec66427a1901074ff23c1e1de843"
+  },
+  "observedBlocker": "Frozen UAR-enabled manifest includes only darwin-arm64 and win32-x64, but the selector requires all declared platforms and all native tools across optional platforms before emitting the selected installer matrix.",
+  "change": "Resolve selected targets before manifest coverage; require UAR-enabled coverage and every native-tool package for selected targets. Retain declared supportedPlatforms, non-UAR exact manifest policy, unknown-platform rejection, native runners, matrix filtering, and all optional records without mutation.",
+  "requiredPlatforms": [
+    "darwin-arm64",
+    "win32-x64"
+  ],
+  "inspectedCallers": [
+    {
+      "path": ".github/workflows/the-boss-release.yml",
+      "behavior": "Explicit inputs.platforms drives preflight, selected UAR record import, selector and one native installer job per selected platform."
+    },
+    {
+      "path": "scripts/release-preflight.cjs",
+      "behavior": "Checks selected platform eligibility, source/version/profile and immutable publication conflict before selector."
+    },
+    {
+      "path": "scripts/import-uar-sidecar-payloads.cjs",
+      "behavior": "Requires exact selected-platform records with source pin, archive, SHA and executable/policy closure; merges packages, preserving unselected records."
+    },
+    {
+      "path": "scripts/validate-release-package.cjs",
+      "behavior": "Native platform must match runner; verifies selected retained-tool payloads/version markers, full UAR packaged closure, actual NSIS install or mounted signed DMG."
+    }
+  ],
+  "unchangedPrerequisites": "All profile.nativeTools—including liter-llm and UAR for uar-enabled—remain required for each selected platform. No package prerequisite is removed from a built target; unselected targets do not become matrix jobs.",
+  "applyAfter": "Root completes frozen packaged operation, applies this patch, commits and pushes. Installer dispatch and manifest filenames must name the resulting actual source revision rather than 58eb4058.",
+  "rootCommand": "git -C /Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance apply /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/release-platforms-selected-native-prerequisites-20261010.patch",
+  "executed": {
+    "applied": false,
+    "selector": false,
+    "tests": false,
+    "builds": false,
+    "dispatch": false,
+    "publication": false,
+    "cadenceMutation": false
+  },
+  "limitations": [
+    "Source inspection and patch preparation only; production release selector has not been operated.",
+    "Prior 58eb application operation remains evidence for that source; record scripts-only reconciliation separately if adopted."
+  ]
+}

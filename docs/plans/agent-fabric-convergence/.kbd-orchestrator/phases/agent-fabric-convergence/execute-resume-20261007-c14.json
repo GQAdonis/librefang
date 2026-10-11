@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-07T19:55:58.998Z",
+  "phase": "agent-fabric-convergence",
+  "planRevision": 10,
+  "backend": "hybrid",
+  "canonicalChange": "afc-c14-studio-administration-and-isolated-service-consoles",
+  "canonicalNextTask": "C14.1",
+  "assignedScope": "C14.2 retained approval-lifecycle work-ahead",
+  "cadence": {
+    "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationMinutes": 120,
+    "activeIteration": null,
+    "workAheadId": "c14-approval-lifecycle-after-c15-20261006",
+    "promotion": "awaiting approved nested-source reconciliation",
+    "publication": "2.2.13 all four platforms physically complete; debt reconciliation pending"
+  },
+  "agents": [
+    {
+      "name": "c14_authority_completion",
+      "role": "boss-runtime",
+      "model": "gpt-6-astra",
+      "ownership": "existing UAR approval ledger/handler contract only",
+      "builds": false
+    },
+    {
+      "name": "c14_packaged_operation",
+      "role": "boss-desktop",
+      "model": "gpt-6.1-sol",
+      "reason": "bounded Node operation procedure implementation within authority-led C14.2",
+      "ownership": "scripts/operate-approval-lifecycle.mjs and scripts/approval-lifecycle-operation/**",
+      "builds": false
+    }
+  ],
+  "leadOwnership": "dependency provisioning, source/artifact provenance, supported Cadence/KBD commands, one completed packaging build and feature operation",
+  "pending": [
+    "Cadence nested-source skill promotion approval",
+    "parent C14.2 distinct drain and applicable ownership/profile coverage",
+    "native Windows installed operation",
+    "whole C14.1/C14.3/C14.4 acceptance reconciliation"
+  ],
+  "priorContext": "prior-context.md reports memory endpoint unreachable; no recalled lesson invented",
+  "policy": "No intermediate tests, lint, verification builds or review loops. Finish all production wiring; build and operate completed functionality once. Preserve authoritative approval and paired-host credentials.",
+  "continuedAt": "2026-10-07T20:44:54.263Z",
+  "completedBoundary": {
+    "localChange": "afc-c14-approval-lifecycle",
+    "localTasks": "5/5 through kbd-apply end-task",
+    "bossBuildSource": "4cae06d65ec05cc156274cf6ba53e68f3fe3c472",
+    "bossEvidenceCommit": "8f61908cae",
+    "uarSource": "36f096dbda0f17c6e15c71b284ce89cb04f04502",
+    "nativeBuild": "success",
+    "macPackaging": "success",
+    "correctiveOperation": "success",
+    "evidence": "https://github.com/Prometheus-AGS/the-boss/blob/codex/afc-c14-approval-lifecycle/openspec/changes/afc-c14-approval-lifecycle/evidence/README.md",
+    "parentCompletion": "not-claimed",
+    "testsRun": false
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-qualification-evidence-addendum",
+  "recordedAt": "2026-10-11T01:47:15.070Z",
+  "version": "2.2.32",
+  "priorCoverage": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-integrated-coverage-delta-2.2.32-20261011.json",
+    "sha256": "1ac71c673adcf6dbdbb0d94eaed4c52f1443eb0187f1a0e359bd1e85037cce72"
+  },
+  "scope": "Only newly completed operations and publication; no whole-task portfolio certification.",
+  "requirements": [
+    {
+      "requirement": "Integrated pending-approval runtime restart/history",
+      "status": "affected-local-candidate-operation-passed",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-pending-approval-restart-passed-2.2.32-20261011.json",
+        "sha256": "4545f7ef4f9fec6b35b62ebfd55f9ca4f5da3315234fe86be2493b9d058eb309"
+      },
+      "limits": "Exact local32 operation; public candidate and Windows operator acceptance stay separate."
+    },
+    {
+      "requirement": "Integrated owned-child shutdown with borrowed process preservation",
+      "status": "affected-local-candidate-operation-passed",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-installed-graceful-quit-passed-2.2.32-20261011.json",
+        "sha256": "cd2cd574401138b8524ef69e8a97da61b6baf7527eeb07c323f1632f1dbdebae"
+      },
+      "limits": "Production lifecycle operation at its recorded local package; not a visual user-menu or Windows pass."
+    },
+    {
+      "requirement": "Required Mac ARM64 and Windows x64 publication, metadata and live website",
+      "status": "passed",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-customer-publication-reconciled-2.2.32-20261011.json",
+        "sha256": "1dd527c6464d14ba9e8b66843487487bb7257f61aaa67c28cb965db005e1789a"
+      },
+      "limits": "No installed acceptance is implied."
+    },
+    {
+      "requirement": "Final public Mac package main-window launch and administration access",
+      "status": "passed-for-named-subset",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/launch-operation-WyVOTo/operation.json",
+        "sha256": "4554e2cd0b11e332f7e507fa73fccafc778709bf06f868b11f32c2fe07d41318"
+      },
+      "limits": "Read-only IPC operation. No public inference/delegation or operator-acceptance claim."
+    },
+    {
+      "requirement": "Synthetic representation read/disclosure and authority lifecycle",
+      "status": "pending-human-operation",
+      "limits": "Expired prior challenges cannot be replayed. A fresh exact challenge requires an actual human decision."
+    },
+    {
+      "requirement": "Final-candidate installed customer acceptance",
+      "status": "pending",
+      "platforms": [
+        "darwin-arm64",
+        "win32-x64"
+      ],
+      "limits": "Native Windows operation and exact32 operator acceptance are still missing."
+    }
+  ],
+  "accounting": {
+    "historicalCodeTasks": "61/61",
+    "historicalCodeChanges": "20/20",
+    "portfolioTerminal": "43/61 (42 qualified and 1 historical skipped duplicate)",
+    "childTasks": "7/9",
+    "newPortfolioQualificationCredit": 0,
+    "successfulCadenceDeliveries": 17,
+    "publicationDue": false
+  }
+}

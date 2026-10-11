@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installer-byte-verification",
+  "operationId": "d798f50b-1a61-462d-8a8e-2273726852a0",
+  "startedAt": "2026-10-10T05:46:15.561Z",
+  "status": "passed",
+  "repository": "Prometheus-AGS/the-boss",
+  "version": "2.2.30",
+  "profile": "uar-enabled",
+  "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+  "platform": "darwin",
+  "arch": "x64",
+  "selectedPlatform": "darwin-x64",
+  "releaseUrl": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.30",
+  "installedAcceptance": "not-exercised",
+  "nativeLaunch": "not-exercised",
+  "verifier": {
+    "runtime": "Node.js",
+    "version": "v24.21.0",
+    "script": ".prometheus/cadence/inputs/verify-customer-platform-download-2.2.30-20261010.mjs",
+    "sha256": "f0f42424fe3a88e9bfe5cd6b4214c1ffd172913a8805f65df4cec122c3eaf971"
+  },
+  "provenance": {
+    "continuationPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-platform-continuation-2.2.30-20261010/state.json",
+    "nativeSource": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "producer": "8119fd7c83248cdf0d0cde4496cb33c569761a71",
+    "installerAction": "f763a4d2-4003-44fd-9d91-eb1878bd8c1e",
+    "uarRecordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.29-308aea46/uar-sidecar-darwin-x64.json"
+  },
+  "downloads": [
+    {
+      "startedAt": "2026-10-10T05:46:17.461Z",
+      "bytes": 747847553,
+      "status": 200,
+      "contentLength": 747847553,
+      "completedAt": "2026-10-10T05:46:30.737Z",
+      "sha256": "08dca082b2d1ee7c59c2d784e90347fbe1c78f94149a6c6c9a4d8ca30418a7d5"
+    }
+  ],
+  "runId": "38026156993",
+  "runUrl": "https://github.com/Prometheus-AGS/the-boss/actions/runs/38026156993",
+  "packagingEvidence": {
+    "runId": 38026156993,
+    "source": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+    "conclusion": "success",
+    "jobId": 114137392783,
+    "jobName": "Installer (darwin-x64)",
+    "jobConclusion": "success",
+    "finishedAt": "2026-10-10T05:45:13Z",
+    "actualInstallerBuild": "success",
+    "artifactPublication": "success",
+    "metadataAndSitePublication": "queued by successful packaging job; completion not inferred here"
+  },
+  "releaseId": 408603047,
+  "githubAssets": [
+    {
+      "id": 627123449,
+      "name": "release-platform-v2.2.30-uar-enabled-darwin-x64-aef2ec2cda68605efab9dddf33b46e726e752c2d.json",
+      "size": 565,
+      "digest": "sha256:32f41ab90ada68e4b4261c7d487801b09d6faaded3c9c23a29ace22f5c5e8543",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/release-platform-v2.2.30-uar-enabled-darwin-x64-aef2ec2cda68605efab9dddf33b46e726e752c2d.json"
+    },
+    {
+      "id": 627122093,
+      "name": "The-Boss-2.2.30-mac-x64.dmg",
+      "size": 747847553,
+      "digest": "sha256:08dca082b2d1ee7c59c2d784e90347fbe1c78f94149a6c6c9a4d8ca30418a7d5",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-x64.dmg"
+    }
+  ],
+  "record": {
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/release-platform-v2.2.30-uar-enabled-darwin-x64-aef2ec2cda68605efab9dddf33b46e726e752c2d.json",
+    "name": "release-platform-v2.2.30-uar-enabled-darwin-x64-aef2ec2cda68605efab9dddf33b46e726e752c2d.json",
+    "startedAt": "2026-10-10T05:46:16.964Z",
+    "bytes": 565,
+    "httpStatus": 200,
+    "contentLength": "565",
+    "sha256": "32f41ab90ada68e4b4261c7d487801b09d6faaded3c9c23a29ace22f5c5e8543",
+    "completedAt": "2026-10-10T05:46:17.449Z",
+    "githubAssetId": 627123449
+  },
+  "artifact": {
+    "name": "The-Boss-2.2.30-mac-x64.dmg",
+    "size": 747847553,
+    "sha256": "08dca082b2d1ee7c59c2d784e90347fbe1c78f94149a6c6c9a4d8ca30418a7d5",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-x64.dmg",
+    "signing": "Developer ID (notarized)",
+    "profile": "uar-enabled"
+  },
+  "signingEvidence": {
+    "reported": "Developer ID (notarized)",
+    "runId": 38026156993,
+    "jobId": 114137392783,
+    "signingConfiguration": "success",
+    "notarizationConfiguration": "success",
+    "jobConclusion": "success",
+    "basis": "Immutable public manifest plus actual successful native Intel packaging workflow; no direct local signature/notarization examination",
+    "downloadedImageMountedLocally": false,
+    "nativeIntelLaunch": "not-exercised"
+  },
+  "architectureEvidence": "Exact immutable darwin-x64 platform record and successful Intel packaging job; no native Intel installed operation",
+  "completedAt": "2026-10-10T05:46:30.737Z",
+  "verification": "Entire public installer streamed once to SHA-256 and byte count; exact manifest and GitHub asset digest/size match"
+}

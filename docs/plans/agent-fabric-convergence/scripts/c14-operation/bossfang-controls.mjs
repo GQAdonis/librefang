@@ -93,26 +93,51 @@ export async function diagnostic(evaluate, signal, id) {
 }
 
 export async function dashboard(evaluate, signal, expectedOrigin) {
-  return waitFor(signal, async () => {
+  let lastObservation = {stage: 'not-observed'}
+  try { return await waitFor(signal, async () => {
     try {
       const observed = await evaluate(`(async()=>{
         const guest=${visible('webview[data-mini-app-id="bossfang-dashboard"]')};
-        if(!guest||!guest.getURL().startsWith(${JSON.stringify(expectedOrigin + '/dashboard')}))return false;
+        if(!guest)return {stage:'guest-missing',guestPresent:false};
+        const partition=guest.getAttribute('partition');
+        let originMatches;
+        try{originMatches=guest.getURL().startsWith(${JSON.stringify(expectedOrigin + '/dashboard')})}
+        catch{return {stage:'guest-url-check',guestPresent:true,errorCategory:'guest-url-unavailable'}}
+        if(!originMatches)return {stage:'guest-origin-mismatch',guestPresent:true,originMatches:false,
+          partitionMatches:partition==='persist:bossfang-dashboard'};
+        try{
         const content=await guest.executeJavaScript(${JSON.stringify(`(async()=>{
           // Match the native dashboard client's existing sessionStorage/header
           // contract. The credential stays inside the isolated guest; only the
           // HTTP status and rendered auth state leave this evaluation.
-          const response=await fetch('/api/authz/whoami',{credentials:'include',redirect:'error',
-            headers:{Authorization:'Bearer '+(sessionStorage.getItem('bossfang-api-key')||'')}});
-          return {authenticatedStatus:response.status,loginDialog:Boolean(document.querySelector('#auth-dialog-title')),
+          const authKeyPresent=Boolean(sessionStorage.getItem('bossfang-api-key'));
+          let response;
+          try{response=await fetch('/api/authz/whoami',{credentials:'include',redirect:'error',
+            headers:{Authorization:'Bearer '+(sessionStorage.getItem('bossfang-api-key')||'')}})}
+          catch{return {stage:'guest-auth-request',errorCategory:'fetch-failed',authKeyPresent,
+            guestReady:document.readyState==='complete'}}
+          const loginDialog=Boolean(document.querySelector('#auth-dialog-title'));
+          const shellVisible=Boolean(document.querySelector('nav'));
+          return {stage:response.status!==200?'authentication-refused':loginDialog?'login-dialog-visible':
+            !shellVisible?'authenticated-shell-missing':'authenticated',authenticatedStatus:response.status,
+            authKeyPresent,guestReady:document.readyState==='complete',loginDialog,
             shellVisible:Boolean(document.querySelector('nav')),hostIpcExposed:Boolean(window.api?.ipcApi),
             mascotVisible:[...document.images].some(node=>node.currentSrc.includes('boss-libre.png')&&node.naturalWidth>0)};
         })()`)});
-        return {partition:guest.getAttribute('partition'),...content};
+        return {partition,guestPresent:true,originMatches:true,
+          partitionMatches:partition==='persist:bossfang-dashboard',...content};
+        }catch{return {stage:'guest-execution',guestPresent:true,originMatches:true,
+          partitionMatches:partition==='persist:bossfang-dashboard',errorCategory:'guest-evaluation-failed'}}
       })()`)
+      const {partition, ...observation} = observed
+      lastObservation = observation
       return observed?.authenticatedStatus === 200 && !observed.loginDialog && observed.shellVisible && observed
-    } catch { return false }
+    } catch { lastObservation = {stage:'host-evaluation',errorCategory:'evaluation-failed'}; return false }
   }, 'C14_BOSSFANG_AUTHENTICATED_DASHBOARD_UNAVAILABLE', 60000)
+  } catch(error) {
+    error.dashboardObservation = lastObservation
+    throw error
+  }
 }
 
 // An actual occupied socket, with no HTTP handler or fabricated service response.

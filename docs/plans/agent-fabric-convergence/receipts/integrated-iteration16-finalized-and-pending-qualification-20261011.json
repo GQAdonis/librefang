@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-iteration16-completed-delivery-and-pending-qualification",
+  "recordedAt": "2026-10-11T00:22:43.173Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "runStartedAt": "2026-10-06T17:07:34.783Z",
+  "iteration": {
+    "id": "7af6fe44-8007-452a-8485-25ec35204c90",
+    "startedAt": "2026-10-10T14:57:53.458Z",
+    "finishedAt": "2026-10-11T00:21:19.469Z",
+    "status": "finished",
+    "workOutcome": "success",
+    "deliveryCounted": true
+  },
+  "successfulDeliveries": 16,
+  "canonicalCompletionsCredited": {
+    "tasks": [],
+    "changes": [],
+    "phases": []
+  },
+  "historicalMarkers": {
+    "codeTasks": "61/61",
+    "codeChanges": "20/20",
+    "portfolioTerminal": "43/61",
+    "qualified": 42,
+    "historicalSkippedDuplicate": 1
+  },
+  "publication": {
+    "obligation": {
+      "id": "1e3aff82-8c61-4278-a84c-8ef1d4e477eb",
+      "candidateId": "e8d1035b-80b2-48d2-aab7-d1004e1d221d",
+      "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+      "contentManifestDigest": "584d5a6934c8c85ee13d93530e8d95b9fc3edbfa4001935c0fb59f989e158beb",
+      "dueAt": "2026-10-11T00:22:08.126Z",
+      "createdAt": "2026-10-11T00:22:08.127Z",
+      "dueOrdinal": 16,
+      "reasons": [
+        "manual"
+      ],
+      "policy": {
+        "mode": "count",
+        "every": 2,
+        "platforms": [
+          "darwin-arm64",
+          "win32-x64"
+        ],
+        "websiteUrl": "https://the-boss.know-me.tools",
+        "procedure": {
+          "repository": "Prometheus-AGS/the-boss",
+          "workflow": "the-boss-release.yml",
+          "profile": "uar-enabled",
+          "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+          "requiredInputs": [
+            "release_version",
+            "release_profile",
+            "platforms",
+            "uar_darwin_arm64_record_url",
+            "uar_win32_x64_record_url"
+          ],
+          "platforms": "darwin-arm64,win32-x64",
+          "landingRepository": "Know-Me-Tools/boss-landing-spot",
+          "completion": "Both selected installers, source-bound metadata and matching live website links are published. Installed acceptance remains separate."
+        },
+        "requireMetadata": true,
+        "acceptancePlatforms": []
+      },
+      "policyDigest": "cab99b4f9a1c773f371b64eaa8fdff9927d5ad441dea44d0b88991f6ad6e4246",
+      "opportunityId": "1663edee-bbe0-4f2c-abbe-fd1296a10c73",
+      "requiredEffects": [
+        "artifact:darwin-arm64",
+        "artifact:win32-x64",
+        "metadata",
+        "website"
+      ],
+      "coveredScopes": {
+        "tasks": [
+          "afc-runtime-admission-v2-release::task3",
+          "afc-integrated-customer-qualification::task1",
+          "afc-integrated-customer-qualification::task2",
+          "afc-integrated-customer-qualification::task3"
+        ],
+        "changes": [
+          "afc-runtime-admission-v2-release",
+          "afc-integrated-customer-qualification"
+        ],
+        "phases": [],
+        "outcomes": [
+          "Operate the integrated 2.2.31 packaged ordinary BossFang workflow through the same UAR process, with authoritative MCP write approval/denial, pending cancellation, visible native output and durable Work selection."
+        ],
+        "deliveryClass": "integrated-runtime-2.2.31-customer-release",
+        "owners": [
+          "boss-core.runtime",
+          "boss-core.desktop",
+          "lead.packaging"
+        ],
+        "authorityRefs": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/plan.md"
+        ],
+        "canonicalScopeRefs": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-runtime-admission-v2-release/tasks.md",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-integrated-customer-qualification/tasks.md"
+        ]
+      },
+      "attemptIds": [],
+      "receiptIds": [],
+      "disposition": "pending"
+    },
+    "authority": "Approved final-corrected-candidate publication; manual tick recorded the obligation without changing counts or dispatching another job.",
+    "observedScheduleDiscrepancy": {
+      "legacyNextPublicationDelivery": 16,
+      "nextCount": 17,
+      "disposition": "Recorded; no state files manually changed. Required publication remains owed through supported tick."
+    }
+  },
+  "representation": {
+    "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-representation-main-window-20261011/integrated-synthetic-representation-7891d8b1-59e3-454c-81e6-2b729a0c9208/evidence.json",
+    "evidenceSha256": "7c0d923a74b438ffc16387779dc8be8f9e7b4d4e41ff1d8829cffa9ff8f4860d",
+    "status": "approval-outcome-unresolved",
+    "complete": false,
+    "operatorDeadline": "2026-10-11T00:19:07.256Z",
+    "humanReceiptPresent": false,
+    "effectQualified": false,
+    "lateReplayAuthorized": false,
+    "cleanupPending": false,
+    "nativeSettingsCleanupPending": false
+  },
+  "repair": {
+    "commit": "95b1e543c5f61665b0da995bc312622134d0e8f6",
+    "pr": "https://github.com/Prometheus-AGS/the-boss/pull/72",
+    "scope": "One typed catch in selected-instance probe reporting; strict mutation/execution admission unchanged.",
+    "packagedOperation": "pending",
+    "frozenCandidateMutated": false
+  },
+  "learning": {
+    "status": "degraded",
+    "report": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence-learning-reports/8f45227e6f595e43c4b66fcd5234907e1a61c0f200a34f3df1e55d87f50c33e0.json",
+    "reportSha256": "8f45227e6f595e43c4b66fcd5234907e1a61c0f200a34f3df1e55d87f50c33e0",
+    "recorder": {
+      "status": "degraded",
+      "eventId": "cadence-8f45227e6f595e43c4b66fcd5234907e1a61c0f200a34f3df1e55d87f50c33e0",
+      "sessionLogAppended": true,
+      "memory": {
+        "transport": "pk",
+        "status": "degraded",
+        "reason": "pk timed out"
+      },
+      "receipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/progress-memory-receipts/11f7a2375efc2a725318cf528216dbf810160b48e5957bd2f1f099052ce4d0b9.json"
+    },
+    "reportPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/reports/7af6fe44-8007-452a-8485-25ec35204c90-504c367c-7436-4700-b6c1-c95d0dcdfd90.json",
+    "workEventId": "504c367c-7436-4700-b6c1-c95d0dcdfd90"
+  },
+  "limitations": [
+    "Cadence success covers the frozen ordinary BossFang workflow and actual local build/launch, not every retained qualification criterion.",
+    "Historical failures remain recorded; final customer/operator acceptance remains pending.",
+    "Mac ARM64 and Windows x64 are the only required publication targets."
+  ]
+}

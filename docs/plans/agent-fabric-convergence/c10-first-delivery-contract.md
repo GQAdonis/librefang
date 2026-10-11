@@ -1,12 +1,12 @@
 # C10 first-delivery contract proposal
 
-Status: proposed architecture and bounded delivery contract, 29 September 2026, with source-reconciliation clarification on 3 October. This document records no architecture approval, selected engine, implementation, measurement, operational pass or C10 completion.
+Status: UAR workflow ownership and completed-boundary measurement approved by the operator on 3 October 2026. This document records no implementation, measurement, operational pass or C10 completion.
 
-The parent initiative has approved execution authority. The earlier documentation-only child approval is not the authority for current product execution. C10 still explicitly leaves the workflow substrate undecided: its [design](openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md) requires a measured comparison before engine selection and implementation against the selected adapter. This proposal makes the candidate concrete for operator review; it does not resolve that decision or waive repository-scoped plans and file claims.
+The parent initiative has approved execution authority. The operator subsequently selected UAR's existing durable team runtime as workflow owner from the current source comparison and moved measurement to the completed integration gate. The earlier documentation-only child approval is not the authority for current product execution. Repository-scoped plans and file claims remain required.
 
 The existing [substrate source proposal](c10-workflow-substrate-decision.md) supplies inspected source anchors and comparison findings. Its historical authority and C09-position statements are not current execution restrictions or fresh runtime evidence. C09's accepted completed-delivery receipt must be consumed separately before implementing this dependent slice.
 
-The 3 October source refresh in that proposal is the current architecture assessment: UAR already has durable coordinator task waits, continuation receipts and restart reconciliation. Reuse their storage/ownership infrastructure without converting the human decision gate into a coordinator continuation. `cand-007` is a generic pattern with no selected external engine. The required pre-selection measured comparison and the completed-delivery-only measurement rule need an explicit sequencing resolution before this proposal is treated as implementation-ready; the exact two alternatives are recorded in the substrate proposal. Neither this clarification nor existing parent execution authority silently selects an engine or waives the comparison.
+The 3 October source refresh in that proposal is the current architecture assessment: UAR already has durable coordinator task waits, continuation receipts and restart reconciliation. Reuse their storage/ownership infrastructure without converting the human decision gate into a coordinator continuation. `cand-007` is a generic pattern with no selected external engine. The operator resolved the sequencing conflict in favor of source-backed UAR selection and measurement at completed delivery; no runtime capability is certified by that decision.
 
 ## Proposed useful operation
 
@@ -101,7 +101,7 @@ Each module stays within the repository's bounded-file rule. No dependency or ve
 
 ## Comparison and acceptance still required
 
-C10 design/REC-059 require a measured comparison of the proposed UAR adaptation, the existing LibreFang engine/adapter and `cand-007` reference before final substrate selection. Source inspection motivates this proposal but cannot replace that comparison. A reference whose runtime, dependencies or supported environment are unavailable is recorded as unmeasured with a reason, not assigned invented favorable or unfavorable results.
+C10 design/REC-059 require an honest comparison. The operator selected UAR from source evidence before implementation and moved runtime measurement to the completed-delivery gate. The existing LibreFang engine remains a source comparison; `cand-007` has no instantiated engine to measure. A reference whose runtime, dependencies or supported environment are unavailable is recorded as unmeasured with a reason, not assigned invented favorable or unfavorable results.
 
 | Required comparison | Current measurement |
 | --- | --- |
@@ -112,7 +112,7 @@ C10 design/REC-059 require a measured comparison of the proposed UAR adaptation,
 | Embedded/mobile/offline constraints and storage/backend profile | Unknown measurements; desktop operation will not certify mobile. |
 | Progression overhead, transitions/storage, recovery latency, memory and operational cost | Unknown; measure separately from model latency, tokens and cost. |
 
-Implementation readiness therefore remains pending the comparison-backed substrate/adapter decision, accepted C09 dependency receipt, repository-specific OpenSpec reconciliation and exact file claims. Parent execution authority is already approved; none of these pending architecture/evidence conditions is a claim that the old documentation-only child approval must be renewed.
+The workflow owner decision is approved. Implementation readiness still requires the accepted C09 dependency receipt, repository-specific OpenSpec reconciliation and exact file claims. Completed-boundary measurements remain pending and cannot be reported as implementation proof in advance.
 
 ## Completed-delivery operation plan
 
@@ -130,4 +130,4 @@ Capture comparison measurements on the same bounded workload and backend profile
 
 This draft slice does not complete C10.1 without the accepted substrate comparison and pinning/recovery evidence, and does not complete C10.2 or C10.3. Retain GitHub issue normalization and Notion/Slack/Jira read/draft/write adapters, target/credential/egress scopes, durable effect intent/outcome and unknown-response reconciliation. Full acceptance still requires one issue after timeout/restart, no sensitive egress, no replay posts, and no issue-to-implementation authorization. Retain observe/classify/deduplicate/standing-policy intake and product/design/reviewer outputs with explicit implementation admission. Direct Boss access does not waive the eventual agreed BossFang ingress path or C05/C07/C08/C09 and D-UAR-P1/D-MINI/D-GATE/D-MEMORY checkpoints.
 
-The operator-reviewable choices are: accept the proposed UAR progression adapter as the candidate subject to the required measured selection; accept the versioned required extension and closed mapping vocabulary; accept progression of known successful no-effect output while accounting remains unresolved and reservations held; and accept the two-step internal-draft boundary without treating it as full C10 acceptance. Required measurements, final adapter selection and repository ownership checkpoints remain unresolved. No canonical task, change or phase transition is made by this proposal.
+The operator approved UAR workflow ownership and completed-boundary measurement. The bounded first-delivery contract still requires a versioned extension, closed mapping vocabulary, known successful no-effect output with held accounting, and an internal-draft-only decision. Required measurements and repository ownership checkpoints remain unresolved. This document does not complete a canonical task, change or phase.

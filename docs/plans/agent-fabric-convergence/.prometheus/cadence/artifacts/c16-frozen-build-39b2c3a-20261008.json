@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "applicationBuildSource": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+  "buildAttemptId": "c1b2739b-71da-4e57-a88a-a4518c0ca8f2",
+  "candidateId": "55f113ea-09cd-424e-9e27-682b652805d5",
+  "startedAt": "2026-10-08T19:30:04.157Z",
+  "finishedAt": "2026-10-08T19:36:37.225Z",
+  "artifacts": {
+    "dist/The-Boss-2.2.19-mac-arm64.dmg": {
+      "sha256": "a4cb6f54605c16618f12bf6816f9d1037053d5d892589655eb583909cc7adb39",
+      "size": 702105506
+    },
+    "dist/mac-arm64/The Boss.app/Contents/Resources/app.asar": {
+      "sha256": "fc729e323193e4934983579fc3201031caa2ef496c7875e89f74bd65d523497a",
+      "size": 346936933
+    }
+  },
+  "signingStatus": "Developer ID signed; local notarization not performed"
+}

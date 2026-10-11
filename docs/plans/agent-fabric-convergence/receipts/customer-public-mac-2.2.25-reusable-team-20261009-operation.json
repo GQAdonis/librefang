@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-customer-operation",
+  "operationId": "reusable-team-retry",
+  "startedAt": "2026-10-09T22:04:15.422Z",
+  "finishedAt": "2026-10-09T22:09:05.618Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "9a043ae0d5d32e9b2fbcbae39d5f7839cd4a3382",
+    "selectedScenarioSha256": "219b350b6bc5c374fffc4a3b0bc2b7933f910c49c1722a399bbaf937cec2828a",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+  },
+  "installationReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installation.json",
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/reusable-team-retry-dc79aa43-3856-4ef9-86fb-2effc1df3cfd/launch.json",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/reusable-team-retry-dc79aa43-3856-4ef9-86fb-2effc1df3cfd/evidence.json",
+  "evidenceSha256": "89fc8b1b6f9b98255a858fc122b6e765553d376e6d9ce80d9a7e7a336ab193bb",
+  "status": "passed",
+  "functionalAcceptance": "scenario-confirmed",
+  "checks": [
+    "named-product-design-team-with-per-role-models-and-exact-scoped-skill",
+    "immutable-package-and-private-scoped-binding-deployed",
+    "real-product-designer-reviewer-model-attempts-and-correlated-artifacts",
+    "revision-preserves-running-definition-package-binding",
+    "renderer-reopen-preserves-authoring-identities-attempts-and-artifacts",
+    "pre-terminal-public-member-model-output-visible",
+    "renderer-reopen-shows-correlated-saved-final-output"
+  ],
+  "acceptance": "operator-acceptance-pending",
+  "newCadenceDelivery": false
+}

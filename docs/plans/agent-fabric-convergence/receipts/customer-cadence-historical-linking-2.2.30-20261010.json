@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-corrective-cadence-historical-evidence-linking",
+  "recordedAt": "2026-10-10T04:35:56.934Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "runStartedAt": "2026-10-06T17:07:34.783Z",
+  "eventsSeq": 1315,
+  "successfulDeliveries": 15,
+  "activeIterationId": null,
+  "publicationDue": true,
+  "originalObligations": [
+    {
+      "id": "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+      "disposition": "pending",
+      "dueAt": "2026-10-06T20:17:02.757Z",
+      "attemptIds": []
+    },
+    {
+      "id": "4077df19-c67c-4059-9665-55988c70e012",
+      "candidateId": "af01868a-0ffa-48a1-80b2-18aefe9928fb",
+      "disposition": "pending",
+      "dueAt": "2026-10-09T12:40:22.383Z",
+      "attemptIds": []
+    }
+  ],
+  "links": [
+    {
+      "id": "c2d03a03-19d1-4cf7-bedd-ba9860d02061",
+      "phaseId": "agent-fabric-convergence",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-corrective-2.2.30-build-installation-20261010.json",
+        "sha256": "3ef7940b4e690b615024233e3b12b0cdb47249f3dd3925fa8af0bd584824f400"
+      },
+      "countedAsDelivery": false,
+      "countedCompletions": false,
+      "recordedAt": "2026-10-10T04:35:25.028Z"
+    },
+    {
+      "id": "d6378d13-3881-4d35-89f2-fd5cc2146cdf",
+      "phaseId": "agent-fabric-convergence",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-pending-approval-restart-recovery-2.2.30-20261010.json",
+        "sha256": "e69c125006ee028a8a3c2662f6bf1d6d93b4fd5b6393786fd3b60a238a7cdcf6"
+      },
+      "countedAsDelivery": false,
+      "countedCompletions": false,
+      "recordedAt": "2026-10-10T04:35:26.652Z"
+    },
+    {
+      "id": "a47a0459-898b-487d-8f13-7180f75ec7eb",
+      "phaseId": "agent-fabric-convergence",
+      "evidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-public-graceful-quit-2.2.30-20261010.json",
+        "sha256": "af99bc46efc003e2105351c965a496a583850f9d1ce5b270e1f6e64ee83f6d91"
+      },
+      "countedAsDelivery": false,
+      "countedCompletions": false,
+      "recordedAt": "2026-10-10T04:35:28.176Z"
+    }
+  ],
+  "commands": [
+    "customer-corrective-2.2.30-build-installation-20261010-history",
+    "customer-pending-approval-restart-recovery-2.2.30-20261010-history",
+    "customer-public-graceful-quit-2.2.30-20261010-history"
+  ],
+  "limitations": [
+    "Supported history commands link real receipts only. No retrospective candidate creation or publication obligation replacement is claimed.",
+    "Clocks, fifteen delivery count, source identities and both original pending debts remain preserved.",
+    "No build or customer operation was repeated for accounting."
+  ]
+}

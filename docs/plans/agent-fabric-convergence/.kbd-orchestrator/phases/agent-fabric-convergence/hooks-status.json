@@ -1,15 +1,26 @@
 {
-  "totalRuns": 35,
-  "failedRuns": 0,
+  "totalRuns": 38,
+  "failedRuns": 1,
   "lastRun": {
-    "ts": "2026-09-30T21:25:37.372Z",
+    "ts": "2026-10-10T14:25:05.254Z",
     "kind": "child",
-    "edge": "after",
-    "name": "delivery-cadence-pipeline",
+    "edge": "before",
+    "name": "integrated-runtime-release-reconciliation",
     "hookId": "delivery-cadence-kbd-reconcile",
     "layer": "project",
     "mode": "augment",
     "status": 0
   },
-  "lastFailure": null
+  "lastFailure": {
+    "ts": "2026-10-05T23:09:03.443Z",
+    "kind": "child",
+    "edge": "before",
+    "name": "six-hour-convergence-recovery",
+    "hookId": "delivery-cadence-kbd-reconcile",
+    "layer": "project",
+    "mode": "augment",
+    "status": 1,
+    "stderrSnippet": "node:internal/modules/cjs/loader:1573   throw err;   ^  Error: Cannot find module '/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-kbd-adapter.mjs'     at Module._r",
+    "logPath": ".kbd-orchestrator/phases/agent-fabric-convergence/hooks.log.jsonl"
+  }
 }

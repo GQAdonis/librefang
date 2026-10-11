@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "metadata",
+  "status": "success",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "verifiedAt": "2026-10-10T05:49:34.895Z",
+  "evidenceRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-release-metadata-2.2.30-2026-10-10T05-49-33-187Z-05573d3f.json",
+      "sha256": "14635d8f6c390c25172dfdd07f14907867c3d6acbc66e91a862d74e0ce45dcc2"
+    }
+  ],
+  "commit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+  "url": "https://github.com/Prometheus-AGS/the-boss/blob/38d9be7524a2719a0aa060943aaf4ce61af3282a/release-manifest.json",
+  "publishedAt": "2026-10-10T05:45:43.659Z",
+  "checkedInFiles": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "commit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+      "path": "release-manifest.json",
+      "blob": "cd25f316f8fb3a047f0bd8f030fd57a4d6553126",
+      "bytes": 2205,
+      "sha256": "00f4f1c5586c992f18a1a676d68a9f4e8987a75ecab694f768beec646614183e"
+    },
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "commit": "38d9be7524a2719a0aa060943aaf4ce61af3282a",
+      "path": "RELEASES.md",
+      "blob": "8350a2a6bef0bcf92b871aac79d6a3921be7002a",
+      "bytes": 38845,
+      "sha256": "d8b953e7af55d8deb707a9beeaac68065879ecd709eb2fcfb5195ecfaa2799e2"
+    }
+  ]
+}
