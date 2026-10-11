@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-actionable-v1-reporting-completed-delivery",
+  "recordedAt": "2026-10-11T00:46:13.563Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "runStartedAt": "2026-10-06T17:07:34.783Z",
+  "iterationId": "b9a060a3-fad7-4a91-8bda-870dd4a7165e",
+  "iterationStartedAt": "2026-10-11T00:24:48.936Z",
+  "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+  "contentManifestDigest": "d05c060884390a24f115a4f90d6780215a9e435e2bd1cddc920f8e9cb9ff1a67",
+  "version": "2.2.32",
+  "candidate": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+    "appAsarSha256": "8a760df9ced70053b54df0ac7659d195f88e124f4f771eee790881575c61cffa",
+    "uarSha256": "2cf4fdb84a71eb864996b9a092559bdaae353201f82a966e82de1ad26ef577e1",
+    "bossfangSha256": "20b060d6b44695169531e35c72d52e54a72dad374fa2a45931aed182bea7a720"
+  },
+  "checkpoints": [
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "c90e77b8-7fa0-4ce4-9e0c-0b6cc5dcc232",
+      "status": "failed",
+      "candidateId": "6143aebb-4a84-4535-be19-1981b5ecd1cd",
+      "startedAt": "2026-10-11T00:30:00.644Z",
+      "finishedAt": "2026-10-11T00:30:06.705Z",
+      "exitCode": 1,
+      "reason": "Build the completed typed compatibility reporting repair from the new 2.2.32 source; original 2.2.31 evidence and public artifacts remain immutable."
+    },
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "ad26cf28-ef93-4e24-b015-242a596c2162",
+      "status": "failed",
+      "candidateId": "6143aebb-4a84-4535-be19-1981b5ecd1cd",
+      "startedAt": "2026-10-11T00:30:45.335Z",
+      "finishedAt": "2026-10-11T00:30:56.267Z",
+      "exitCode": 1,
+      "reason": "Previous attempt exited before application compilation because the required local UAR source environment binding was omitted. Restore THE_BOSS_LOCAL_UAR_SOURCE_DIR to the same frozen 74194623 stage; preserve the failed attempt and candidate."
+    },
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "60d9e027-1caf-47f5-b5be-5d6bd19df3a6",
+      "status": "failed",
+      "candidateId": "79a11159-22c3-4c06-9260-0758b9c99dd3",
+      "startedAt": "2026-10-11T00:32:05.564Z",
+      "finishedAt": "2026-10-11T00:33:49.262Z",
+      "exitCode": 1,
+      "reason": "Retry the failed actual package after adding the required current 2.2.32 bilingual release-history entry through its existing generator; source05c1d8413e is frozen and the exact UAR74194623 binding is restored."
+    },
+    {
+      "id": "mac-arm64-build",
+      "attemptId": "5c89d0f0-54c6-4307-8790-a604014837e2",
+      "status": "success",
+      "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+      "startedAt": "2026-10-11T00:36:55.148Z",
+      "finishedAt": "2026-10-11T00:42:44.338Z",
+      "exitCode": 0,
+      "reason": "The prior actual package timed out unconditionally fetching an exact clean cached liter-llm commit. Source46d68291ae fixes this observed packaging blocker and records the Windows LTO correction; all failed attempts and clocks remain retained."
+    },
+    {
+      "id": "mac-functional-launch",
+      "attemptId": "219066ad-7d11-4852-8d0b-4c1df80a22c3",
+      "status": "success",
+      "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+      "startedAt": "2026-10-11T00:44:18.186Z",
+      "finishedAt": "2026-10-11T00:44:22.987Z",
+      "exitCode": 0,
+      "reason": "Initial delivery checkpoint"
+    },
+    {
+      "id": "github-feedback-operation",
+      "attemptId": "b194c44b-934f-475e-a464-73fc22e0d666",
+      "status": "success",
+      "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+      "startedAt": "2026-10-11T00:44:42.180Z",
+      "finishedAt": "2026-10-11T00:44:57.953Z",
+      "exitCode": 0,
+      "reason": "Initial delivery checkpoint"
+    }
+  ],
+  "operation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/operation.json",
+    "sha256": "af313a9ca50d9c01ed3a6ad1fdcb6d672e609e2ec40d02a6015e708a76dc1165",
+    "status": "success"
+  },
+  "evidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/integrated-admission-v2-older-instance-ab2bd684-1ccf-4a5e-a592-0f6c166024b5/evidence.json",
+    "sha256": "19728a43b44b57b9d18bbf634e593a59c81f6b5f17cb0f2d43807e22f4c2297f",
+    "checks": [
+      "actual-v1-capability-selected-actionable-incompatibility-local-config-readable",
+      "v2-dependent-catalog-mutation-and-work-execution-refused-with-provider-catalog-unchanged"
+    ],
+    "discovery": {
+      "localInventoryReadable": true,
+      "selectedInstanceId": "uar-admission-v1-20261010",
+      "compatibility": "incompatible",
+      "checks": {
+        "configured": true,
+        "reachable": true,
+        "authenticated": true,
+        "compatible": false,
+        "operational": false
+      },
+      "diagnostic": "UAR 1.0.0 does not support tool admission v2. Update this instance or select a compatible instance. Catalog changes and runs are blocked.",
+      "observedVersion": "1.0.0"
+    },
+    "refusal": {
+      "catalogMutationRefused": true,
+      "execution": {
+        "boundary": "runtime-admission",
+        "nativeRunAdmitted": false,
+        "terminalFailure": true
+      },
+      "providerCatalogBeforeSha256": "b020cba26b99d83ca87c07b5ba1fe455759625727f919b563ba25f65718649ba",
+      "providerCatalogAfterSha256": "b020cba26b99d83ca87c07b5ba1fe455759625727f919b563ba25f65718649ba",
+      "providerCatalogUnchanged": true,
+      "externalWritesSubmitted": false
+    },
+    "originalSelectionRestored": true
+  },
+  "ownedRuntime": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-actionable-v1-refusal-20261011/owned-runtime-operation.json",
+    "sha256": "41b85a74632b8335a81ae699ee1f8d2789d71f53699bfc897d61dc0dd9211bb3",
+    "complete": true,
+    "treeStopped": true
+  },
+  "platformScope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64",
+      "linux"
+    ],
+    "authority": "Latest operator instruction in this conversation; existing child plan revision and Cadence profile match."
+  },
+  "accounting": {
+    "historicalCode": "61/61 tasks,20/20 changes",
+    "portfolioQualification": "43/61 terminal items",
+    "canonicalTaskCredit": [],
+    "deliveryCountBeforeFinish": 16,
+    "installedAcceptance": "pending exact final candidate"
+  },
+  "limitations": [
+    "This delivery qualifies the observed compatibility-probe repair only.",
+    "Windows x64 packaging, final required-platform publication and operator acceptance remain pending.",
+    "No suite, unit, partial verification or unrelated passing scenario was run."
+  ],
+  "securityBoundary": "An actual separately owned v1 runtime was OS-contained, authenticated with ephemeral credentials and stopped through its owned tree; strict v2 effect admission remains enforced."
+}
