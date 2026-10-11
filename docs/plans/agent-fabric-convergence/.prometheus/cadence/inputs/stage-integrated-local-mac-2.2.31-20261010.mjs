@@ -28,7 +28,7 @@ async function stage(args = process.argv.slice(2)) {
   fact(Object.keys(options).length === 4, 'INTEGRATED_INSTALL_EXPLICIT_INPUTS_REQUIRED')
   fact(process.platform === 'darwin' && process.arch === 'arm64', 'INTEGRATED_INSTALL_MAC_ARM64_REQUIRED')
   const config = read(options.config)
-  fact(config.schemaVersion === 1 && config.version === '2.2.31' && config.candidateId &&
+  fact(config.schemaVersion === 1 && ['2.2.31', '2.2.32'].includes(config.version) && config.candidateId &&
     config.builtSource?.candidateId === config.candidateId &&
     /^[a-f0-9]{40}$/.test(config.builtSource.boss ?? '') &&
     /^[a-f0-9]{64}$/.test(config.builtSource.contentManifestDigest ?? '') &&
@@ -39,7 +39,7 @@ async function stage(args = process.argv.slice(2)) {
   fact(revision(nativeRecord.source) === config.candidate.uar && /^[a-f0-9]{64}$/.test(nativeRecord.sha256 ?? ''),
     'INTEGRATED_INSTALL_NATIVE_RECORD_SOURCE_MISMATCH')
   fs.mkdirSync(options.output, { recursive: true })
-  const directory = path.join(fs.realpathSync(options.output), 'integrated-local-mac-2.2.31-' + randomUUID())
+  const directory = path.join(fs.realpathSync(options.output), 'integrated-local-mac-' + config.version + '-' + randomUUID())
   fs.mkdirSync(directory, { mode: 0o700 })
   const receiptPath = path.join(directory, 'installation.json')
   const receipt = { schemaVersion: 1, kind: 'integrated-local-mac-installer-installation',

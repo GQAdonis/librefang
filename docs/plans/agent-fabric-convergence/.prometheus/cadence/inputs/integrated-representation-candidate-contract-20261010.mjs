@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 export const sha256 = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 export const requireFact = (value, code) => { if (!value) throw new Error(code) }
 export function candidatePins(candidate) {
-  requireFact(candidate?.version === '2.2.31' && ['boss', 'uar', 'mini', 'full'].every(key =>
+  requireFact(['2.2.31', '2.2.32'].includes(candidate?.version) && ['boss', 'uar', 'mini', 'full'].every(key =>
     /^[a-f0-9]{40}$/.test(candidate[key] ?? '')), 'C17_INTEGRATED_FROZEN_CANDIDATE_REQUIRED')
   return candidate
 }
