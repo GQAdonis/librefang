@@ -1,4 +1,0 @@
-{
-  "id": "mac-arm64-build",
-  "reason": "The prior actual package timed out unconditionally fetching an exact clean cached liter-llm commit. Source46d68291ae fixes this observed packaging blocker and records the Windows LTO correction; all failed attempts and clocks remain retained."
-}

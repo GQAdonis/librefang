@@ -1,6 +1,0 @@
-{
-  "activityId": "integrated-callback-cancellation-native-wait-20261010",
-  "kind": "resource-wait",
-  "actor": "release-native-payload-dependency",
-  "note": "Observed wait for live UAR741 runs38090581696/38090581678 and BossFang92bc run38091286809. Actual required native compilation precedes the corrected complete local application package. Starts at this recording time; earlier unrecorded time is unknown. No optional targets required."
-}

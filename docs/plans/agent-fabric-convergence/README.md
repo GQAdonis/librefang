@@ -95,3 +95,7 @@ The operator closed this phase administratively after accepting The Boss 2.2.32 
 ## Final administrative closeout
 
 The phase is closed by operator direction. See the [main-only consolidation and recovery index](main-consolidation-closeout.md) and [remaining manual certification scenarios](manual-certification-handoff.md). Remaining qualification is not marked passed.
+
+## Cadence retired — 11 October 2026
+
+The operator requested removal of active Cadence state, profiles and reports. They were moved intact to the private archive documented in the [Cadence evidence relocation index](receipts/cadence-retirement-relocation-20261011.md). Historical delivery counts and schedules remain provenance; there is no active Cadence configuration for this initiative. Reusable skill source and the manual certification handoff remain.

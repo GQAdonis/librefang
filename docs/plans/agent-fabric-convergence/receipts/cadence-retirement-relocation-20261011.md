@@ -1,0 +1,21 @@
+# Cadence retirement and evidence relocation — 11 October 2026
+
+The operator requested removal of all remaining secondary branches/worktrees and active Cadence files after administrative phase closeout. Cadence is retired for this initiative. This cleanup moved state, configuration, artifacts, recovery material and learning reports intact into the private archive below; it did not run a delivery, build, runtime operation or approval cycle.
+
+Private archive: `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z`. Its `relocation-manifest.json` records each original location, unchanged tracked-file SHA-256 hashes, preserved filesystem identity and pre-cleanup repository commits. Recovery Git bundles are alongside it. Prefix substitution resolves an old artifact path: replace the original path in the first column with its archive path, retaining the suffix. Historical receipts retain their original provenance and checksums.
+
+| Former initiative location | Preserved location |
+| --- | --- |
+| `.prometheus/cadence` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence` |
+| `.prometheus/cadence-binding.json` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence-binding.json` |
+| `.prometheus/cadence-profile.json` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence-profile.json` |
+| `.prometheus/cadence-learning-reports` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence-learning-reports` |
+| `.prometheus/cadence-recovery-20261006` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence-recovery-20261006` |
+| `.refiner/artifacts/afc-release-cadence-optimization` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.refiner/artifacts/afc-release-cadence-optimization` |
+| `.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/baseline-cadence-state.json` | `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-20261011/archive/cadence-retirement-2026-10-11T14-48-35-355Z/librefang/docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/integrated-runtime-release-reconciliation/baseline-cadence-state.json` |
+
+The complete Cadence tree (about 90 GB at removal) includes ignored/local artifacts as well as tracked receipts and inputs. The archive also retains the skill-pack’s generated Cadence state and old phase profile, and the mini pack’s generated profiles, binding and adaptation/source reports. Reusable delivery-cadence skill source, adapters, scripts and historical specifications remain. UAR frontend and The Boss production/packaging files were not changed.
+
+Core public 2.2.32 Mac ARM64 and Windows x64 operator acceptances remain valid as recorded. Code stays historically 61/61 tasks and 20/20 changes; qualification stays 43/61 terminal (42 qualified plus one historical skip). Remaining manual certification and representation uncertainty are unchanged. The archived Cadence clock, delivery count, operation records and publication history describe past execution; they are not an active scheduler or authority to resume publication.
+
+LibreFang’s open pull-request query returned an empty list during this cleanup. Main-only branch/worktree verification across the sixteen connected repositories is recorded in the private cleanup receipt. Backup verification was limited to filesystem relocation identity and the hashes of moved tracked files; no product runtime certification is implied.

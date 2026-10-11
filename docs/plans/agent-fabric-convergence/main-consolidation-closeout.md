@@ -5,7 +5,7 @@ The operator closed this phase on 2026-10-11 and took ownership of the remaining
 - **Code:** 61/61 tasks and 20/20 changes remain recorded.
 - **Qualification:** 43/61 terminal items (42 qualified plus one historical skipped duplicate). The [manual certification handoff](manual-certification-handoff.md) describes all 18 remaining items, prerequisites, actions, expected outcomes and evidence.
 - **Accepted customer release:** 2.2.32 on Mac ARM64 and Windows x64. Both acceptance records and representation-attempt evidence remain unchanged.
-- **Cadence:** 17 successful deliveries, original start 2026-10-06T17:07:34.783Z, no publication debt, no active iteration. No new delivery or acceptance credit was created.
+- **Cadence:** retired by operator direction. Archived history retains 17 successful deliveries, original start 2026-10-06T17:07:34.783Z and no publication debt. Active state/configuration, recovery material and generated reports have been removed from checkouts; no new delivery or acceptance credit was created.
 
 ## Consolidation result
 
@@ -46,7 +46,7 @@ Recovery root: `/Users/gqadonis/Projects/prometheus/phase-closeout-preservation-
 
 It contains pre/post-consolidation Git bundles, dirty/index patches, complete retired checkouts or archives with Git administration, branch dispositions, inventories and per-repository receipts. Keep this directory until you no longer need recovery. Archived checkouts are backups, not registered active worktrees.
 
-The initiative's approximately 90 GB of local Cadence evidence and canonical KBD records were moved intact to `/Users/gqadonis/Projects/references/librefang/docs/plans/agent-fabric-convergence`. Historical receipt paths were not rewritten. [Relocation mapping](receipts/main-consolidation-closeout-20261011.json) maps the former initiative prefix to this permanent directory. Cadence event history, clocks, counts and publication obligations retain their original bytes; the editable binding now names the permanent checkout and full-pack skill source.
+The original consolidation moved canonical KBD records and local evidence into the permanent LibreFang initiative directory. The operator then requested retirement of active Cadence files: its approximately 90 GB evidence tree, profiles/binding, recovery material and generated reports were moved intact into the private recovery archive. [Cadence retirement relocation index](receipts/cadence-retirement-relocation-20261011.md) maps each former checkout path to its preserved location. Apply this mapping after the original [initiative relocation mapping](receipts/main-consolidation-closeout-20261011.json) when resolving an older worktree path. Historical receipts, clock/count values and provenance were not rewritten. Canonical KBD records and historical qualification remain in the permanent initiative; no active Cadence binding remains.
 
 Large local logs, installers, application profiles and private recovery material are deliberately not newly committed to Git. Existing checked-in receipts and prior IPFS archive references remain available. No new IPFS upload is claimed.
 

@@ -1,4 +1,0 @@
-{
-  "id": "mac-arm64-build",
-  "reason": "Retry the failed actual package after adding the required current 2.2.32 bilingual release-history entry through its existing generator; source05c1d8413e is frozen and the exact UAR74194623 binding is restored."
-}
