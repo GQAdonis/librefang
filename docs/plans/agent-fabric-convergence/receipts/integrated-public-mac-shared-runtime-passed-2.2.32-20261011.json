@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-mac-shared-runtime-startup-qualification",
+  "recordedAt": "2026-10-11T01:55:07.009Z",
+  "version": "2.2.32",
+  "source": "46d68291aec8dfa57a41f0453af22050fd34a035",
+  "appAsarSha256": "8832383025dc209fbbbc44534d0e0ace4b64f5089c93c9ec60b88ec1b42bcc19",
+  "sidecarSha256": "a83cf8af2069db2c03aae72f15311c4b2ca7472b0f96d584ff658fb260461bd9",
+  "bossfangSha256": "d95a6f8e5e64d0fd94502ef2717ce2e7ccade9d3e5121d2f9a99a957a2993396",
+  "operation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/startup-operation-wcq778/operation.json",
+    "sha256": "48ab19eca99ae7fcabea5a3ca8196f93a99313d94e1702952b63abc242a05194"
+  },
+  "observation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.32/startup-operation-wcq778/evidence.json",
+    "sha256": "b60edbdb88239e52bc6a54a218627e4e3e6f99f704b0d211682b9c4d96eeae40"
+  },
+  "driver": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/operate-public-mac-2.2.32-startup-20261011.mjs",
+    "sha256": "6657434ff34e86870205b0dc2956b26c07485f3ba42f463d4c552ea5b9c0cd82"
+  },
+  "observedStages": [
+    {
+      "stage": "managed-uar-operational",
+      "at": "2026-10-11T01:54:26.190Z",
+      "instanceId": "managed-local",
+      "runtimeId": "managed-local",
+      "capabilities": [
+        "approval_lifecycle_v1",
+        "collaboration_conversion_reports_v1",
+        "collaboration_definition_packages_v1",
+        "collaboration_definition_packages_v2",
+        "collaboration_deployment_bindings_v1",
+        "collaboration_deployment_bindings_v2",
+        "collaboration_representation_execution_v1",
+        "collaboration_representation_grant_refs_v1",
+        "collaboration_team_execution_v1",
+        "collaboration_team_planning_v1",
+        "durable_agent_instances_v1",
+        "full_harness_delegation_v1",
+        "host_history",
+        "local_scoped_observers_v1",
+        "prometheus.workflow-execution/1.0.0",
+        "reasoning_effort",
+        "run_scoped_credentials",
+        "run_scoped_mcp_servers",
+        "scoped_delegation_grants_v1",
+        "service_instance_placement_v1",
+        "session_principal",
+        "team_execution_continuations_v1",
+        "team_execution_host_workspace_v1",
+        "team_execution_peer_tools_v1",
+        "team_execution_shared_instructions_v1",
+        "tool_admission_v2",
+        "working_directory"
+      ],
+      "processId": 53802,
+      "port": 1907
+    },
+    {
+      "stage": "bossfang-shared-uar-connected",
+      "at": "2026-10-11T01:54:38.776Z",
+      "dashboardUrl": "http://127.0.0.1:4547/dashboard/",
+      "connection": "connected",
+      "instanceId": "managed-local",
+      "generation": 1,
+      "scopedGrantExpiresAt": "2026-10-11T02:09:38.380596Z",
+      "uarProcessId": 53802
+    },
+    {
+      "stage": "bossfang-stop-preserves-uar",
+      "at": "2026-10-11T01:54:40.348Z",
+      "state": "running",
+      "processId": 53802
+    }
+  ],
+  "qualificationScope": "Actual public package managed UAR v2 startup, authenticated BossFang shared-instance connection and owned BossFang stop preserving UAR. No inference or human acceptance credit.",
+  "limits": [
+    "No inferred public inference/delegation completion.",
+    "No operator acceptance or native Windows operation.",
+    "No full original portfolio task qualification credit.",
+    "Disposable profile and registered workspace only; user data and existing services untouched."
+  ],
+  "accounting": {
+    "historicalCodeTasks": "61/61",
+    "historicalCodeChanges": "20/20",
+    "portfolioTerminal": "43/61 (42 qualified and 1 historical skipped duplicate)",
+    "childTasks": "7/9",
+    "successfulCadenceDeliveries": 17,
+    "newDeliveries": 0,
+    "publicationDue": false
+  },
+  "remaining": [
+    "Synthetic representation exact human operation and authority lifecycle",
+    "Final 2.2.32 Mac ARM64 and Windows x64 installed operation/operator acceptance",
+    "Satisfied-only child reflection/archive and parent restoration"
+  ]
+}
