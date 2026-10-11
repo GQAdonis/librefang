@@ -1,0 +1,4 @@
+{
+  "id": "mac-arm64-build",
+  "reason": "Build the completed typed compatibility reporting repair from the new 2.2.32 source; original 2.2.31 evidence and public artifacts remain immutable."
+}
