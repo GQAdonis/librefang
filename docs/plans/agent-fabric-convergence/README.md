@@ -41,8 +41,8 @@ The OpenSpec changes are initiative-level contracts. Product implementation must
 
 ## Change index
 
-- [C01: Baseline reconciliation and shared contracts](openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md)
-- [C02: Governed action and approval boundary](openspec/changes/afc-c02-governed-action-and-approval-boundary/proposal.md)
+- [C01: Baseline reconciliation and shared contracts](openspec/changes/archive/2026-09-26-afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md)
+- [C02: Governed action and approval boundary](openspec/changes/archive/2026-09-27-afc-c02-governed-action-and-approval-boundary/proposal.md)
 - [C03: Lossless definitions and collaboration document profile](openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/proposal.md)
 - [C04: Replaceable service instances and placement](openspec/changes/afc-c04-replaceable-service-instances-and-placement/proposal.md)
 - [C05: librefang full-run delegation](openspec/changes/archive/2026-09-27-afc-c05-bossfang-full-run-delegation/proposal.md)
@@ -87,3 +87,7 @@ The operator approved the documentation-only [uar-team-specification child](.kbd
 ## UAR team definitions deployment child
 
 The [I1 implementation child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-definitions-deployment/handoff-out.md) is complete. It delivers immutable collaboration packages, private deployment bindings, agent-team creator maintenance/deployment, and SurrealDB 3.3.0 alignment while explicitly refusing team activation until I2. Its six repository PRs merged on 26 September 2026; their immutable heads and merge commits are recorded in the P1 checkpoint. D-UAR-P1 is now accepted through the separate installed 2.2.3 closeout; I1 does not transfer or duplicate execution ownership.
+
+## Phase closed — operator handoff, 11 October 2026
+
+The operator closed this phase administratively after accepting The Boss 2.2.32 on Mac ARM64 and Windows x64. [Manual certification handoff](manual-certification-handoff.md) assigns the remaining 18 portfolio criteria to the operator. Code remains 61/61 tasks and 20/20 changes; qualification remains 43/61 terminal (42 qualified, one historical skipped duplicate). No remaining criterion is certified by this closure. [Canonical closeout receipt](receipts/phase-manual-closeout-20261011.json). Earlier next-task directions below or in historical plans are retained history, not an instruction to resume.
