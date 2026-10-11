@@ -15,6 +15,7 @@ use base64::Engine;
 use dashmap::DashMap;
 use librefang_types::message::{ContentBlock, MessageContent, Role, StopReason, TokenUsage};
 use serde::Deserialize;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt};
@@ -404,7 +405,23 @@ impl ClaudeCodeDriver {
             }
         });
 
-        std::fs::write(&path, serde_json::to_vec_pretty(&config)?)?;
+        let bytes = serde_json::to_vec_pretty(&config)?;
+        // This file carries the daemon bearer credential. Set permissions at
+        // creation, rather than exposing it until a later chmod; create_new
+        // also refuses existing files and symlinks in the temporary directory.
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&path)?;
+        if let Err(error) = file.write_all(&bytes) {
+            drop(file);
+            let _ = std::fs::remove_file(&path);
+            return Err(error);
+        }
         Ok(path)
     }
 
