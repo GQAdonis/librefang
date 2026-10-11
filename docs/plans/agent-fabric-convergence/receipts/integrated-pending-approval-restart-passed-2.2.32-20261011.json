@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-integrated-pending-approval-restart-operation",
+  "recordedAt": "2026-10-11T00:58:11.408Z",
+  "version": "2.2.32",
+  "platform": "darwin-arm64",
+  "status": "passed",
+  "complete": true,
+  "sourceRefs": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "mini": "6c63c0acec67444e30f65461836e7a943316e242",
+    "full": "547a9bc93de61246bbe38567796d5fa2d0f616f0",
+    "installedVersion": "2.2.32",
+    "appAsarSha256": "8a760df9ced70053b54df0ac7659d195f88e124f4f771eee790881575c61cffa",
+    "sidecarSha256": "2cf4fdb84a71eb864996b9a092559bdaae353201f82a966e82de1ad26ef577e1",
+    "installerSha256": "5f6d3dc59c82f1bd1f0e554cfd92fd061001afd18dff481651038caf37bef882",
+    "installationReceiptSha256": "3c8296d451f980b3adee06451b9dc4bea457acdbd2899c1275045186079111a2",
+    "configurationSha256": "0cd5b3b70f77011b5ddbc4800138f95f1c00776704117cf1d4db795cd378e507",
+    "selectedScenarioSha256": "1078e6a6046f2bce122066d04b86f45f559de2e66a1ab7a3ee71226b695febde",
+    "preparationScenarioSha256": "1f4db18c815fe6ffd9e018cec082eaf037135d1476cb6668bb7814ba4dad2a75",
+    "priorRecoveryScenarioSha256": "2e9b364750832f1467e427fcc64acbbe56eaf640b31365d80615f9eb80a20ed1",
+    "operationDriverRevision": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "operationDriverSha256": "760999b804868e274e3b0188d436123bd58822d581ccaa2b29c92b3d8c2f7a63",
+    "candidateContractSha256": "97898d13dcc6b74e3ce29713c221754d367c4826b2d68288ffd8272b830a59f3",
+    "launcherSha256": "e348c971f429668dbe0e23deaa00f5dad40eae11752284042f4510456aa931e4"
+  },
+  "checks": [
+    {
+      "name": "exact-real-pending-challenge-without-approved-effect",
+      "passed": true
+    },
+    {
+      "name": "owned-runtime-restarted-without-another-turn-or-decision",
+      "passed": true
+    },
+    {
+      "name": "same-command-retained-with-terminal-interruption-and-no-replay",
+      "passed": true,
+      "outcome": "confirmed-cancellation"
+    },
+    {
+      "name": "retained-history-readable-old-challenge-unresolvable-no-successful-effect",
+      "passed": true
+    }
+  ],
+  "before": {
+    "instanceId": "09e261c2-ccb3-49e4-87a9-4f64c98c9726",
+    "lifecycle": "active",
+    "recovery": "ready",
+    "epoch": 1,
+    "revision": 5,
+    "commandCount": 2,
+    "lastErrorCode": null,
+    "activeRunId": "75cfbc08-a322-4ba2-beb6-a821a208666c",
+    "activeCommandId": "fe78915a-b41a-4e00-aff2-bb85f48efb3c",
+    "activeAttemptId": "278212cd-6e91-4a97-be48-da58eed0b5b6",
+    "commandId": "fe78915a-b41a-4e00-aff2-bb85f48efb3c",
+    "attemptId": "278212cd-6e91-4a97-be48-da58eed0b5b6",
+    "runId": "75cfbc08-a322-4ba2-beb6-a821a208666c",
+    "commandStatus": "running",
+    "approvalId": "2a865712-7b37-44ed-8a7a-5ae256b243d4",
+    "issuerId": "672c1172-ecd9-4ae9-8bd6-b8d9f1e85923",
+    "challengeId": "2a865712-7b37-44ed-8a7a-5ae256b243d4",
+    "toolName": "file_read",
+    "admissionOwner": "paired-host",
+    "decisionOwner": "uar-runtime",
+    "argumentsSha256": "ed35080c2270b1fecf989a21bc360a7c36e0c0c14c31cfbd612648841753c4aa",
+    "successfulEffects": 0,
+    "effectStates": [
+      {
+        "toolName": "file_read",
+        "state": "awaiting_approval"
+      }
+    ]
+  },
+  "restart": {
+    "operationId": "71e0857a-0dd5-42a5-840d-f5201fb30e60",
+    "status": "succeeded",
+    "generationBefore": 2,
+    "generationAfter": 3,
+    "instanceId": "managed-local"
+  },
+  "after": {
+    "instanceId": "09e261c2-ccb3-49e4-87a9-4f64c98c9726",
+    "lifecycle": "dormant",
+    "recovery": "ready",
+    "epoch": 2,
+    "revision": 7,
+    "commandCount": 2,
+    "lastErrorCode": null,
+    "activeRunId": null,
+    "activeCommandId": null,
+    "activeAttemptId": null,
+    "commandId": "fe78915a-b41a-4e00-aff2-bb85f48efb3c",
+    "attemptId": "278212cd-6e91-4a97-be48-da58eed0b5b6",
+    "runId": "75cfbc08-a322-4ba2-beb6-a821a208666c",
+    "commandStatus": "cancelled"
+  },
+  "afterRestartHistory": {
+    "available": true,
+    "pendingApprovalPresent": false,
+    "exactChallengePresent": true,
+    "approvalState": "cancelled",
+    "resolvable": false,
+    "successfulEffects": 0
+  },
+  "interruptionOutcome": "confirmed-cancellation",
+  "decisionSubmitted": false,
+  "retrySubmitted": false,
+  "replaySubmitted": false,
+  "humanRepresentationQualified": false,
+  "cleanupPending": false,
+  "nativeSettingsCleanupPending": false,
+  "evidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-pending-recovery-2.2.32-20261011/integrated-pending-recovery-2.2.32-f9cc1927-bf54-48b3-b7dd-e61b6a7c88b7/evidence.json",
+    "sha256": "361e1924609c1b44bd54d7d7e011eac5db8326feeb5469fae49b68691c9cca12"
+  },
+  "operation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-pending-recovery-2.2.32-20261011/integrated-pending-recovery-2.2.32-f9cc1927-bf54-48b3-b7dd-e61b6a7c88b7/operation.json",
+    "sha256": "56fef0405e210d6b5d74f8e87b27921f6f49e908375037d44870f092501f23b6"
+  },
+  "newCadenceDelivery": false,
+  "canonicalTaskCredit": 0,
+  "acceptance": "operator acceptance and final public candidate pending"
+}

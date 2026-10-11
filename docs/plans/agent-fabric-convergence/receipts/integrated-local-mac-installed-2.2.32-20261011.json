@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-local-mac-installer-installation",
+  "version": "2.2.32",
+  "platform": "darwin-arm64",
+  "source": "46d68291aec8dfa57a41f0453af22050fd34a035",
+  "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+  "contentManifestDigest": "d05c060884390a24f115a4f90d6780215a9e435e2bd1cddc920f8e9cb9ff1a67",
+  "builtSource": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "candidateId": "af298304-cc76-4c35-a4c6-90c4eace43f8",
+    "contentManifestDigest": "d05c060884390a24f115a4f90d6780215a9e435e2bd1cddc920f8e9cb9ff1a67"
+  },
+  "operatedSource": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "driverDiffPaths": []
+  },
+  "requiresFrozenBuildReconciliation": false,
+  "sourceRefs": {
+    "boss": "46d68291aec8dfa57a41f0453af22050fd34a035",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7"
+  },
+  "startedAt": "2026-10-11T00:54:23.529Z",
+  "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/The-Boss-2.2.32-mac-arm64.dmg",
+  "configurationPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.32-probe-operation-config-20261011.json",
+  "nativeRecordPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/uar-74194623-native-inputs-20261010-aHBrVR/darwin-arm64/uar-sidecar-darwin-arm64.json",
+  "status": "passed",
+  "signature": "passed",
+  "gatekeeper": "passed",
+  "notarization": "not-claimed",
+  "functionalOperation": "not-performed",
+  "installedAcceptance": "pending",
+  "publication": "not-public-artifact",
+  "size": 708598736,
+  "sha256": "5f6d3dc59c82f1bd1f0e554cfd92fd061001afd18dff481651038caf37bef882",
+  "configurationSha256": "adeb585dbbbdf0ccd19a398578f0ab201c31e7ea2705f770eeacee095ddfed8f",
+  "nativeRecordSha256": "7385fcc1d0988a77c9241156164794447aa63554510db6602029875f1bba1778",
+  "validatorSha256": "7eacadb12da8c996316613f67830ba77499bf3f1f089c755b2081ffef6176057",
+  "stagingDriverSha256": "94d7fcd948a04ab7783a438b92d5efc5e5c685aae192228c7aa2c43ac9514412",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-local-mac-2.2.32-20261011/integrated-local-mac-2.2.32-1ae8a6e5-8f98-46c5-a50f-caff839c0df5/installed/The Boss.app",
+  "appAsarSha256": "8a760df9ced70053b54df0ac7659d195f88e124f4f771eee790881575c61cffa",
+  "sidecarSha256": "2cf4fdb84a71eb864996b9a092559bdaae353201f82a966e82de1ad26ef577e1",
+  "bossfangSha256": "20b060d6b44695169531e35c72d52e54a72dad374fa2a45931aed182bea7a720",
+  "nativeIntegrity": {
+    "method": "production-signature-aware-payload-validator",
+    "originalPayloadSha256": "1f5f14e0165e271aaeabe3c851acf76d5fe0a3199438217a55643d6eb519a67f",
+    "installedSignedSha256": "2cf4fdb84a71eb864996b9a092559bdaae353201f82a966e82de1ad26ef577e1",
+    "archiveSha256": "969e1d59d9f90a27e4a50a5defd65949a86d570903db146ece8ba9c25c7d161b",
+    "status": "passed",
+    "runtimeProbe": "not-performed"
+  },
+  "uarSource": "74194623b17e5db127534b0f0469f8557794d4bc",
+  "installation": "copied-from-actual-local-DMG-into-disposable-directory",
+  "mountedImageDetached": true,
+  "finishedAt": "2026-10-11T00:54:34.892Z"
+}
