@@ -15,6 +15,8 @@ mod observation;
 mod storage;
 #[cfg(feature = "uar-driver")]
 pub(crate) mod workflow;
+#[cfg(feature = "uar-driver")]
+pub(crate) mod chat;
 #[cfg(not(feature = "uar-driver"))]
 pub fn router() -> axum::Router<Arc<AppState>> {
     axum::Router::new().route("/uar/jobs/{job_id}/admission", axum::routing::post(|| async {
@@ -45,6 +47,10 @@ pub(crate) mod enabled {
     use serde::Deserialize;
     pub fn router() -> axum::Router<Arc<AppState>> {
         axum::Router::new()
+            .route("/agents/{id}/uar-target", axum::routing::get(super::chat::config::get).put(super::chat::config::save))
+            .route("/agents/{id}/uar-chat/turns", axum::routing::get(super::chat::list).post(super::chat::start))
+            .route("/agents/{id}/uar-chat/resume", axum::routing::post(super::chat::turns::resume))
+            .route("/agents/{id}/uar-chat/cancel", axum::routing::post(super::chat::stop))
             .route("/uar/delegations", axum::routing::post(admit))
             .route("/uar/jobs/{job_id}/admission", axum::routing::post(super::job_mapping::admit))
             .route("/uar/connections", axum::routing::get(super::connections))
@@ -104,7 +110,7 @@ pub(crate) mod enabled {
         api_user: Option<Extension<AuthenticatedApiUser>>,
         Json(admission): Json<UarRunAdmission>,
     ) -> Response {
-        admit_source(state, api_user, admission, false, None).await
+        admit_source(state, api_user, admission, false, None, None).await
     }
 
     pub(super) async fn admit_source(
@@ -113,6 +119,7 @@ pub(crate) mod enabled {
         mut admission: UarRunAdmission,
         inline_diagnostic: bool,
         workflow: Option<librefang_types::uar_run::UarWorkflowCorrelation>,
+        chat: Option<librefang_types::uar_run::UarChatCorrelation>,
     ) -> Response {
         let Some(verified_user) = api_user.as_ref() else {
             return api_error(
@@ -184,11 +191,13 @@ pub(crate) mod enabled {
             Err(error) => return client_error(error),
         };
         pending.workflow = workflow;
+        pending.chat = chat;
+        if pending.chat.is_some() && pending.created_at.is_none() { pending.created_at = Some(chrono::Utc::now().to_rfc3339()); }
         let pending = match persist_initial(
             &state,
             A2aTask {
                 id: admission.boss_task_id.clone(),
-                session_id: None,
+                session_id: pending.chat.as_ref().map(|chat| chat.session_id.clone()),
                 status: librefang_kernel::a2a::A2aTaskStatus::Submitted.into(),
                 messages: Vec::new(),
                 artifacts: Vec::new(),
@@ -203,7 +212,9 @@ pub(crate) mod enabled {
         match client.admit(&admission, &prepared, &pending).await {
             Ok(mut projection) => {
                 projection.workflow = pending.workflow;
-                if projection.workflow.is_some() { projection.cursor = 0; }
+                projection.chat = pending.chat;
+                if projection.created_at.is_none() {projection.created_at = pending.created_at;}
+                if projection.workflow.is_some() || projection.chat.is_some() { projection.cursor = 0; }
                 saved_view(&state, projection, StatusCode::CREATED)
             }
             Err(error) if outcome_uncertain(&error) => {

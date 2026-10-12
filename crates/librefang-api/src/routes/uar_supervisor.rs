@@ -161,6 +161,8 @@ pub(crate) struct ConnectRequest {
     bearer: Option<String>,
     workspace_id: Option<String>,
     delegated_host_contexts: Option<Vec<librefang_types::uar_run::UarDelegatedHostContext>>,
+    #[cfg(feature = "uar-driver")]
+    host_context_resolver: Option<librefang_llm_drivers::drivers::uar::HostContextResolver>,
 }
 
 #[utoipa::path(post, path = "/api/uar/connect", tag = "uar", request_body = crate::types::JsonObject,
@@ -283,6 +285,10 @@ pub(crate) async fn uar_connect(
                 }
                 #[cfg(not(feature = "uar-driver"))]
                 let _ = contexts;
+            }
+            #[cfg(feature = "uar-driver")]
+            if let Err(error) = librefang_llm_drivers::drivers::uar::configure_host_context_resolver(request.host_context_resolver) {
+                return operator_error(StatusCode::BAD_REQUEST, error);
             }
             Json(operator_status(&state).await).into_response()
         }

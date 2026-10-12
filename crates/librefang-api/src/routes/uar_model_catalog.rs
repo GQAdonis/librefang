@@ -49,6 +49,10 @@ fn rows(catalog: &Value) -> Vec<Value> {
     if let Some(data) = catalog.get("data").and_then(Value::as_array) {
         return data
             .iter()
+            // Full-agent targets belong to the explicit delegation selector,
+            // never to the legacy inference-only driver/model field.
+            .filter(|model| model.pointer("/uar/kind").and_then(Value::as_str) != Some("agent")
+                && model.pointer("/uar/available").and_then(Value::as_bool) != Some(false))
             .filter_map(|model| {
                 model
                     .get("id")
@@ -73,11 +77,10 @@ fn rows(catalog: &Value) -> Vec<Value> {
                         if detail.get("enabled").and_then(Value::as_bool) != Some(true) {
                             return None;
                         }
-                        let id = if id.starts_with(&format!("{provider_id}/")) {
-                            id.clone()
-                        } else {
-                            format!("{provider_id}/{id}")
-                        };
+                        // UAR consumes the first segment as the provider and
+                        // compares the remainder to the opaque registered ID.
+                        // A served alias may itself include that same prefix.
+                        let id = format!("{provider_id}/{id}");
                         Some(row(id, detail))
                     })
                 })

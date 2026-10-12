@@ -42,7 +42,7 @@ use crate::llm_driver::{
 
 #[path = "uar_delegated_host_context.rs"]
 mod delegated_host_context;
-pub use delegated_host_context::{configure_delegated_host_contexts, delegated_host_contexts};
+pub use delegated_host_context::{configure_delegated_host_contexts, delegated_host_contexts, HostContextResolver, configure_host_context_resolver, resolve_chat_host_context};
 
 // ---------------------------------------------------------------------------
 // Driver struct
@@ -59,6 +59,7 @@ struct PublishedBinding {
     generation: u64,
     workspace_id: Option<String>,
     delegated_host_contexts: Vec<librefang_types::uar_run::UarDelegatedHostContext>,
+    host_context_resolver: Option<HostContextResolver>,
 }
 
 /// Resolved bearer credentials kept only in process memory. Configuration and
@@ -190,6 +191,7 @@ pub fn configure_supervised_instance(instance: Result<UarServiceInstanceConfig, 
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.credentials = UarResolvedCredentials::default();
     guard.delegated_host_contexts.clear();
+    guard.host_context_resolver = None;
     guard.credential_error = None;
     match instance {
         Ok(instance) => {
@@ -218,6 +220,7 @@ pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentia
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.delegated_host_contexts.clear();
+    guard.host_context_resolver = None;
     match credentials {
         Ok(credentials) => {
             guard.credentials = credentials;
@@ -242,14 +245,19 @@ pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentia
     guard.generation = guard.generation.wrapping_add(1);
 }
 
+/// Read only the authenticated selected workspace, never model-supplied scope.
+pub fn selected_workspace_id() -> Option<String> {
+    binding_cell().read().unwrap_or_else(std::sync::PoisonError::into_inner).workspace_id.clone()
+}
+
 /// Set the authenticated workspace attached to private connection credentials.
-/// It is sent as scope context, never as a caller-asserted principal.
 pub fn configure_connection_workspace(workspace_id: Option<String>) {
     let mut guard = binding_cell()
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.workspace_id = workspace_id;
     guard.delegated_host_contexts.clear();
+    guard.host_context_resolver = None;
     guard.admitted = None;
     guard.generation = guard.generation.wrapping_add(1);
 }
@@ -272,6 +280,7 @@ pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Opt
     guard.endpoint = endpoint.map(|value| value.trim_end_matches('/').to_string());
     if guard.endpoint.is_none() || bearer.is_some() {
         guard.delegated_host_contexts.clear();
+    guard.host_context_resolver = None;
     }
     if let Some(bearer) = bearer {
         guard.credentials = UarResolvedCredentials::delegated(bearer);

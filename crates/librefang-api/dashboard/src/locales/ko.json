@@ -4618,5 +4618,32 @@
     "expires": "만료 시각 {{at}}",
     "unsupported": "지원되지 않는 의미 체계: {{values}}",
     "unsupported_connection": "선택된 연결은 전체 하네스 위임 기능을 제공하지 않습니다."
+  },
+  "uar_chat": {
+    "target": "UAR 실행 대상",
+    "search": "에이전트 및 모델 검색",
+    "choose": "UAR 실행 대상 선택",
+    "group_agent": "설치된 에이전트",
+    "group_model": "기본 에이전트로 실행할 모델",
+    "unavailable": "사용할 수 없음",
+    "saved_unavailable": "저장된 실행 대상을 사용할 수 없습니다. 해당 모델을 설정하거나 준비된 대상을 선택하세요.",
+    "advanced": "고급 모델 재정의",
+    "model": "실제 사용 모델",
+    "configured_model": "에이전트에 설정된 모델 사용",
+    "override_policy": "이 설치 바인딩에서 허용되고 검증된 모델만 사용할 수 있습니다. 모델을 재정의해도 공급자가 자동으로 전환되지 않습니다.",
+    "instance": "UAR 인스턴스",
+    "agent": "에이전트",
+    "workspace": "작업 공간",
+    "memory": "공유 메모리",
+    "memory_scope": "허용된 작업 공간 범위 · 에이전트의 비공개 메모리와 별도",
+    "selected_workspace": "선택된 BossFang 작업 공간",
+    "not_configured": "설정되지 않음",
+    "ownership": "UAR이 선택된 에이전트, 도구 및 승인을 처리합니다. 변경 사항은 새 대화에 적용되며 기존 실행은 원래 바인딩을 유지합니다.",
+    "save": "UAR 실행 대상 저장",
+    "configure": "UAR 연결 및 모델 설정",
+    "saved": "실행 대상이 저장되었습니다",
+    "empty": "준비된 대상이 없습니다. The Boss → 설정 → BossFang에서 모델을 설정하고 검증한 후 새로 고침하세요.",
+    "legacy": "이 에이전트는 기존 추론 경로를 사용합니다. 실행 대상을 저장하면 전체 UAR 에이전트 실행이 명시적으로 활성화됩니다.",
+    "resume": "원래 실행 모니터링 재개"
   }
 }

@@ -620,3 +620,9 @@ export const chatCommandKeys = {
   lists: () => [...chatCommandKeys.all, "list"] as const,
   list: () => [...chatCommandKeys.lists()] as const,
 };
+
+export const uarChatKeys = {
+  all: ["uarChat"] as const,
+  target: (agentId: string) => [...uarChatKeys.all, "target", agentId] as const,
+  turns: (agentId: string, sessionId?: string | null) => [...uarChatKeys.all, "turns", agentId, sessionId ?? null] as const,
+};

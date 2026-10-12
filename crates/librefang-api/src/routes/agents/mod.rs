@@ -378,6 +378,7 @@ pub(crate) fn enrich_agent_json(
         "mode": e.mode,
         "created_at": e.created_at.to_rfc3339(),
         "last_active": e.last_active.to_rfc3339(),
+        "uar_target": e.manifest.metadata.get("bossfang_uar_chat_target_v1"),
         "model_provider": provider,
         "model_name": model,
         "model_tier": tier,

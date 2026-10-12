@@ -7,7 +7,7 @@ import type { TFunction } from "i18next";
 import type { ApiActionResponse, ProviderItem } from "../api";
 import { isCliProvider, isProviderAvailable, isProviderConfigured, isProviderKeyRejected, isProviderOffline } from "../lib/status";
 import { useCredentialPools, useProviders, useProviderStatus } from "../lib/queries/providers";
-import { useUarModels, useUarStatus } from "../lib/queries/uar";
+import { useUarStatus } from "../lib/queries/uar";
 import type { CredentialPoolStatus, CredentialPoolKeySnapshot, ModelOverrides } from "../api";
 import { useModels, useModelOverrides } from "../lib/queries/models";
 import { useUpdateModelOverrides } from "../lib/mutations/models";
@@ -1678,7 +1678,7 @@ function UarControlPanel() {
   const statusQuery = useUarStatus();
   const status = statusQuery.data;
   const healthy = status?.state === "healthy";
-  const modelsQuery = useUarModels(healthy);
+  const modelsQuery = useModels({ provider: "uar", available: true }, { enabled: healthy });
   const startMutation = useStartUar();
   const stopMutation = useStopUar();
   const restartMutation = useRestartUar();
@@ -1688,9 +1688,7 @@ function UarControlPanel() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const modelOptions = useMemo(
-    () => Object.entries(modelsQuery.data ?? {}).filter(([, detail]) => detail.configured === true).flatMap(([provider, detail]) =>
-      Object.entries(detail.models ?? {}).filter(([, model]) => typeof model === "object" && model !== null && "enabled" in model && model.enabled === true).map(([modelId]) =>
-        modelId.includes("/") ? modelId : `${provider}/${modelId}`)),
+    () => (modelsQuery.data?.models ?? []).map(model => model.id),
     [modelsQuery.data],
   );
 
@@ -1724,6 +1722,7 @@ function UarControlPanel() {
   const busy = startMutation.isPending || stopMutation.isPending || restartMutation.isPending;
   const initialStatusLoading = statusQuery.isLoading && !status;
   const statusError = statusQuery.error ? getErrorMessage(statusQuery.error) : null;
+  const catalogError = modelsQuery.data?.uar_catalog?.error;
   const badgeVariant: BadgeVariant = healthy
     ? "success"
     : status?.state === "starting"
@@ -1846,12 +1845,12 @@ function UarControlPanel() {
         </span>
       </div>
 
-      {(actionError || statusError || modelsQuery.error || status?.last_error || status?.compatibility?.message) && (
+      {(actionError || statusError || modelsQuery.error || catalogError || status?.last_error || status?.compatibility?.message) && (
         <div className="rounded-lg border border-error/30 bg-error/5 p-3 text-xs text-error" role="alert">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span className="break-all">
-              {actionError || statusError || (modelsQuery.error ? getErrorMessage(modelsQuery.error) : null) || status?.last_error || `${status?.compatibility?.code}: ${status?.compatibility?.message}`}
+              {actionError || statusError || (modelsQuery.error ? getErrorMessage(modelsQuery.error) : null) || catalogError || status?.last_error || `${status?.compatibility?.code}: ${status?.compatibility?.message}`}
             </span>
           </div>
         </div>

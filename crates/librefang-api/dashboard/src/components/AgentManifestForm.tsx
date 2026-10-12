@@ -68,6 +68,7 @@ export interface ManifestCatalogEntry {
 }
 
 interface AgentManifestFormProps {
+  modelSelector?: React.ReactNode;
   value: ManifestFormState;
   onChange: (next: ManifestFormState) => void;
   providers: { name: string }[];
@@ -150,6 +151,7 @@ export function AgentManifestForm({
   mcpCatalog,
   nameField = "editable",
   routingInertReason,
+  modelSelector,
 }: AgentManifestFormProps) {
   const { t } = useTranslation();
 
@@ -297,7 +299,7 @@ export function AgentManifestForm({
       </Section>
 
       <Section title={t("agents.form.model")}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className={modelSelector ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
           <Field
             label={t("agents.form.provider")}
             hint={t("agents.form.inherit_default")}
@@ -305,6 +307,7 @@ export function AgentManifestForm({
           >
             <select
               value={value.model.provider}
+              disabled={!!modelSelector}
               onChange={(e) => updateModel({ provider: e.target.value, model: "" })}
               className={inputClass}
             >
@@ -327,7 +330,7 @@ export function AgentManifestForm({
             hint={t("agents.form.inherit_default")}
             invalid={invalidFields.has("model.model")}
           >
-            {filteredModels.length > 0 ? (
+            {modelSelector ?? (filteredModels.length > 0 ? (
               <select
                 value={value.model.model}
                 onChange={(e) => updateModel({ model: e.target.value })}
@@ -348,7 +351,7 @@ export function AgentManifestForm({
                 placeholder={t("agents.form.model_id_placeholder")}
                 className={inputClass}
               />
-            )}
+            ))}
           </Field>
         </div>
         <Field label={t("agents.form.system_prompt")}>

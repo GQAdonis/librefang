@@ -87,6 +87,8 @@ impl UarRunClient {
             terminal_at: None,
             links: Map::new(),
             workflow: None,
+            chat: None,
+            effective_target: None,
             output: None,
             pending_approval: None,
         };

@@ -84,6 +84,22 @@ pub struct UarWorkflowCorrelation {
     pub step_name: String,
 }
 
+/// An actual dashboard/API conversation turn, not a synthetic workflow job.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UarChatCorrelation {
+    pub agent_id: String,
+    pub session_id: String,
+    pub turn_id: String,
+    pub input: String,
+    pub target_id: String,
+    #[serde(default)]
+    pub model_override: Option<String>,
+    /// Frozen native prefix from the first explicitly converted turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_history: Option<Vec<serde_json::Value>>,
+}
+
 /// One non-secret compiler or activation diagnostic retained with a definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,6 +204,11 @@ pub struct UarDelegatedRunProjection {
     pub links: serde_json::Map<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow: Option<UarWorkflowCorrelation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat: Option<UarChatCorrelation>,
+    /// Receiver-reported effective target, separate from the requested UI selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_target: Option<serde_json::Value>,
     /// Actual UAR message deltas, retained for the owning ordinary workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,

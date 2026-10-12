@@ -63,6 +63,7 @@ function last(values: StepAgentBindingValue[]): StepAgentBindingValue {
 const SKILLS = ["browser-automation", "pdf-extract"];
 
 const EMPTY: StepAgentBindingValue = {
+  uarBound: false,
   source: "instance",
   agentId: "",
   agentName: "",

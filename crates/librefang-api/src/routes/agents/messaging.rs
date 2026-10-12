@@ -93,6 +93,11 @@ pub async fn send_message(
         );
     }
 
+    #[cfg(feature = "uar-driver")]
+    if crate::routes::uar_delegation::chat::configured(&state, agent_id) {
+        return crate::routes::uar_delegation::chat::http(state, agent_id, api_user, req).await;
+    }
+
     // Reject messages when the agent's provider has no API key configured
     {
         let registry = state.kernel.agent_registry();
@@ -131,6 +136,11 @@ pub async fn send_message(
                 }
             }
         }
+    }
+
+    #[cfg(feature = "uar-driver")]
+    if crate::routes::uar_delegation::chat::configured(&state, agent_id) {
+        return crate::routes::uar_delegation::chat::stream(state, agent_id, api_user, req).await;
     }
 
     // Parse optional explicit session_id override from the request body.

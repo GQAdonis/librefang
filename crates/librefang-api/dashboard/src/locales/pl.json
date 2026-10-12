@@ -4599,5 +4599,32 @@
     "expires": "Wygasa {{at}}",
     "unsupported": "Nieobsługiwane semantyki: {{values}}",
     "unsupported_connection": "Wybrane połączenie nie deklaruje obsługi delegowania pełnego środowiska wykonania."
+  },
+  "uar_chat": {
+    "target": "Cel UAR",
+    "search": "Szukaj agentów i modeli",
+    "choose": "Wybierz cel UAR",
+    "group_agent": "Zainstalowani agenci",
+    "group_model": "Modele uruchamiane przez domyślnego agenta",
+    "unavailable": "Niedostępne",
+    "saved_unavailable": "Zapisany cel jest niedostępny. Skonfiguruj jego model lub wybierz gotowy cel.",
+    "advanced": "Zaawansowane nadpisanie modelu",
+    "model": "Model używany do wykonania",
+    "configured_model": "Użyj modelu skonfigurowanego dla agenta",
+    "override_policy": "Dostępne są tylko zweryfikowane modele dozwolone przez to zainstalowane powiązanie. Nadpisanie modelu nigdy nie włącza automatycznego przełączania dostawcy.",
+    "instance": "Instancja UAR",
+    "agent": "Agent",
+    "workspace": "Obszar roboczy",
+    "memory": "Pamięć współdzielona",
+    "memory_scope": "Dozwolony zakres obszaru roboczego · oddzielony od prywatnej pamięci agenta",
+    "selected_workspace": "Wybrany obszar roboczy BossFang",
+    "not_configured": "Nie skonfigurowano",
+    "ownership": "UAR wykonuje wybranego agenta, jego narzędzia i obsługuje zatwierdzenia. Zmiany dotyczą nowej rozmowy; istniejące wykonania zachowują pierwotne powiązanie.",
+    "save": "Zapisz cel UAR",
+    "configure": "Skonfiguruj połączenie UAR i modele",
+    "saved": "Cel zapisany",
+    "empty": "Brak gotowych celów. Skonfiguruj i zweryfikuj model w The Boss → Ustawienia → BossFang, a następnie odśwież.",
+    "legacy": "Ten agent korzysta ze starszej ścieżki wnioskowania. Zapisanie celu jawnie włącza pełne wykonanie agenta przez UAR.",
+    "resume": "Wznów obserwację pierwotnego wykonania"
   }
 }

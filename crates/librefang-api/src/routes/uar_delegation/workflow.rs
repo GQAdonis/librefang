@@ -10,10 +10,10 @@ pub(crate) async fn admit(
     admission: UarRunAdmission,
     workflow: UarWorkflowCorrelation,
 ) -> Result<UarDelegatedRunProjection, String> {
-    projection_response(super::enabled::admit_source(state, user, admission, false, Some(workflow)).await).await
+    projection_response(super::enabled::admit_source(state, user, admission, false, Some(workflow), None).await).await
 }
 
-async fn projection_response(response: Response) -> Result<UarDelegatedRunProjection, String> {
+pub(super) async fn projection_response(response: Response) -> Result<UarDelegatedRunProjection, String> {
     let status = response.status();
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await.map_err(|error| format!("delegation response body: {error}"))?;
@@ -40,11 +40,16 @@ pub(crate) async fn consume(
 ) -> Result<UarDelegatedRunProjection, String> {
     use librefang_llm_drivers::drivers::uar_run::UarRunClient;
     let client = state.uar_run_control.as_ref();
+    let _observer = if projection.chat.is_some() {
+        match client.claim_observation(&projection.boss_task_id) {Some(owner)=>Some(owner),None=>return retained_projection(state, &projection.boss_task_id).map_err(|error| error.to_string())}
+    } else {None};
     let current = if projection.uar_task_id.is_none() {
         client.resolve(projection).await.map_err(|error| error.to_string())?
     } else {
         projection.clone()
     };
+    let mut current = current;
+    if current.chat.is_some() { current.remote_diagnostics.retain(|value| value["code"] != "uar_chat_observation_interrupted"); }
     let current = persist_observation(state, current).map_err(|error| error.to_string())?;
     let task_id = current.boss_task_id.clone();
     let observed = client.observe_retained(&current, current.cursor, |event| {

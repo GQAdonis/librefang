@@ -104,6 +104,7 @@ struct Transport {
 
 /// Dedicated control client for a UAR-owned complete run.
 pub struct UarRunClient {
+    observation_owners: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
     client: reqwest::Client,
     request_timeout: Duration,
     retained_connections:
@@ -120,7 +121,17 @@ impl Default for UarRunClient {
     }
 }
 
+/// Ephemeral observer ownership only; durable execution stays in UAR and the
+/// saved projection. Dropping an observer never cancels or re-admits work.
+pub struct UarObservationOwner { owners: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>, task: String }
+impl Drop for UarObservationOwner {
+    fn drop(&mut self) { self.owners.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&self.task); }
+}
 impl UarRunClient {
+    pub fn claim_observation(&self, task: &str) -> Option<UarObservationOwner> {
+        if !self.observation_owners.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(task.into()) {return None;}
+        Some(UarObservationOwner {owners: self.observation_owners.clone(),task:task.into()})
+    }
     #[must_use]
     pub fn new(request_timeout: Duration) -> Self {
         let client = reqwest::Client::builder()
@@ -131,6 +142,7 @@ impl UarRunClient {
         Self {
             client,
             request_timeout,
+            observation_owners: Default::default(),
             retained_connections: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }

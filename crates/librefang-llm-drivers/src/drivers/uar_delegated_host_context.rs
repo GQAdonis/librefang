@@ -24,3 +24,31 @@ pub fn delegated_host_contexts() -> Vec<UarDelegatedHostContext> {
     if guard.admitted.is_none() { return Vec::new(); }
     guard.delegated_host_contexts.clone()
 }
+
+/// Private host callback. Never serialized into dashboard state or model input.
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostContextResolver { url: String, token: String }
+
+pub fn configure_host_context_resolver(resolver: Option<HostContextResolver>) -> Result<(), String> {
+    if let Some(value) = &resolver {
+        let url = reqwest::Url::parse(&value.url).map_err(|_| "invalid host context resolver")?;
+        if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || value.token.is_empty()
+            || !url.username().is_empty() || url.password().is_some() {
+            return Err("host context resolver must be an authenticated loopback callback".into());
+        }
+    }
+    super::binding_cell().write().unwrap_or_else(std::sync::PoisonError::into_inner).host_context_resolver = resolver;
+    Ok(())
+}
+
+pub async fn resolve_chat_host_context(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    let resolver = super::binding_cell().read().unwrap_or_else(std::sync::PoisonError::into_inner)
+        .host_context_resolver.clone().ok_or("uar_host_context_resolver_unavailable")?;
+    let response = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build()
+        .map_err(|_| "uar_host_context_transport_failed")?
+        .post(&resolver.url).bearer_auth(&resolver.token).json(&request).send().await
+        .map_err(|_| "uar_host_context_unavailable")?;
+    if !response.status().is_success() { return Err("uar_host_context_refused".into()); }
+    response.json().await.map_err(|_| "uar_host_context_invalid".into())
+}

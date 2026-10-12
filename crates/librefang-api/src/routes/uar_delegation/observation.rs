@@ -14,12 +14,12 @@ pub(super) async fn observe(
         if event.cursor <= projection.cursor {
             continue;
         }
-        if current.workflow.is_some() && event.data.get("code").and_then(serde_json::Value::as_str) == Some("STREAM_GAP") {
+        if (current.workflow.is_some() || current.chat.is_some()) && event.data.get("code").and_then(serde_json::Value::as_str) == Some("STREAM_GAP") {
             current.recovery_state = "recovery_unsupported".into();
             current.remote_diagnostics.push(serde_json::json!({"code":"STREAM_GAP"}));
         }
         match event.event_type.as_str() {
-            "agui.message.delta" if current.workflow.is_some() => {
+            "agui.message.delta" if current.workflow.is_some() || current.chat.is_some() => {
                 if let Some(text) = event.data.pointer("/delta/text").and_then(serde_json::Value::as_str) {
                     current.output.get_or_insert_with(String::new).push_str(text);
                 }

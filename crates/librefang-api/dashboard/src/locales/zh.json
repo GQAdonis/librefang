@@ -4619,5 +4619,32 @@
     "expires": "过期时间 {{at}}",
     "unsupported": "不支持的语义：{{values}}",
     "unsupported_connection": "已选连接未声明支持完整执行框架委派。"
+  },
+  "uar_chat": {
+    "target": "UAR 执行目标",
+    "search": "搜索智能体和模型",
+    "choose": "选择 UAR 执行目标",
+    "group_agent": "已安装的智能体",
+    "group_model": "通过默认智能体运行的模型",
+    "unavailable": "不可用",
+    "saved_unavailable": "已保存的目标不可用。请配置其模型，或选择已就绪的目标。",
+    "advanced": "高级模型覆盖",
+    "model": "实际使用的模型",
+    "configured_model": "使用智能体配置的模型",
+    "override_policy": "仅可使用此已安装绑定授权且已验证的模型。覆盖模型不会启用自动切换提供商。",
+    "instance": "UAR 实例",
+    "agent": "智能体",
+    "workspace": "工作区",
+    "memory": "共享记忆",
+    "memory_scope": "已授权的工作区范围 · 与智能体私有记忆分离",
+    "selected_workspace": "已选择的 BossFang 工作区",
+    "not_configured": "未配置",
+    "ownership": "UAR 负责执行所选智能体、工具和审批流程。更改适用于新对话；现有运行保留原始绑定。",
+    "save": "保存 UAR 执行目标",
+    "configure": "配置 UAR 连接和模型",
+    "saved": "目标已保存",
+    "empty": "没有已就绪的目标。请在 The Boss → 设置 → BossFang 中配置并验证模型，然后刷新。",
+    "legacy": "此智能体使用旧版推理路径。保存目标后，将明确启用完整的 UAR 智能体执行。",
+    "resume": "恢复观察原始运行"
   }
 }

@@ -6872,3 +6872,40 @@ export function approveUarDelegation(input: { bossTaskId: string; approvalId: st
 export function cancelUarDelegation(bossTaskId: string): Promise<UarDelegatedRunProjection> {
   return post(`/api/uar/delegations/${encodeURIComponent(bossTaskId)}/cancel`, {});
 }
+
+export interface UarChatTarget {
+  targetId: string; instanceId: string; workspaceId: string; bindingId: string;
+  bindingRevision: number; definition: UarWorkflowTarget["definition"]; modelOverride?: string | null;
+}
+export interface UarTargetCard {
+  id: string;
+  uar: {
+    version: number; kind: "agent" | "model"; display_name: string; agent_id?: string;
+    provider_id?: string; model_id?: string; available: boolean; delegation_available: boolean;
+    reason?: string; delegation_reason?: string; verified_at?: string; allowed_model_overrides?: string[];
+  };
+}
+export interface UarChatTargetResult {
+  target: UarChatTarget | null;
+  catalog: { data: UarTargetCard[] } | null;
+  error: string | null;
+}
+export function getUarChatTarget(agentId: string): Promise<UarChatTargetResult> {
+  return get(`/api/agents/${encodeURIComponent(agentId)}/uar-target`);
+}
+export function saveUarChatTarget(input: { agentId: string; targetId: string; modelOverride?: string | null }): Promise<{ target: UarChatTarget }> {
+  return put(`/api/agents/${encodeURIComponent(input.agentId)}/uar-target`, {
+    targetId: input.targetId, modelOverride: input.modelOverride ?? null,
+  });
+}
+export type UarChatTurn = UarDelegatedRunProjection & {
+  effectiveTarget?: { provider_id: string; model_id: string; agent_id: string };
+  chat: { agentId: string; sessionId: string; turnId: string; input: string; targetId: string };
+};
+export function getUarChatTurns(agentId: string, sessionId?: string | null): Promise<{ sessionId: string; turns: UarChatTurn[] }> {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  return get(`/api/agents/${encodeURIComponent(agentId)}/uar-chat/turns${query}`);
+}
+export function resumeUarChat(input: { agentId: string; sessionId?: string | null }): Promise<{ observationRequested: boolean }> {
+  return post(`/api/agents/${encodeURIComponent(input.agentId)}/uar-chat/resume`, { sessionId: input.sessionId ?? null });
+}

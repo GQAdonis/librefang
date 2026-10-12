@@ -1375,6 +1375,25 @@ async fn handle_text_message(
                 .await;
             }
 
+            #[cfg(feature = "uar-driver")]
+            if crate::routes::uar_delegation::chat::configured(state, agent_id) {
+                use crate::routes::uar_delegation::chat::{transport, turns::TurnRequest};
+                let request = TurnRequest { message: content,
+                    session_id: client.explicit_session.map(|id| id.to_string()),
+                    turn_id: message_id.as_deref().map(|id| uuid::Uuid::parse_str(id)
+                        .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, id.as_bytes())))
+                        .unwrap_or_else(uuid::Uuid::new_v4).to_string() };
+                match transport::events(Arc::clone(state), agent_id,
+                    client.authenticated_user.clone().map(axum::Extension), request).await {
+                    Ok(mut events) => while let Some(event) = events.recv().await {
+                        send_json_or_close(sender, &stamp_message_id(event, message_id.as_deref())).await?;
+                    },
+                    Err(error) => { send_json_or_close(sender, &stamp_message_id(
+                        serde_json::json!({"type":"error","content":error}),message_id.as_deref())).await?; }
+                }
+                return Ok(());
+            }
+
             // Reject messages when provider API key is missing
             {
                 let registry = state.kernel.agent_registry();
@@ -1925,6 +1944,15 @@ async fn handle_text_message(
         "command" => {
             let cmd = parsed["command"].as_str().unwrap_or("");
             let args = parsed["args"].as_str().unwrap_or("");
+            #[cfg(feature = "uar-driver")]
+            if cmd == "stop" && crate::routes::uar_delegation::chat::configured(state, agent_id) {
+                let response = crate::routes::uar_delegation::chat::stop(axum::extract::State(Arc::clone(state)),
+                    axum::extract::Path(agent_id.to_string()), client.authenticated_user.clone().map(axum::Extension),
+                    axum::Json(crate::routes::uar_delegation::chat::turns::ConversationQuery {
+                        session_id:client.explicit_session.map(|id|id.to_string()) })).await;
+                return send_json_or_close(sender,&serde_json::json!({"type":"command_result","command":"stop",
+                    "message":if response.status().is_success(){"Cancellation requested"}else{"UAR cancellation could not be confirmed"}})).await;
+            }
             let response = handle_command(sender, state, agent_id, cmd, args, verbose).await;
             send_json_or_close(sender, &response).await?;
         }

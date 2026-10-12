@@ -4621,5 +4621,32 @@
     "expires": "Expires at {{at}}",
     "unsupported": "Unsupported semantics: {{values}}",
     "unsupported_connection": "The selected connection does not advertise full-harness delegation."
+  },
+  "uar_chat": {
+    "target": "UAR target",
+    "search": "Search agents and models",
+    "choose": "Choose a UAR target",
+    "group_agent": "Installed agents",
+    "group_model": "Models through the default agent",
+    "unavailable": "Unavailable",
+    "saved_unavailable": "The saved target is unavailable. Configure its model or choose a ready target.",
+    "advanced": "Advanced model override",
+    "model": "Effective model",
+    "configured_model": "Use agent’s configured model",
+    "override_policy": "Only verified models authorized by this installed binding are available. An override never enables automatic provider fallback.",
+    "instance": "UAR instance",
+    "agent": "Agent",
+    "workspace": "Workspace",
+    "memory": "Shared memory",
+    "memory_scope": "Authorized workspace scope · separate from private agent memory",
+    "selected_workspace": "Selected BossFang workspace",
+    "not_configured": "Not configured",
+    "ownership": "UAR runs the selected agent, tools and approvals. Changes apply to a new conversation; existing runs keep their original binding.",
+    "save": "Save UAR target",
+    "configure": "Configure UAR connection and models",
+    "saved": "Target saved",
+    "empty": "No ready targets. Configure and verify a model in The Boss → Settings → BossFang, then refresh.",
+    "legacy": "This agent uses the legacy inference route. Saving a target explicitly enables complete UAR agent execution.",
+    "resume": "Resume observing original run"
   }
 }

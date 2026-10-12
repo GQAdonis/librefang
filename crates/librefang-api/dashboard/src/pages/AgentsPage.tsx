@@ -1,3 +1,4 @@
+import { UarTargetSettings } from "../components/UarTargetSettings";
 import { UarCatalogNotice } from "../components/UarCatalogNotice";
 import { formatRelativeTime } from "../lib/datetime";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -3234,7 +3235,8 @@ export function AgentsPage() {
               <ChannelsSection agentId={detailAgent.id} />
 
               {/* Model */}
-              {detailAgent.model && (
+              {detailAgent.model?.provider === "uar" && <UarTargetSettings agentId={detailAgent.id} />}
+              {detailAgent.model && detailAgent.model.provider !== "uar" && (
                 <section>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-semibold flex items-center gap-2">
@@ -3821,6 +3823,7 @@ export function AgentsPage() {
                 <UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={showCreate ? formState.model.model : manifestEditorFormState.model.model} modelIds={formModelsQuery.data?.models.map(model => model.id)} />
                 <ManifestEditorForm
                   agent={detailAgent}
+                  modelSelector={manifestEditorFormState.model.provider === "uar" ? <UarTargetSettings agentId={detailAgent.id} /> : undefined}
                   value={manifestEditorFormState}
                   onChange={setManifestEditorFormState}
                   providers={formProviderOptions}

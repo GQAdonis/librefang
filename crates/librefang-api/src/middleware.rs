@@ -600,7 +600,8 @@ fn user_role_allows_request(role: UserRole, method: &axum::http::Method, path: &
     // User role: only specific POST endpoints are allowed.
     if *method == axum::http::Method::POST {
         let agent_message = path.starts_with("/api/agents/")
-            && (path.ends_with("/message") || path.ends_with("/message/stream"));
+            && (path.ends_with("/message") || path.ends_with("/message/stream")
+                || path.ends_with("/uar-chat/turns") || path.ends_with("/uar-chat/cancel") || path.ends_with("/uar-chat/resume"));
         let agent_clone = path.starts_with("/api/agents/") && path.ends_with("/clone");
         // Anchor the approval suffixes to the `/api/approvals/` prefix. These
         // suffixes are meant only for tool-call approval actions; left

@@ -43,7 +43,7 @@ export function UarWorkflowStepTarget({ value, onChange }: {
         <label key={key} className="block space-y-1">
           <span className="text-xs font-semibold">{t(`uar_workflow.${key}`)} <span aria-hidden="true">*</span></span>
           <input value={text} onChange={event => update(event.target.value)} required aria-required="true"
-            data-ui={`uar-workflow-${key.replaceAll("_", "-")}`} className={CANVAS_INPUT_CLASS} />
+            data-ui={`uar-workflow-${key.replace(/_/g, "-")}`} className={CANVAS_INPUT_CLASS} />
         </label>
       ))}
       <section className="rounded-lg border border-border-subtle bg-main p-3 space-y-2"

@@ -506,3 +506,6 @@ export type {
   EffectiveBudget,
   EffectiveChannelToolPolicy,
 } from "../../api";
+
+export { getUarChatTarget, saveUarChatTarget, getUarChatTurns } from "../../api";
+export { resumeUarChat } from "../../api";

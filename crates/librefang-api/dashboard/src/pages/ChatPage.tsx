@@ -1,3 +1,4 @@
+import { UarChatControl } from "../components/UarChatControl";
 import { formatBytes, formatCost, formatNumber } from "../lib/format";
 import { safeStorageGet, safeStorageSet } from "../lib/safeStorage";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -2693,12 +2694,13 @@ function ConnectionBar({ agentName, isLoading, messageCount, onClear, onExport, 
         )}
       </div>
       <div className="flex items-center gap-2">
-        {/* Model switcher */}
+        {/* UAR target controls live in the scoped target panel. */}
         <div className="relative hidden sm:block" ref={modelRef}>
           <button
             onClick={() => { setModelOpen(v => { if (v) { setSelectedProvider(""); setModelSearch(""); } return !v; }); }}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono text-text-dim/50 hover:text-text hover:bg-surface-hover transition-colors truncate max-w-[200px]"
-            title={t("chat.switch_model")}
+            disabled={modelProvider === "uar"}
+            title={t(modelProvider === "uar" ? "uar_chat.target" : "chat.switch_model")}
           >
             <span className="truncate">{optimisticModel ?? modelName ?? t("chat.no_model")}</span>
             <ChevronDown className={`h-2.5 w-2.5 shrink-0 transition-transform ${modelOpen ? "rotate-180" : ""}`} />
@@ -3813,6 +3815,8 @@ export function ChatPage() {
               }}
             />
           )}
+
+          {selectedAgentId && selectedAgent?.model_provider === "uar" && <UarChatControl key={selectedAgentId} agentId={selectedAgentId} sessionId={activeSessionId} />}
 
           {/*
             Message area.

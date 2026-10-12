@@ -37,6 +37,8 @@ pub(super) struct WireReceipt {
     #[serde(default)]
     effective_service_binding: Value,
     #[serde(default)]
+    effective_target: Option<Value>,
+    #[serde(default)]
     diagnostics: Vec<Value>,
     #[serde(default)]
     cancellation: WireCancellation,
@@ -215,6 +217,8 @@ impl WireReceipt {
             terminal_at: self.terminal_at,
             links: self.links,
             workflow: None,
+            chat: None,
+            effective_target: self.effective_target,
             output: None,
             pending_approval: None,
         })
@@ -270,10 +274,13 @@ impl WireReceipt {
         merged.boss_projection_retention = projection.boss_projection_retention;
         merged.delegated_host_context_id.clone_from(&projection.delegated_host_context_id);
         merged.workflow.clone_from(&projection.workflow);
+        merged.chat.clone_from(&projection.chat);
+        if merged.effective_target.is_none() {merged.effective_target.clone_from(&projection.effective_target);}
+        if merged.created_at.is_none() {merged.created_at.clone_from(&projection.created_at);}
         merged.output.clone_from(&projection.output);
         // Workflow output advances only with consumed events. A status receipt's
         // advertised high-water must not skip unread output on a UI lookup.
-        if projection.workflow.is_some() { merged.cursor = projection.cursor; }
+        if projection.workflow.is_some() || projection.chat.is_some() { merged.cursor = projection.cursor; }
         if merged.execution_state == "input_required" {
             merged.pending_approval.clone_from(&projection.pending_approval);
         }
