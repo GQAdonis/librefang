@@ -14,8 +14,10 @@ pub struct ChatTarget {
     pub binding_id: String,
     pub binding_revision: u64,
     pub definition: UarDefinitionIdentity,
+    // Metadata is persisted in agent.toml, which cannot represent JSON null.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_override: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_model: Option<String>,
 }
 #[derive(Deserialize)]
@@ -116,6 +118,11 @@ pub async fn save(
     // until this metadata exists; provider names alone never imply delegation.
     manifest.model.provider = "uar".into();
     manifest.model.model = target.target_id.clone();
+    // Reject non-persistable target metadata before the kernel changes its live
+    // copy: restart reconciles from TOML, not the in-memory registry.
+    if toml::to_string_pretty(&manifest).is_err() {
+        return failure("uar_target_save_failed");
+    }
     match state.kernel.update_manifest(id, manifest) {
         Ok(()) => Json(json!({"target":target})).into_response(),
         Err(_) => failure("uar_target_save_failed"),
