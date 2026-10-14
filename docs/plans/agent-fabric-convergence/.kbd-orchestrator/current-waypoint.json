@@ -2,12 +2,13 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 705,
-  "derivedRevision": 705,
+  "sourceRevision": 709,
+  "derivedRevision": 709,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 466
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 466,
+    "cac7e798-83ff-46eb-872a-c8b819aaad44": 4
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -25,17 +26,17 @@
   "childPointer": null,
   "change": null,
   "currentTask": null,
-  "status": "running",
-  "lifecycle": "running",
+  "status": "cancelled",
+  "lifecycle": "cancelled",
   "stageId": "reflect",
   "stageStatus": "COMPLETE",
   "completionMetric": "implementation",
   "implementationCompleted": 30,
   "implementationTotal": 30,
   "planRevision": 14,
-  "revision": 705,
+  "revision": 709,
   "exactNextCommand": "Closed phase: operator owns remaining manual certification in manual-certification-handoff.md; no automatic approval cycles or implementation dispatch.",
   "nextChange": null,
   "nextTask": null,
-  "updatedAt": "2026-10-11T14:22:53.351631Z"
+  "updatedAt": "2026-10-14T15:55:16.305318Z"
 }

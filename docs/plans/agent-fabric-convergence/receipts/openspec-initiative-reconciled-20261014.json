@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "kind": "initiative-openspec-evidence-reconciliation",
+  "recordedAt": "2026-10-14T15:51:58.028Z",
+  "baselineRepositoryRevision": "2ec0f66ec224ec60fe1b4aaecabbd6f735c73f85",
+  "authority": "Operator requests reconciling older OpenSpec changes against existing evidence, archiving completed work while preserving pending qualification; no new runtime operation authorized or performed by this record.",
+  "scope": "Eight already-complete original initiative changes; seven partial qualification changes remain active.",
+  "markers": {
+    "codeTasks": "61/61",
+    "codeChanges": "20/20",
+    "portfolioTerminal": "43/61",
+    "qualified": 42,
+    "historicalSkippedDuplicate": 1,
+    "remainingQualification": 18,
+    "newQualificationCredit": 0,
+    "newDeliveryCredit": 0
+  },
+  "archiveMethod": "Supported openspec archive <change> --yes --json after manual main-spec sync; C09 additionally uses documented --skip-specs because stale prose/link corrections in its new main spec must not overwrite the immutable original delta.",
+  "status": "completed-historical-scope-archived-pending-qualification-preserved",
+  "changes": [
+    {
+      "change": "afc-d01-local-mac-durable-agent-delivery",
+      "retainedCompletedTasks": 4,
+      "retainedTotalTasks": 4,
+      "archive": "openspec/changes/archive/2026-10-14-afc-d01-local-mac-durable-agent-delivery",
+      "mainSpec": "openspec/specs/local-mac-durable-agent-delivery/spec.md",
+      "deltaSha256": "94d12ee1d412bb07561b9a537e193af04093246fa655090a8794d117b0f4306a",
+      "evidence": [
+        {
+          "path": "openspec/changes/afc-d01-local-mac-durable-agent-delivery/evidence.md",
+          "sha256": "cc47f9310685b23bbd9597380300a6f9e28db41b3c3d4aaae8063c763885cff3",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-d01-local-mac-durable-agent-delivery/evidence.md"
+        }
+      ],
+      "notes": [
+        "The historical delta has no Purpose; the new main spec adds a factual scope description. Original delta bytes are unchanged. D01.4 was satisfied by recorded wait decision, not an invented four-platform publication. Later Cadence retirement supersedes active scheduling, not the original publication truth requirement."
+      ],
+      "mainSpecSha256": "8f452f13f9fa6ee73455946f141383298c5aa31b3c85131da34ced4aa79c226b",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c16-specialist-marketing-product-and-design-teams",
+      "retainedCompletedTasks": 3,
+      "retainedTotalTasks": 3,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c16-specialist-marketing-product-and-design-teams",
+      "mainSpec": "openspec/specs/specialist-marketing-product-and-design-teams/spec.md",
+      "deltaSha256": "7a1ec00aaa2181867fd902ca3cf47ac52f9df46e0d804642b049316bd958b23b",
+      "evidence": [
+        {
+          "path": "receipts/c16-practical-team-presets-20261008.json",
+          "sha256": "f6ba96245151dcbb9bf6bfaba74d5865a25371323715aac9d504b60ff7c119af",
+          "postArchivePath": "receipts/c16-practical-team-presets-20261008.json"
+        },
+        {
+          "path": "receipts/c16-team-guidance-20261008.json",
+          "sha256": "716f31091dcac8903d9c042f2cdb5509cd457217ad3e855b8883677210c48b9a",
+          "postArchivePath": "receipts/c16-team-guidance-20261008.json"
+        },
+        {
+          "path": "receipts/integrated-reusable-team-core-passed-20261011.json",
+          "sha256": "835fe4ef5b9bbb956cb2a4f70cb25e597b7b495de9789a6b71216cf3b62c2c01",
+          "postArchivePath": "receipts/integrated-reusable-team-core-passed-20261011.json"
+        }
+      ],
+      "notes": [
+        "Archive records bounded completed task scope and retained presets/guidance operation. Measured single-agent cost comparison is explicitly NOT claimed by the retained receipt; REC-047 and broader comparative qualification remain under pending C18.3. No report-level certification is inferred."
+      ],
+      "mainSpecSha256": "fc02901d35f0f3aeda8cc3da1397db2b3783fd1d836f03f91222d486ae8a38ec",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "retainedCompletedTasks": 4,
+      "retainedTotalTasks": 4,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c14-studio-administration-and-isolated-service-consoles",
+      "mainSpec": "openspec/specs/studio-administration-and-isolated-service-consoles/spec.md",
+      "deltaSha256": "48f9155255542aaafacd316f5f719c858348c99e32d0cece16ac112dbff51c3f",
+      "evidence": [
+        {
+          "path": "c14-1-cumulative-production-receipt-20261007.json",
+          "sha256": "299a9e99821f7fc87bbef1fd807bd29e5b9b0ce880bfd41c74014b91c1b72154",
+          "postArchivePath": "c14-1-cumulative-production-receipt-20261007.json"
+        },
+        {
+          "path": "c14-2-cumulative-production-receipt-20261007.json",
+          "sha256": "7e7fa43a7961409ae489048785927161bc4b5a2e97d597f50ef2630ac2a329a1",
+          "postArchivePath": "c14-2-cumulative-production-receipt-20261007.json"
+        },
+        {
+          "path": "c14-successful-workflow-boundary-20261008.json",
+          "sha256": "1f8384bd95b6feb069a0a57e110d5bd801dd34c1bc117221606e32862024f501",
+          "postArchivePath": "c14-successful-workflow-boundary-20261008.json"
+        },
+        {
+          "path": "receipts/customer-integrated-coverage-delta-2.2.32-20261011.json",
+          "sha256": "1ac71c673adcf6dbdbb0d94eaed4c52f1443eb0187f1a0e359bd1e85037cce72",
+          "postArchivePath": "receipts/customer-integrated-coverage-delta-2.2.32-20261011.json"
+        },
+        {
+          "path": "receipts/integrated-operator-acceptance-2.2.32-20261011.json",
+          "sha256": "aab3049250843e7d9cacf73e2fb1850fd7b08138b5ebc45bea823be38f9a8d30",
+          "postArchivePath": "receipts/integrated-operator-acceptance-2.2.32-20261011.json"
+        }
+      ],
+      "notes": [],
+      "mainSpecSha256": "8c8fb32ab83fdd8b0117635988f594bc68dcd84d793f45a99e46eb645e535bb9",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c09-bounded-teams-and-shared-task-board",
+      "retainedCompletedTasks": 4,
+      "retainedTotalTasks": 4,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board",
+      "mainSpec": "openspec/specs/bounded-teams-and-shared-task-board/spec.md",
+      "deltaSha256": "93e2f1c16c85fd2c93460b977338afa5983f37664622b8cf3c16fc186515a8ce",
+      "evidence": [
+        {
+          "path": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-1-evidence.md",
+          "sha256": "1e2e6602d4314b1c31bcbb6b4d825622ee2e696a6703cda99b1112eb889d2f38",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board/c09-1-evidence.md"
+        },
+        {
+          "path": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-2-evidence.md",
+          "sha256": "30ec534aa19020321771af39f3cd44aff97df9ec57d0d9475ccd82d343ed1ad2",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board/c09-2-evidence.md"
+        },
+        {
+          "path": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-4-gate-b-receipt.json",
+          "sha256": "2c39718f13f20900b80665cf08a2f3d45423716139204689456622f7276a08d6",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board/c09-4-gate-b-receipt.json"
+        },
+        {
+          "path": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-4-public-qualified-receipt.json",
+          "sha256": "b122bef1dca33127a9ef0e8ee7ecc86f4fcebb40f457b3a206cd60743065aadc",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board/c09-4-public-qualified-receipt.json"
+        }
+      ],
+      "notes": [
+        "Only the created main spec corrects historical pending prose and its moved amendment link; original change artifacts remain byte-identical. Existing requirements/scenarios are retained."
+      ],
+      "mainSpecSha256": "dc45c91f92514fd9f3a60726185287ef34c8a5f8177a02c041d35a99cd832a52",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c08-bossfang-and-fabric-observer-routing",
+      "retainedCompletedTasks": 3,
+      "retainedTotalTasks": 3,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c08-bossfang-and-fabric-observer-routing",
+      "mainSpec": "openspec/specs/bossfang-and-fabric-observer-routing/spec.md",
+      "deltaSha256": "134e7c9a6b9aea5473c7dd15e3ce115fb3bf7ad7b33332ea994f98d89ffe6433",
+      "evidence": [
+        {
+          "path": "openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/evidence.md",
+          "sha256": "684c36cc75471a96d658bd7a79902ab5102645f1e2be031e33bbfd7167d6f0d0",
+          "postArchivePath": "openspec/changes/archive/2026-10-14-afc-c08-bossfang-and-fabric-observer-routing/evidence.md"
+        }
+      ],
+      "notes": [
+        "The retained operation is a disposable local Mac gate. Discord/external-provider/native Windows qualification is not created by archive. Existing unsupported/profile boundaries remain."
+      ],
+      "mainSpecSha256": "99868d8b0fda9fd0c6bba388ec5f173ee1347b53598933ab6126ed3248c461f2",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c04-replaceable-service-instances-and-placement",
+      "retainedCompletedTasks": 3,
+      "retainedTotalTasks": 3,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c04-replaceable-service-instances-and-placement",
+      "mainSpec": "openspec/specs/replaceable-service-instances-and-placement/spec.md",
+      "deltaSha256": "f9e5773a39d05fac6f191b72e649afe22b57ef5fb8df67dbdc169902df21f85c",
+      "evidence": [
+        {
+          "path": ".kbd-orchestrator/phases/agent-fabric-convergence/c04/c04-acceptance-receipt-2026-09-27.json",
+          "sha256": "15a6726b0df359af306c8dcc7d2797ec35b6e4b1437f86050d7f43b870a42f4e",
+          "postArchivePath": ".kbd-orchestrator/phases/agent-fabric-convergence/c04/c04-acceptance-receipt-2026-09-27.json"
+        }
+      ],
+      "notes": [],
+      "mainSpecSha256": "95d766a4f2d2e87cb3fd5d95b1b1327080cd8e94c722211fd5b911ec7993ee88",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "retainedCompletedTasks": 3,
+      "retainedTotalTasks": 3,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c06-durable-addressable-instances-and-bounded-turns",
+      "mainSpec": "openspec/specs/durable-addressable-instances-and-bounded-turns/spec.md",
+      "deltaSha256": "ffe04d1f62945d93bd0a31185ba1866a9d7ea985457e02d499353f60c1977865",
+      "evidence": [
+        {
+          "path": ".kbd-orchestrator/phases/agent-fabric-convergence/c06/implementation-receipt-2026-09-27.json",
+          "sha256": "837f8f69e2902449dcc64dc1c237444e4befe92115ab8bd5788ceb1284702d74",
+          "postArchivePath": ".kbd-orchestrator/phases/agent-fabric-convergence/c06/implementation-receipt-2026-09-27.json"
+        }
+      ],
+      "notes": [],
+      "mainSpecSha256": "04eecdf1950978082527ebae4fcbde4a9262cb2b0ce3f3c37027a400ec1f9366",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    },
+    {
+      "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "retainedCompletedTasks": 3,
+      "retainedTotalTasks": 3,
+      "archive": "openspec/changes/archive/2026-10-14-afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "mainSpec": "openspec/specs/lossless-definitions-and-collaboration-document-profile/spec.md",
+      "deltaSha256": "c80e27f6bd6e150f713d7b31537e714cf433109a1091107dff781f60ac5fece3",
+      "evidence": [
+        {
+          "path": ".kbd-orchestrator/phases/agent-fabric-convergence/c03/acceptance-disposition-receipt-2026-09-27.json",
+          "sha256": "af15ec272b619625fe856e9a547ca132066785a2471e1dba5dee01d8efc3d456",
+          "postArchivePath": ".kbd-orchestrator/phases/agent-fabric-convergence/c03/acceptance-disposition-receipt-2026-09-27.json"
+        }
+      ],
+      "notes": [],
+      "mainSpecSha256": "b5be6500c6b804e3c693e6a96213adc125d5b2eec670824fa0b2f799371d0bbc",
+      "archiveCompleted": true,
+      "deltaPreservedByteIdentical": true
+    }
+  ],
+  "preservedPendingTaskFileHashes": {
+    "afc-c18-federated-compatibility-and-release-evidence": "c3ab7b125f91c91e9873709a1470d76cfce3c4836d5f368bfca148eb4363fa5a",
+    "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff": "6c30679637d425b0601e7c697096a9587cca2ab1fa8a547ac704c2711c4d28b5",
+    "afc-c10-feedback-workflow-and-governed-connector-effects": "9a6fa4cc0ee463da9910d94489e5011c1a495367e28e036c4f99bf779e857b75",
+    "afc-c17-executive-assistants-and-consented-human-representation": "677892432f13a2be22567f50d8b98a94698fc71bb8e0bc1a86ceee61e344914a",
+    "afc-c13-embedded-mobile-and-home-cloud-execution-profiles": "59f33a6b46a03872e3f82a5a60c7b4fd2ba175330a3d075ced2a22ca8592f3dd",
+    "afc-c11-authoritative-business-data-and-offline-commands": "aca81c7caf01c2a20093ede48f3f88b9cb0ac089d1b9abf66225705ca23ee666",
+    "afc-c12-personal-peer-sovereignty-and-consent": "2412fbc7119fee24e711fc5043bef408eb58669c722edfb0af676d8b904cd7ab"
+  },
+  "preservedUnqualifiedTaskIds": [
+    "C10.2",
+    "C10.3",
+    "C11.1",
+    "C11.2",
+    "C11.3",
+    "C12.1",
+    "C12.2",
+    "C12.3",
+    "C13.1",
+    "C13.2",
+    "C13.3",
+    "C15.2",
+    "C17.1",
+    "C17.2",
+    "C17.3",
+    "C18.1",
+    "C18.2",
+    "C18.3"
+  ],
+  "qualificationAuthority": "manual-certification-handoff.md and receipts/phase-manual-closeout-20261011.json; original task completion and historical operator acceptance remain their recorded scope, not a new2.2.38 acceptance.",
+  "evidenceLocation": "receipts/cadence-retirement-relocation-20261011.md resolves old Cadence paths to the intact private archive; no archived historical receipts are rewritten.",
+  "noProductWork": {
+    "builds": false,
+    "tests": false,
+    "operations": false,
+    "approvalCycles": false,
+    "productionCodeChanges": false,
+    "kbdChanges": false,
+    "cadenceChanges": false
+  },
+  "limitations": [
+    "Existing historical qualification dispositions are preserved, not independently recertified.",
+    "Archived and synced normative specs are requirements, not claims that every report clause or future deployment profile is qualified.",
+    "2.2.38 affected Mac operation/publication and pending exact-candidate acceptance remain in The Boss release receipt; no historical evidence is reassigned to newer bytes."
+  ],
+  "completedAt": "2026-10-14T15:53:41.310Z",
+  "documentationChecks": {
+    "newMainSpecs": 8,
+    "allMainSpecsSchemaValid": "18/18 passed; no errors",
+    "existingWarnings": [
+      "afc-cadence-historical-publication existing Purpose placeholder",
+      "afc-integrated-customer-qualification existing Purpose placeholder",
+      "afc-runtime-admission-v2-release existing Purpose placeholder",
+      "afc-runtime-source-reconciliation existing Purpose placeholder"
+    ],
+    "pendingChanges": [
+      {
+        "name": "afc-c18-federated-compatibility-and-release-evidence",
+        "completedTasks": 0,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+        "completedTasks": 2,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c10-feedback-workflow-and-governed-connector-effects",
+        "completedTasks": 1,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c17-executive-assistants-and-consented-human-representation",
+        "completedTasks": 0,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+        "completedTasks": 0,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c11-authoritative-business-data-and-offline-commands",
+        "completedTasks": 0,
+        "totalTasks": 3
+      },
+      {
+        "name": "afc-c12-personal-peer-sovereignty-and-consent",
+        "completedTasks": 0,
+        "totalTasks": 3
+      }
+    ],
+    "uncheckedQualificationIds": [
+      "C10.2",
+      "C10.3",
+      "C11.1",
+      "C11.2",
+      "C11.3",
+      "C12.1",
+      "C12.2",
+      "C12.3",
+      "C13.1",
+      "C13.2",
+      "C13.3",
+      "C15.2",
+      "C17.1",
+      "C17.2",
+      "C17.3",
+      "C18.1",
+      "C18.2",
+      "C18.3"
+    ],
+    "pendingTaskFilesByteIdentical": true,
+    "archivedDeltaAndEvidenceBytesUnchanged": true
+  },
+  "archiveResolution": {
+    "change": "afc-c09-bounded-teams-and-shared-task-board",
+    "firstAttempt": "CLI archive refused ADDED requirement already exists, before changes; manually synced main differs only in documented pending-prose and amendment-link corrections.",
+    "resolution": "Supported --skip-specs archives preserved original change after existing manual sync; no runtime semantics weakened and no delta rewritten."
+  }
+}

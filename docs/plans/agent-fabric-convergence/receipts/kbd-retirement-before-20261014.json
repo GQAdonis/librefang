@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14T15:55:10.886Z",
+  "revision": 705,
+  "lifecycle": "running",
+  "phaseStatus": "complete",
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence"
+    ],
+    "phaseId": "agent-fabric-convergence",
+    "stageId": "reflect",
+    "changeId": null,
+    "taskId": null,
+    "commit": "510ab810ba8fea3ac53f23b203d8c465a96a0c63"
+  },
+  "completion": {
+    "implementation": {
+      "completed": 30,
+      "total": 30,
+      "status": "complete",
+      "summary": null,
+      "blockers": []
+    },
+    "evidence": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "taskStates": [
+    {
+      "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "id": "C01.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "id": "C01.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "id": "C01.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c02-governed-action-and-approval-boundary",
+      "id": "C02.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c02-governed-action-and-approval-boundary",
+      "id": "C02.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c02-governed-action-and-approval-boundary",
+      "id": "C02.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "id": "C03.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "id": "C03.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "id": "C03.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c04-replaceable-service-instances-and-placement",
+      "id": "C04.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c04-replaceable-service-instances-and-placement",
+      "id": "C04.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c04-replaceable-service-instances-and-placement",
+      "id": "C04.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c05-bossfang-full-run-delegation",
+      "id": "C05.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c05-bossfang-full-run-delegation",
+      "id": "C05.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c05-bossfang-full-run-delegation",
+      "id": "C05.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "id": "C06.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "id": "C06.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "id": "C06.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "id": "C07.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "id": "C07.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "id": "C07.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c08-bossfang-and-fabric-observer-routing",
+      "id": "C08.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c08-bossfang-and-fabric-observer-routing",
+      "id": "C08.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c08-bossfang-and-fabric-observer-routing",
+      "id": "C08.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c09-bounded-teams-and-shared-task-board",
+      "id": "C09.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c09-bounded-teams-and-shared-task-board",
+      "id": "C09.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c09-bounded-teams-and-shared-task-board",
+      "id": "C09.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c09-bounded-teams-and-shared-task-board",
+      "id": "C09.4",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c09-team-task-admission-context-and-membership",
+      "id": "C09.3",
+      "status": "cancelled"
+    },
+    {
+      "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "id": "C10.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "id": "C10.2",
+      "status": "in_progress"
+    },
+    {
+      "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "id": "C10.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c11-authoritative-business-data-and-offline-commands",
+      "id": "C11.1",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c11-authoritative-business-data-and-offline-commands",
+      "id": "C11.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c11-authoritative-business-data-and-offline-commands",
+      "id": "C11.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c12-personal-peer-sovereignty-and-consent",
+      "id": "C12.1",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c12-personal-peer-sovereignty-and-consent",
+      "id": "C12.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c12-personal-peer-sovereignty-and-consent",
+      "id": "C12.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "id": "C13.1",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "id": "C13.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "id": "C13.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "id": "C14.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "id": "C14.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "id": "C14.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "id": "C14.4",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "id": "C15.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "id": "C15.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "id": "C15.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c16-specialist-marketing-product-and-design-teams",
+      "id": "C16.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c16-specialist-marketing-product-and-design-teams",
+      "id": "C16.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c16-specialist-marketing-product-and-design-teams",
+      "id": "C16.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-c17-executive-assistants-and-consented-human-representation",
+      "id": "C17.1",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c17-executive-assistants-and-consented-human-representation",
+      "id": "C17.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c17-executive-assistants-and-consented-human-representation",
+      "id": "C17.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c18-federated-compatibility-and-release-evidence",
+      "id": "C18.1",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c18-federated-compatibility-and-release-evidence",
+      "id": "C18.2",
+      "status": "pending"
+    },
+    {
+      "change": "afc-c18-federated-compatibility-and-release-evidence",
+      "id": "C18.3",
+      "status": "pending"
+    },
+    {
+      "change": "afc-d01-local-mac-durable-agent-delivery",
+      "id": "D01.1",
+      "status": "complete"
+    },
+    {
+      "change": "afc-d01-local-mac-durable-agent-delivery",
+      "id": "D01.2",
+      "status": "complete"
+    },
+    {
+      "change": "afc-d01-local-mac-durable-agent-delivery",
+      "id": "D01.3",
+      "status": "complete"
+    },
+    {
+      "change": "afc-d01-local-mac-durable-agent-delivery",
+      "id": "D01.4",
+      "status": "complete"
+    }
+  ],
+  "code": {
+    "completed": 61,
+    "total": 61,
+    "status": "COMPLETE",
+    "basis": "Each of the61 planned task slots is mapped below to its recorded completed production implementation. No qualification result is inferred.",
+    "changesCompleted": 20,
+    "changesTotal": 20
+  },
+  "qualification": {
+    "completed": 43,
+    "total": 61,
+    "status": "PARTIAL",
+    "basis": "Preserved canonical task completion ledger",
+    "historicalSkippedDuplicates": 1,
+    "passedTasks": 42,
+    "qualificationPending": 18
+  },
+  "markersSha256": "44c263048f599927a6960f52834369918e70279c5182df48256c92dd58202d8c",
+  "cadenceRetirementReceipt": "receipts/cadence-retirement-relocation-20261011.md"
+}

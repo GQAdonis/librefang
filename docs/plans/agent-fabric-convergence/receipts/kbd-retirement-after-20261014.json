@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14T15:55:17.223Z",
+  "revision": 709,
+  "previousRevision": 705,
+  "lifecycle": "cancelled",
+  "meaning": "Closed administrative run retired through supportedCLI cancel; phase remains complete and qualification remains partial.",
+  "phaseStatus": "complete",
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence"
+    ],
+    "phaseId": "agent-fabric-convergence",
+    "stageId": "reflect",
+    "changeId": null,
+    "taskId": null,
+    "commit": "510ab810ba8fea3ac53f23b203d8c465a96a0c63"
+  },
+  "completion": {
+    "implementation": {
+      "completed": 30,
+      "total": 30,
+      "status": "complete",
+      "summary": null,
+      "blockers": []
+    },
+    "evidence": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "completed": 42,
+      "total": 61,
+      "status": "in_progress",
+      "summary": "Historical portfolio:42 qualified plus1 historical skipped duplicate=43terminal/61;18unqualified tasks remain operator-owned. No new2.2.38 acceptance or qualification credit.",
+      "blockers": []
+    },
+    "publication": {
+      "completed": 2,
+      "total": 2,
+      "status": "complete",
+      "summary": "Selected customer platforms MacARM64 andWindowsx64 published as2.2.38; immutable manifests, byte/hash checks and livewebsite receipts in TheBoss build/release-operation-2.2.38/publication.json. Macsigned notnotarized,Windowsunsigned; installedacceptance separate.",
+      "blockers": []
+    }
+  },
+  "taskStatesUnchanged": true,
+  "markersSha256": "44c263048f599927a6960f52834369918e70279c5182df48256c92dd58202d8c",
+  "conflictCount": 0,
+  "originalCodeTasks": "61/61",
+  "originalCodeChanges": "20/20",
+  "portfolioTerminalQualification": "43/61=42qualified+1skipped;18pending",
+  "buildsOrProductOperationsRun": 0,
+  "successorRunCreated": false
+}

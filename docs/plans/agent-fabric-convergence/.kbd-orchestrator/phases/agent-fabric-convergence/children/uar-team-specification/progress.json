@@ -2,18 +2,19 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 701,
-  "derivedRevision": 701,
+  "sourceRevision": 708,
+  "derivedRevision": 708,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 462
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 466,
+    "cac7e798-83ff-46eb-872a-c8b819aaad44": 3
   },
   "conflictCount": 0,
   "phase": "uar-team-specification",
   "phaseId": "agent-fabric-convergence::uar-team-specification",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-10-11T14:22:11.862409Z",
+  "last_updated": "2026-10-14T15:55:14.827828Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 1,
   "changes_completed": 1,
@@ -61,13 +62,13 @@
       "blockers": []
     },
     "certification": {
-      "status": "PENDING",
-      "summary": null,
+      "status": "IN_PROGRESS",
+      "summary": "Historical portfolio:42 qualified plus1 historical skipped duplicate=43terminal/61;18unqualified tasks remain operator-owned. No new2.2.38 acceptance or qualification credit.",
       "blockers": []
     },
     "publication": {
-      "status": "PENDING",
-      "summary": null,
+      "status": "COMPLETE",
+      "summary": "Selected customer platforms MacARM64 andWindowsx64 published as2.2.38; immutable manifests, byte/hash checks and livewebsite receipts in TheBoss build/release-operation-2.2.38/publication.json. Macsigned notnotarized,Windowsunsigned; installedacceptance separate.",
       "blockers": []
     }
   },

@@ -1,0 +1,212 @@
+[
+  {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+    "runId": "project-20260924T180329Z",
+    "eventId": "4095da65-92cf-4e9c-bf84-071ee0dfb6c3",
+    "commandId": "ea85c6da-5a1c-474b-aa6a-034216280cce",
+    "revision": 705,
+    "expectedRevision": 704,
+    "lamport": 466,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 465
+    },
+    "causalParent": "9d754458-bd91-4f31-bf8a-eee0e77a6a4f",
+    "actor": {
+      "kind": "harness",
+      "id": "gqadonis",
+      "device": "unknown-device",
+      "harness": "codex",
+      "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+    },
+    "actorId": "gqadonis",
+    "timestamp": "2026-10-11T14:22:53.250464Z",
+    "kind": {
+      "type": "blocker_cleared",
+      "payload": {
+        "blocker_id": "bottleneck-06d4e8406a9e79f1fa51d70faf859351883e5b0b8c6f3901fedd5f0267e7a875",
+        "resolution": "boundary agent-fabric-convergence passed at source revision 703"
+      }
+    },
+    "previousHash": "cf691ae58b19318255ee8e916aae3789ba5097394243832283648545db08a80c",
+    "integrityHash": "241956b8e99bef306b058f949bebd74079ae47242170c2ffb41077c3d7ef7192",
+    "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+    "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+    "signature": "7FbNF+5V//qnojM7x/CgHQV3a/o/QEBc6oNHLI/DZk8fjbIE/9bpcTqTwR0cbmIgOm6XHI0l9uhusJt/JlIOBw=="
+  },
+  {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "replicaId": "cac7e798-83ff-46eb-872a-c8b819aaad44",
+    "runId": "project-20260924T180329Z",
+    "eventId": "63ee2370-0cd9-4f3d-9d5e-d8581a8212c9",
+    "commandId": "afc-ledger-reconciliation-authority-20261014",
+    "revision": 706,
+    "expectedRevision": 705,
+    "lamport": 1,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 466
+    },
+    "causalParent": null,
+    "actor": {
+      "kind": "harness",
+      "id": "gqadonis",
+      "device": "unknown-device",
+      "harness": "codex",
+      "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+    },
+    "actorId": "gqadonis",
+    "timestamp": "2026-10-14T15:55:11.834403Z",
+    "kind": {
+      "type": "decision_recorded",
+      "payload": {
+        "decision": {
+          "id": "afc-ledger-reconciliation-20261014",
+          "summary": "Operator authorized evidence-only OpenSpec reconciliation and retirement of the stale enclosing run after2.2.38. Phase remains complete; code61/61 and20/20 retained; qualification43/61 terminal=42passed+1skipped,18manual criteria retained. Native2.2.38 Windows operation and new-candidate acceptance pending. No builds, passing operations, approval cycles or Cadence restart.",
+          "planRevision": 14,
+          "supersedes": null
+        }
+      }
+    },
+    "previousHash": null,
+    "integrityHash": "7bb90bf918a0eb849c2b0a469e447de7e22ad46bbdcd77ba09e0482da82dfba0",
+    "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+    "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+    "signature": "0BYmMRZ4IOJaj7/1cy8BHdH7LpZYNkx6SDlXgrvB0TprPkgoyUdj/fvdeMQiO7Lj25UhuCj+XhEt1Fv8riPUAA=="
+  },
+  {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "replicaId": "cac7e798-83ff-46eb-872a-c8b819aaad44",
+    "runId": "project-20260924T180329Z",
+    "eventId": "09d03115-8129-43b5-8ac8-068b56126d33",
+    "commandId": "afc-ledger-certification-20261014",
+    "revision": 707,
+    "expectedRevision": 706,
+    "lamport": 2,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 466,
+      "cac7e798-83ff-46eb-872a-c8b819aaad44": 1
+    },
+    "causalParent": "63ee2370-0cd9-4f3d-9d5e-d8581a8212c9",
+    "actor": {
+      "kind": "harness",
+      "id": "gqadonis",
+      "device": "unknown-device",
+      "harness": "codex",
+      "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+    },
+    "actorId": "gqadonis",
+    "timestamp": "2026-10-14T15:55:12.997390Z",
+    "kind": {
+      "type": "completion_updated",
+      "payload": {
+        "dimension": "certification",
+        "completion": {
+          "completed": 42,
+          "total": 61,
+          "status": "in_progress",
+          "summary": "Historical portfolio:42 qualified plus1 historical skipped duplicate=43terminal/61;18unqualified tasks remain operator-owned. No new2.2.38 acceptance or qualification credit.",
+          "blockers": []
+        }
+      }
+    },
+    "previousHash": "7bb90bf918a0eb849c2b0a469e447de7e22ad46bbdcd77ba09e0482da82dfba0",
+    "integrityHash": "2fa5f8e1b5f639c30b87a0dee767b7cbea8a33b3a3b176bbb3b2507feb0307e0",
+    "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+    "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+    "signature": "3ZJqlq6GURs/qLCXc2eUkckEjnm+jpeSKMTelazVCUPcMtqKVIi/sizwADqe1dln6gRSC5GKl57hO78QqEKIAg=="
+  },
+  {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "replicaId": "cac7e798-83ff-46eb-872a-c8b819aaad44",
+    "runId": "project-20260924T180329Z",
+    "eventId": "7511aa16-7a4b-4157-bf39-6913da19e1a5",
+    "commandId": "afc-ledger-publication-20261014",
+    "revision": 708,
+    "expectedRevision": 707,
+    "lamport": 3,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 466,
+      "cac7e798-83ff-46eb-872a-c8b819aaad44": 2
+    },
+    "causalParent": "09d03115-8129-43b5-8ac8-068b56126d33",
+    "actor": {
+      "kind": "harness",
+      "id": "gqadonis",
+      "device": "unknown-device",
+      "harness": "codex",
+      "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+    },
+    "actorId": "gqadonis",
+    "timestamp": "2026-10-14T15:55:14.659859Z",
+    "kind": {
+      "type": "completion_updated",
+      "payload": {
+        "dimension": "publication",
+        "completion": {
+          "completed": 2,
+          "total": 2,
+          "status": "complete",
+          "summary": "Selected customer platforms MacARM64 andWindowsx64 published as2.2.38; immutable manifests, byte/hash checks and livewebsite receipts in TheBoss build/release-operation-2.2.38/publication.json. Macsigned notnotarized,Windowsunsigned; installedacceptance separate.",
+          "blockers": []
+        }
+      }
+    },
+    "previousHash": "2fa5f8e1b5f639c30b87a0dee767b7cbea8a33b3a3b176bbb3b2507feb0307e0",
+    "integrityHash": "31bbeb2fddb1d6d748b1394f2962eb367a9641650525841ff72f0a8bb8fe34fe",
+    "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+    "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+    "signature": "gwEuuz7BpnGfm/vj4Qwk5GjXmIO9ZLIsUN1DshxCLGFCNXSIbrBmUZiieKfOlpK0oIT2aiMlou689dpRqnnAAw=="
+  },
+  {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "replicaId": "cac7e798-83ff-46eb-872a-c8b819aaad44",
+    "runId": "project-20260924T180329Z",
+    "eventId": "e938cb49-62a3-4145-87ce-4543366eff8c",
+    "commandId": "738f8b51-3b1c-42c1-8449-bf700225b01a",
+    "revision": 709,
+    "expectedRevision": 708,
+    "lamport": 4,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 466,
+      "cac7e798-83ff-46eb-872a-c8b819aaad44": 3
+    },
+    "causalParent": "7511aa16-7a4b-4157-bf39-6913da19e1a5",
+    "actor": {
+      "kind": "operator",
+      "id": "gqadonis",
+      "device": "unknown-device",
+      "harness": "codex",
+      "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+    },
+    "actorId": "gqadonis",
+    "timestamp": "2026-10-14T15:55:16.157230Z",
+    "kind": {
+      "type": "lifecycle_transition",
+      "payload": {
+        "from": "running",
+        "to": "cancelled",
+        "reason": "Administrative retirement of the already complete agent-fabric-convergence run under operator-directed closure; no active implementation. Preserve all completed phases/tasks and18 pending manual qualification items, original history/clocks and accepted releases. This is run retirement, not product failure or certification completion."
+      }
+    },
+    "previousHash": "31bbeb2fddb1d6d748b1394f2962eb367a9641650525841ff72f0a8bb8fe34fe",
+    "integrityHash": "c88a030c0aa9aa6c412db104d7bcf7f08dea8594040cd5f033d82e46ce9668ea",
+    "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+    "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+    "signature": "8f6dOwXjq9MX+cy7WLbTRdidOKO4oUVS1YaTXK/6JiiDWAglbt/PSJcWuuk/2JldMkj/GRfjiw6KoQdkd8lQBQ=="
+  }
+]

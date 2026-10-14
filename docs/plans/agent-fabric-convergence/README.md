@@ -1,6 +1,10 @@
 # Agent Fabric Convergence
 
-## Current customer priority — 2026-10-05
+## Current disposition — 14 October 2026
+
+The phase is complete and its enclosing run is administratively retired through supported KBD commands. Read [reconciled status](current-execution-status.md), [OpenSpec archive receipt](receipts/openspec-initiative-reconciled-20261014.json) and [manual certification handoff](manual-certification-handoff.md). Code remains 61/61 tasks and 20/20 changes; portfolio qualification remains 43/61 terminal with eighteen criteria pending. The Boss 2.2.38 release publication is complete; new-candidate acceptance remains separate. Cadence is retired, not waiting to resume. This main checkout is the current coordination home; earlier worktree paths and directions below are preserved provenance.
+
+## Historical customer priority — 2026-10-05
 
 Read [approved delivery order](customer-delivery-order.md) and [machine-readable scope map](customer-delivery-map.json) first. Teams in Work → reusable mixed teams → shared BossFang/UAR → BossFang MiniApp → GitHub feedback. Next: C14.1. New C14.4 records shared desktop runtime explicitly. Earlier chronology below is historical, not current pending-work status. Cadence remains 120 minutes, local Mac build+operate each delivery, full Mac/Windows/site every second successful delivery.
 
@@ -43,20 +47,20 @@ The OpenSpec changes are initiative-level contracts. Product implementation must
 
 - [C01: Baseline reconciliation and shared contracts](openspec/changes/archive/2026-09-26-afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md)
 - [C02: Governed action and approval boundary](openspec/changes/archive/2026-09-27-afc-c02-governed-action-and-approval-boundary/proposal.md)
-- [C03: Lossless definitions and collaboration document profile](openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/proposal.md)
-- [C04: Replaceable service instances and placement](openspec/changes/afc-c04-replaceable-service-instances-and-placement/proposal.md)
+- [C03: Lossless definitions and collaboration document profile](openspec/changes/archive/2026-10-14-afc-c03-lossless-definitions-and-collaboration-document-profile/proposal.md)
+- [C04: Replaceable service instances and placement](openspec/changes/archive/2026-10-14-afc-c04-replaceable-service-instances-and-placement/proposal.md)
 - [C05: librefang full-run delegation](openspec/changes/archive/2026-09-27-afc-c05-bossfang-full-run-delegation/proposal.md)
-- [C06: Durable addressable instances and bounded turns](openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/proposal.md)
+- [C06: Durable addressable instances and bounded turns](openspec/changes/archive/2026-10-14-afc-c06-durable-addressable-instances-and-bounded-turns/proposal.md)
 - [C07: Local scoped observers with durable delivery](openspec/changes/archive/2026-09-28-afc-c07-local-scoped-observers-with-durable-delivery/proposal.md)
-- [C08: BossFang and Fabric observer routing](openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/proposal.md)
-- [C09: Bounded teams and shared task board](openspec/changes/afc-c09-bounded-teams-and-shared-task-board/proposal.md)
+- [C08: BossFang and Fabric observer routing](openspec/changes/archive/2026-10-14-afc-c08-bossfang-and-fabric-observer-routing/proposal.md)
+- [C09: Bounded teams and shared task board](openspec/changes/archive/2026-10-14-afc-c09-bounded-teams-and-shared-task-board/proposal.md)
 - [C10: Feedback workflow and governed connector effects](openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/proposal.md)
 - [C11: Authoritative business data and offline commands](openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/proposal.md)
 - [C12: Personal peer sovereignty and consent](openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/proposal.md)
 - [C13: Embedded mobile and home/cloud execution profiles](openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/proposal.md)
-- [C14: Studio administration and isolated service consoles](openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/proposal.md)
+- [C14: Studio administration and isolated service consoles](openspec/changes/archive/2026-10-14-afc-c14-studio-administration-and-isolated-service-consoles/proposal.md)
 - [C15: Portable skills, plugin contracts and cross-harness handoff](openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/proposal.md)
-- [C16: Specialist, marketing, product and design teams](openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/proposal.md)
+- [C16: Specialist, marketing, product and design teams](openspec/changes/archive/2026-10-14-afc-c16-specialist-marketing-product-and-design-teams/proposal.md)
 - [C17: Executive assistants and consented human representation](openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/proposal.md)
 - [C18: Federated compatibility and release evidence](openspec/changes/afc-c18-federated-compatibility-and-release-evidence/proposal.md)
 

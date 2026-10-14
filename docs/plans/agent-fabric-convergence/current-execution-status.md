@@ -1,4 +1,20 @@
-# Agent Fabric Convergence — live execution status
+# Agent Fabric Convergence — reconciled status
+
+Current disposition: **phase complete, enclosing run administratively retired** at canonical revision 709 on 14 October 2026. The supported CLI's terminal label is `cancelled`: it retires the already closed run, not the completed product or any qualification predicate. No active change, task, successor run or Cadence iteration exists.
+
+| Independent marker | Current status |
+|---|---|
+| Original production code | 61/61 tasks, 20/20 changes complete |
+| Portfolio qualification | 43/61 terminal: 42 qualified, one historical skipped duplicate, eighteen unqualified |
+| Current release | The Boss 2.2.38 Mac ARM64 and Windows x64 published; website and downloaded checksum receipts recorded separately |
+| New-candidate installed acceptance | Mac affected operation passed; operator acceptance of 2.2.38 and native Windows operation remain pending |
+| Cadence | Retired; seventeen original deliveries and clocks retained, no added delivery or publication debt |
+
+The [typed retirement receipt](receipts/kbd-retirement-after-20261014.json) records independent completion dimensions and unchanged canonical task states. The [initiative OpenSpec reconciliation](receipts/openspec-initiative-reconciled-20261014.json) records eight completed archives and preserves the seven partial changes with exactly eighteen unchecked qualification IDs. Use the [manual certification handoff](manual-certification-handoff.md) for those requirements; missing evidence is not a new code task or permission to repeat a passing operation.
+
+The dated entries below are **historical observations**, including their old next-task directions, counts, artifact paths and publication debt. They are not current dispatch instructions or claims about 2.2.38.
+
+## Historical execution status — 5 October 2026
 
 Recorded: 2026-10-05T08:04:59.606Z. Canonical revision 507, plan revision 8.
 
