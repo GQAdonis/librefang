@@ -68,12 +68,20 @@ fi
 
 echo
 echo "[preflight] commits to merge:"
-git log HEAD..upstream/main --oneline | head -40
-total="$(git log HEAD..upstream/main --oneline | wc -l | tr -d ' ')"
+# `git log -n` instead of `| head -40`: under `set -o pipefail` the
+# head-closed pipe makes git exit 141 (SIGPIPE) and aborts preflight
+# whenever more than 40 commits are pending.
+git log -n 40 HEAD..upstream/main --oneline
+total="$(git rev-list --count HEAD..upstream/main)"
 if [ "$total" -gt 40 ]; then
   echo "  ... and $(( total - 40 )) more"
 fi
 
+echo
+# Record the exact range for the merge report (completeness proof).
+base="$(git merge-base HEAD upstream/main)"
+tip="$(git rev-parse upstream/main)"
+echo "[preflight] upstream range: ${base}..${tip} (${total} commits)"
 echo
 echo "[preflight] all checks passed — proceed to Phase 2 (merge)."
 exit 0
