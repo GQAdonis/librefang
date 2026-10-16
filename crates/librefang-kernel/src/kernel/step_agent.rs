@@ -130,9 +130,13 @@ impl LibreFangKernel {
     /// reported, without registering anything.
     pub fn preview_step_agent(&self, agent_ref: &StepAgent) -> Option<(AgentId, String, bool)> {
         match agent_ref {
-            StepAgent::UarBound { uar_bound, step_key } => Some((
+            StepAgent::UarBound {
+                uar_bound,
+                step_key,
+            } => Some((
                 AgentId::from_name(&format!("uar-workflow-step:{step_key}")),
-                uar_bound.definition.id.clone(), false,
+                uar_bound.definition.id.clone(),
+                false,
             )),
             StepAgent::ById { id } => self.registry_agent_by_id(id),
             StepAgent::ByName { name } => self.registry_agent_by_name(name),

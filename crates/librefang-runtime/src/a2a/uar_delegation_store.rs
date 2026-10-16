@@ -16,9 +16,9 @@
 
 use super::{lock_a2a_recover, now_unix_secs, uar_projection_task_status, A2aTask, A2aTaskStore};
 use librefang_types::uar_run::{
-    JobAttemptRef, UarAttemptPresentationEvent, UarDelegatedRunProjection,
-    UarEventApplyOutcome, UarJobAttemptReservation, UarProjectionRetention,
-    UarReservationDisposition, UarReservedJobAttempt,
+    JobAttemptRef, UarAttemptPresentationEvent, UarDelegatedRunProjection, UarEventApplyOutcome,
+    UarJobAttemptReservation, UarProjectionRetention, UarReservationDisposition,
+    UarReservedJobAttempt,
 };
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
@@ -54,7 +54,10 @@ fn encode(value: &impl serde::Serialize) -> Result<String, String> {
 }
 
 fn attempt_key(
-    subject: &str, tenant: Option<&str>, workspace: &str, job: &JobAttemptRef,
+    subject: &str,
+    tenant: Option<&str>,
+    workspace: &str,
+    job: &JobAttemptRef,
 ) -> Result<String, String> {
     encode(&(subject, tenant, workspace, job))
 }
@@ -65,28 +68,39 @@ fn storage_error(_: rusqlite::Error) -> String {
 }
 
 fn load_projection(conn: &Connection, id: &str) -> Result<UarDelegatedRunProjection, String> {
-    let json: Option<String> = conn.query_row(
-        "SELECT projection_json FROM uar_delegations_v1 WHERE boss_task_id = ?1",
-        [id], |row| row.get(0),
-    ).optional().map_err(storage_error)?;
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT projection_json FROM uar_delegations_v1 WHERE boss_task_id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage_error)?;
     serde_json::from_str(&json.ok_or("uar_attempt_outcome_unknown")?)
         .map_err(|_| "uar_attempt_outcome_unknown".to_string())
 }
 
 fn reservation_for_task(
-    conn: &Connection, id: &str,
+    conn: &Connection,
+    id: &str,
 ) -> Result<Option<UarJobAttemptReservation>, String> {
-    let json: Option<String> = conn.query_row(
-        "SELECT reservation_json FROM uar_job_attempts_v1 WHERE boss_task_id = ?1",
-        [id], |row| row.get(0),
-    ).optional().map_err(storage_error)?;
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT reservation_json FROM uar_job_attempts_v1 WHERE boss_task_id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage_error)?;
     json.map(|json| {
         serde_json::from_str(&json).map_err(|_| "uar_attempt_outcome_unknown".to_string())
-    }).transpose()
+    })
+    .transpose()
 }
 
 fn validate_projection(
-    reservation: &UarJobAttemptReservation, projection: &UarDelegatedRunProjection,
+    reservation: &UarJobAttemptReservation,
+    projection: &UarDelegatedRunProjection,
 ) -> Result<(), String> {
     if reservation.boss_task_id != projection.boss_task_id
         || reservation.verified_subject != projection.verified_principal
@@ -103,10 +117,17 @@ fn validate_projection(
 }
 
 fn validate_execution(
-    stored: &UarDelegatedRunProjection, incoming: &UarDelegatedRunProjection,
+    stored: &UarDelegatedRunProjection,
+    incoming: &UarDelegatedRunProjection,
 ) -> Result<(), String> {
-    if stored.uar_task_id.as_ref().is_some_and(|id| incoming.uar_task_id.as_ref() != Some(id))
-        || stored.uar_run_id.as_ref().is_some_and(|id| incoming.uar_run_id.as_ref() != Some(id))
+    if stored
+        .uar_task_id
+        .as_ref()
+        .is_some_and(|id| incoming.uar_task_id.as_ref() != Some(id))
+        || stored
+            .uar_run_id
+            .as_ref()
+            .is_some_and(|id| incoming.uar_run_id.as_ref() != Some(id))
         || stored.target_binding_id != incoming.target_binding_id
         || stored.selected_instance_id != incoming.selected_instance_id
         || stored.delegation_id != incoming.delegation_id
@@ -116,13 +137,21 @@ fn validate_execution(
     Ok(())
 }
 
-fn write_projection(conn: &Connection, projection: &UarDelegatedRunProjection) -> Result<(), String> {
+fn write_projection(
+    conn: &Connection,
+    projection: &UarDelegatedRunProjection,
+) -> Result<(), String> {
     conn.execute(
         "INSERT INTO uar_delegations_v1 (boss_task_id, projection_json, updated_at)
          VALUES (?1, ?2, ?3) ON CONFLICT(boss_task_id) DO UPDATE SET
          projection_json = excluded.projection_json, updated_at = excluded.updated_at",
-        params![projection.boss_task_id, encode(projection)?, now_unix_secs()],
-    ).map_err(storage_error)?;
+        params![
+            projection.boss_task_id,
+            encode(projection)?,
+            now_unix_secs()
+        ],
+    )
+    .map_err(storage_error)?;
     Ok(())
 }
 
@@ -131,18 +160,29 @@ fn insert_task(conn: &Connection, task: &A2aTask) -> Result<(), String> {
         "INSERT INTO a2a_tasks_v2 (id, status, session_id, messages_json, artifacts_json,
          agent_id, caller_a2a_agent_id, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
-        params![task.id, encode(&task.status)?, task.session_id, encode(&task.messages)?,
-            encode(&task.artifacts)?, task.agent_id, task.caller_a2a_agent_id, now_unix_secs()],
-    ).map_err(storage_error)?;
+        params![
+            task.id,
+            encode(&task.status)?,
+            task.session_id,
+            encode(&task.messages)?,
+            encode(&task.artifacts)?,
+            task.agent_id,
+            task.caller_a2a_agent_id,
+            now_unix_secs()
+        ],
+    )
+    .map_err(storage_error)?;
     Ok(())
 }
 
 fn write_outcome(conn: &Connection, projection: &UarDelegatedRunProjection) -> Result<(), String> {
     let status: super::A2aTaskStatusWrapper = uar_projection_task_status(projection).into();
-    let changed = conn.execute(
-        "UPDATE a2a_tasks_v2 SET status = ?2, updated_at = ?3 WHERE id = ?1",
-        params![projection.boss_task_id, encode(&status)?, now_unix_secs()],
-    ).map_err(storage_error)?;
+    let changed = conn
+        .execute(
+            "UPDATE a2a_tasks_v2 SET status = ?2, updated_at = ?3 WHERE id = ?1",
+            params![projection.boss_task_id, encode(&status)?, now_unix_secs()],
+        )
+        .map_err(storage_error)?;
     if changed != 1 {
         return Err("uar_attempt_outcome_unknown".to_string());
     }
@@ -152,16 +192,35 @@ fn write_outcome(conn: &Connection, projection: &UarDelegatedRunProjection) -> R
 // Private evidence of fully committed presentation, not effect certainty or
 // authority to recover execution. No credential or human content is retained.
 fn terminal_correlation(projection: &UarDelegatedRunProjection) -> Result<Option<String>, String> {
-    if projection.terminal_at.is_none() || projection.recovery_state != "available"
+    if projection.terminal_at.is_none()
+        || projection.recovery_state != "available"
         || projection.cursor == 0
-        || !matches!(projection.execution_state.as_str(), "completed" | "failed" | "cancelled" | "rejected") {
+        || !matches!(
+            projection.execution_state.as_str(),
+            "completed" | "failed" | "cancelled" | "rejected"
+        )
+    {
         return Ok(None);
     }
-    let (Some(epoch), Some(task), Some(run)) = (&projection.runtime_epoch,
-        &projection.uar_task_id, &projection.uar_run_id) else { return Ok(None); };
-    if epoch.is_empty() || task.is_empty() || run.is_empty() { return Ok(None); }
-    encode(&(epoch, task, run, projection.revision, projection.cursor,
-        &projection.execution_state)).map(Some)
+    let (Some(epoch), Some(task), Some(run)) = (
+        &projection.runtime_epoch,
+        &projection.uar_task_id,
+        &projection.uar_run_id,
+    ) else {
+        return Ok(None);
+    };
+    if epoch.is_empty() || task.is_empty() || run.is_empty() {
+        return Ok(None);
+    }
+    encode(&(
+        epoch,
+        task,
+        run,
+        projection.revision,
+        projection.cursor,
+        &projection.execution_state,
+    ))
+    .map(Some)
 }
 
 impl A2aTaskStore {
@@ -180,7 +239,10 @@ impl A2aTaskStore {
     ) -> Result<UarReservedJobAttempt, String> {
         if reservation.verified_subject.trim().is_empty()
             || reservation.verified_subject == "anonymous"
-            || reservation.verified_tenant.as_ref().is_some_and(|v| v.trim().is_empty())
+            || reservation
+                .verified_tenant
+                .as_ref()
+                .is_some_and(|v| v.trim().is_empty())
             || reservation.boss_task_id.trim().is_empty()
             || reservation.job.job_id.trim().is_empty()
             || reservation.workspace_id.trim().is_empty()
@@ -194,18 +256,28 @@ impl A2aTaskStore {
         }
         validate_projection(&reservation, &projection)?;
         let key = attempt_key(
-            &reservation.verified_subject, reservation.verified_tenant.as_deref(),
-            &reservation.workspace_id, &reservation.job,
+            &reservation.verified_subject,
+            reservation.verified_tenant.as_deref(),
+            &reservation.workspace_id,
+            &reservation.job,
         )?;
         let _mutation = lock_a2a_recover(&self.mutation_order, "mutation order");
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let mut conn = lock_a2a_recover(db, "database");
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
-        let existing: Option<String> = tx.query_row(
-            "SELECT reservation_json FROM uar_job_attempts_v1 WHERE attempt_key = ?1",
-            [&key], |row| row.get(0),
-        ).optional().map_err(storage_error)?;
+        let existing: Option<String> = tx
+            .query_row(
+                "SELECT reservation_json FROM uar_job_attempts_v1 WHERE attempt_key = ?1",
+                [&key],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(storage_error)?;
         if let Some(json) = existing {
             let original: UarJobAttemptReservation = serde_json::from_str(&json)
                 .map_err(|_| "uar_attempt_outcome_unknown".to_string())?;
@@ -214,23 +286,48 @@ impl A2aTaskStore {
             }
             let saved = load_projection(&tx, &original.boss_task_id)?;
             validate_projection(&original, &saved)?;
-            let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)", [&original.boss_task_id], |row| row.get(0)).map_err(storage_error)?;
-            if !exists { return Err("uar_attempt_outcome_unknown".to_string()); }
-            return Ok(UarReservedJobAttempt { disposition: UarReservationDisposition::Existing, reservation: original, projection: saved });
+            let exists: bool = tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)",
+                    [&original.boss_task_id],
+                    |row| row.get(0),
+                )
+                .map_err(storage_error)?;
+            if !exists {
+                return Err("uar_attempt_outcome_unknown".to_string());
+            }
+            return Ok(UarReservedJobAttempt {
+                disposition: UarReservationDisposition::Existing,
+                reservation: original,
+                projection: saved,
+            });
         }
-        if projection.cursor != 0 || projection.uar_task_id.is_some() || projection.uar_run_id.is_some() {
+        if projection.cursor != 0
+            || projection.uar_task_id.is_some()
+            || projection.uar_run_id.is_some()
+        {
             return Err("uar_attempt_requires_unsubmitted_projection".to_string());
         }
         projection.boss_projection_retention = UarProjectionRetention::Durable;
         let admission_key = encode(&(
-            &reservation.verified_subject, &reservation.verified_tenant,
-            &reservation.workspace_id, &reservation.runtime_epoch, &reservation.admission_id,
+            &reservation.verified_subject,
+            &reservation.verified_tenant,
+            &reservation.workspace_id,
+            &reservation.runtime_epoch,
+            &reservation.admission_id,
         ))?;
         tx.execute("INSERT INTO uar_job_attempts_v1 (attempt_key, admission_key, boss_task_id, reservation_json) VALUES (?1, ?2, ?3, ?4)",
             params![key, admission_key, reservation.boss_task_id, encode(&reservation)?]).map_err(storage_error)?;
         insert_task(&tx, &task)?;
         // A previous projection with no task must not be silently overwritten.
-        if tx.query_row("SELECT EXISTS(SELECT 1 FROM uar_delegations_v1 WHERE boss_task_id = ?1)", [&task.id], |row| row.get::<_, bool>(0)).map_err(storage_error)? {
+        if tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM uar_delegations_v1 WHERE boss_task_id = ?1)",
+                [&task.id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(storage_error)?
+        {
             return Err("uar_attempt_identity_conflict".to_string());
         }
         write_projection(&tx, &projection)?;
@@ -239,44 +336,86 @@ impl A2aTaskStore {
         self.insert_memory_task(task);
         lock_a2a_recover(&self.uar_delegations, "UAR delegations")
             .insert(projection.boss_task_id.clone(), projection.clone());
-        Ok(UarReservedJobAttempt { disposition: UarReservationDisposition::Created, reservation, projection })
+        Ok(UarReservedJobAttempt {
+            disposition: UarReservationDisposition::Created,
+            reservation,
+            projection,
+        })
     }
 
     /// Resolve the original durable attempt. Storage errors are not absence.
     pub fn get_uar_job_attempt(
-        &self, subject: &str, tenant: Option<&str>, workspace: &str, job: &JobAttemptRef,
+        &self,
+        subject: &str,
+        tenant: Option<&str>,
+        workspace: &str,
+        job: &JobAttemptRef,
     ) -> Result<Option<UarReservedJobAttempt>, String> {
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let conn = lock_a2a_recover(db, "database");
-        let json: Option<String> = conn.query_row("SELECT reservation_json FROM uar_job_attempts_v1 WHERE attempt_key = ?1",
-            [attempt_key(subject, tenant, workspace, job)?], |row| row.get(0)).optional().map_err(storage_error)?;
-        let Some(json) = json else { return Ok(None); };
-        let reservation: UarJobAttemptReservation = serde_json::from_str(&json).map_err(|_| "uar_attempt_outcome_unknown".to_string())?;
+        let json: Option<String> = conn
+            .query_row(
+                "SELECT reservation_json FROM uar_job_attempts_v1 WHERE attempt_key = ?1",
+                [attempt_key(subject, tenant, workspace, job)?],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(storage_error)?;
+        let Some(json) = json else {
+            return Ok(None);
+        };
+        let reservation: UarJobAttemptReservation =
+            serde_json::from_str(&json).map_err(|_| "uar_attempt_outcome_unknown".to_string())?;
         let projection = load_projection(&conn, &reservation.boss_task_id)?;
         validate_projection(&reservation, &projection)?;
-        let exists: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)", [&reservation.boss_task_id], |row| row.get(0)).map_err(storage_error)?;
-        if !exists { return Err("uar_attempt_outcome_unknown".to_string()); }
-        Ok(Some(UarReservedJobAttempt { disposition: UarReservationDisposition::Existing, reservation, projection }))
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)",
+                [&reservation.boss_task_id],
+                |row| row.get(0),
+            )
+            .map_err(storage_error)?;
+        if !exists {
+            return Err("uar_attempt_outcome_unknown".to_string());
+        }
+        Ok(Some(UarReservedJobAttempt {
+            disposition: UarReservationDisposition::Existing,
+            reservation,
+            projection,
+        }))
     }
 
     /// Durable reservations for scheduling reconciliation, including unknown or
     /// terminal attempts. Their presence never grants new execution authority.
     pub fn list_uar_job_attempts(&self) -> Result<Vec<UarJobAttemptReservation>, String> {
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let conn = lock_a2a_recover(db, "database");
-        let mut stmt = conn.prepare("SELECT reservation_json FROM uar_job_attempts_v1 ORDER BY attempt_key").map_err(storage_error)?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0)).map_err(storage_error)?;
+        let mut stmt = conn
+            .prepare("SELECT reservation_json FROM uar_job_attempts_v1 ORDER BY attempt_key")
+            .map_err(storage_error)?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(storage_error)?;
         rows.map(|row| {
             serde_json::from_str(&row.map_err(storage_error)?)
                 .map_err(|_| "uar_attempt_outcome_unknown".to_string())
-        }).collect()
+        })
+        .collect()
     }
 
     /// Commit one execution-scoped, non-executable event marker, applied cursor
     /// and task outcome atomically. Gaps and wrong executions require upstream
     /// reconciliation; duplicate IDs return AlreadyApplied without any write.
     pub fn apply_uar_attempt_event(
-        &self, reservation: &UarJobAttemptReservation, event: UarAttemptPresentationEvent,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        event: UarAttemptPresentationEvent,
         projection: UarDelegatedRunProjection,
     ) -> Result<UarEventApplyOutcome, String> {
         self.apply_uar_attempt_events(reservation, vec![event], projection)
@@ -285,7 +424,9 @@ impl A2aTaskStore {
     /// Commit a safe observation group together. Private fragmented-text carry
     /// must be empty before calling; no intermediate cursor can survive a crash.
     pub fn apply_uar_attempt_events(
-        &self, reservation: &UarJobAttemptReservation, events: Vec<UarAttemptPresentationEvent>,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        events: Vec<UarAttemptPresentationEvent>,
         projection: UarDelegatedRunProjection,
     ) -> Result<UarEventApplyOutcome, String> {
         self.commit_uar_events(reservation, events, projection, false)
@@ -296,60 +437,96 @@ impl A2aTaskStore {
     /// it with the applied cursor. Empty final pages may seal already applied
     /// contiguous history; legacy duplicate-event writes cannot create a seal.
     pub fn commit_uar_attempt_observation(
-        &self, reservation: &UarJobAttemptReservation, events: Vec<UarAttemptPresentationEvent>,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        events: Vec<UarAttemptPresentationEvent>,
         projection: UarDelegatedRunProjection,
     ) -> Result<UarEventApplyOutcome, String> {
         self.commit_uar_events(reservation, events, projection, true)
     }
 
     fn commit_uar_events(
-        &self, reservation: &UarJobAttemptReservation, events: Vec<UarAttemptPresentationEvent>,
-        mut projection: UarDelegatedRunProjection, observed: bool,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        events: Vec<UarAttemptPresentationEvent>,
+        mut projection: UarDelegatedRunProjection,
+        observed: bool,
     ) -> Result<UarEventApplyOutcome, String> {
         let _mutation = lock_a2a_recover(&self.mutation_order, "mutation order");
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let mut conn = lock_a2a_recover(db, "database");
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
-        let original = reservation_for_task(&tx, &reservation.boss_task_id)?.ok_or("uar_attempt_not_reserved")?;
-        if &original != reservation { return Err("uar_attempt_identity_conflict".to_string()); }
+        let original = reservation_for_task(&tx, &reservation.boss_task_id)?
+            .ok_or("uar_attempt_not_reserved")?;
+        if &original != reservation {
+            return Err("uar_attempt_identity_conflict".to_string());
+        }
         let stored = load_projection(&tx, &reservation.boss_task_id)?;
         validate_projection(reservation, &stored)?;
         validate_projection(reservation, &projection)?;
         validate_execution(&stored, &projection)?;
-        let task_exists: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)",
-            [&reservation.boss_task_id], |row| row.get(0),
-        ).map_err(storage_error)?;
-        if !task_exists { return Err("uar_attempt_outcome_unknown".to_string()); }
+        let task_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)",
+                [&reservation.boss_task_id],
+                |row| row.get(0),
+            )
+            .map_err(storage_error)?;
+        if !task_exists {
+            return Err("uar_attempt_outcome_unknown".to_string());
+        }
         let mut cursor = stored.cursor;
         let mut applied = false;
         for event in &events {
             if event.runtime_epoch != reservation.runtime_epoch
                 || Some(event.task_id.as_str()) != stored.uar_task_id.as_deref()
                 || Some(event.run_id.as_str()) != stored.uar_run_id.as_deref()
-                || event.task_id.is_empty() || event.run_id.is_empty() || event.event_id == 0 {
+                || event.task_id.is_empty()
+                || event.run_id.is_empty()
+                || event.event_id == 0
+            {
                 return Err("uar_attempt_event_identity_conflict".into());
             }
-            if event.event_id <= stored.cursor { continue; }
-            if cursor.checked_add(1) != Some(event.event_id) { return Err("uar_attempt_event_gap".into()); }
-            let event_id = i64::try_from(event.event_id).map_err(|_| "uar_attempt_event_id_invalid")?;
+            if event.event_id <= stored.cursor {
+                continue;
+            }
+            if cursor.checked_add(1) != Some(event.event_id) {
+                return Err("uar_attempt_event_gap".into());
+            }
+            let event_id =
+                i64::try_from(event.event_id).map_err(|_| "uar_attempt_event_id_invalid")?;
             tx.execute("INSERT INTO uar_attempt_events_v1 (boss_task_id, runtime_epoch, task_id, run_id, event_id, event_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![reservation.boss_task_id, event.runtime_epoch, event.task_id, event.run_id, event_id, encode(event)?]).map_err(storage_error)?;
             cursor = event.event_id;
             applied = true;
         }
-        if !applied && !observed { return Ok(UarEventApplyOutcome::AlreadyApplied); }
-        let terminal = if observed && stored.recovery_state == "available"
-            && projection.revision >= stored.revision && projection.cursor == cursor {
+        if !applied && !observed {
+            return Ok(UarEventApplyOutcome::AlreadyApplied);
+        }
+        let terminal = if observed
+            && stored.recovery_state == "available"
+            && projection.revision >= stored.revision
+            && projection.cursor == cursor
+        {
             terminal_correlation(&projection)?
-        } else { None };
+        } else {
+            None
+        };
         // A delayed event cannot regress a newer receipt or settle uncertainty.
-        if projection.revision < stored.revision { projection = stored.clone(); }
+        if projection.revision < stored.revision {
+            projection = stored.clone();
+        }
         if observed && stored.recovery_state != "available" {
             projection.recovery_state.clone_from(&stored.recovery_state);
         }
-        if stored.effect_state == "effect_unconfirmed" { projection.effect_state = stored.effect_state; }
+        if stored.effect_state == "effect_unconfirmed" {
+            projection.effect_state = stored.effect_state;
+        }
         projection.cursor = cursor;
         projection.boss_projection_retention = UarProjectionRetention::Durable;
         write_projection(&tx, &projection)?;
@@ -368,10 +545,17 @@ impl A2aTaskStore {
     /// A sealed original terminal outcome needs no new transport or dictionary
     /// to read its already projected history, including after a host restart.
     pub fn has_uar_terminal_observation(
-        &self, reservation: &UarJobAttemptReservation, projection: &UarDelegatedRunProjection,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        projection: &UarDelegatedRunProjection,
     ) -> Result<bool, String> {
-        let Some(expected) = terminal_correlation(projection)? else { return Ok(false); };
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let Some(expected) = terminal_correlation(projection)? else {
+            return Ok(false);
+        };
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let conn = lock_a2a_recover(db, "database");
         if reservation_for_task(&conn, &reservation.boss_task_id)?.as_ref() != Some(reservation) {
             return Err("uar_attempt_identity_conflict".into());
@@ -380,7 +564,9 @@ impl A2aTaskStore {
         validate_projection(reservation, &stored)?;
         validate_projection(reservation, projection)?;
         validate_execution(&stored, projection)?;
-        if terminal_correlation(&stored)?.as_ref() != Some(&expected) { return Ok(false); }
+        if terminal_correlation(&stored)?.as_ref() != Some(&expected) {
+            return Ok(false);
+        }
         let sealed: Option<String> = conn.query_row(
             "SELECT correlation_json FROM uar_attempt_terminal_observations_v1 WHERE boss_task_id = ?1",
             [&reservation.boss_task_id], |row| row.get(0)).optional().map_err(storage_error)?;
@@ -391,60 +577,92 @@ impl A2aTaskStore {
     /// authorize tool execution or admission and have no raw envelope field.
     /// Empty parts on old events must be shown as historical text unavailable.
     pub fn uar_attempt_events_after(
-        &self, reservation: &UarJobAttemptReservation, cursor: u64,
+        &self,
+        reservation: &UarJobAttemptReservation,
+        cursor: u64,
     ) -> Result<Vec<UarAttemptPresentationEvent>, String> {
-        let db = self.db.as_ref().ok_or("uar_attempt_durable_storage_required")?;
+        let db = self
+            .db
+            .as_ref()
+            .ok_or("uar_attempt_durable_storage_required")?;
         let conn = lock_a2a_recover(db, "database");
         if reservation_for_task(&conn, &reservation.boss_task_id)?.as_ref() != Some(reservation) {
             return Err("uar_attempt_identity_conflict".to_string());
         }
         let cursor = i64::try_from(cursor).map_err(|_| "uar_attempt_event_id_invalid")?;
         let mut stmt = conn.prepare("SELECT event_json FROM uar_attempt_events_v1 WHERE boss_task_id = ?1 AND event_id > ?2 ORDER BY event_id").map_err(storage_error)?;
-        let rows = stmt.query_map(params![reservation.boss_task_id, cursor], |row| row.get::<_, String>(0)).map_err(storage_error)?;
+        let rows = stmt
+            .query_map(params![reservation.boss_task_id, cursor], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(storage_error)?;
         rows.map(|row| {
             serde_json::from_str(&row.map_err(storage_error)?)
                 .map_err(|_| "uar_attempt_outcome_unknown".to_string())
-        }).collect()
+        })
+        .collect()
     }
 
     pub(super) fn validate_uar_projection_update(
-        &self, projection: &UarDelegatedRunProjection,
+        &self,
+        projection: &UarDelegatedRunProjection,
     ) -> Result<(), String> {
-        let Some(db) = &self.db else { return Ok(()); };
+        let Some(db) = &self.db else {
+            return Ok(());
+        };
         let conn = lock_a2a_recover(db, "database");
         if let Some(reservation) = reservation_for_task(&conn, &projection.boss_task_id)? {
             validate_projection(&reservation, projection)?;
-            validate_execution(&load_projection(&conn, &projection.boss_task_id)?, projection)?;
+            validate_execution(
+                &load_projection(&conn, &projection.boss_task_id)?,
+                projection,
+            )?;
         }
         Ok(())
     }
 
     pub(super) fn persist_uar_projection(
-        &self, projection: &mut UarDelegatedRunProjection,
+        &self,
+        projection: &mut UarDelegatedRunProjection,
     ) -> Result<UarProjectionRetention, String> {
-        let Some(db) = &self.db else { return Ok(UarProjectionRetention::ProcessEphemeral); };
+        let Some(db) = &self.db else {
+            return Ok(UarProjectionRetention::ProcessEphemeral);
+        };
         let mut conn = lock_a2a_recover(db, "database");
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)
+        let tx = conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
         let selected = reservation_for_task(&tx, &projection.boss_task_id)?;
         if let Some(reservation) = &selected {
             let stored = load_projection(&tx, &projection.boss_task_id)?;
             validate_projection(reservation, projection)?;
             validate_execution(&stored, projection)?;
-            if projection.revision < stored.revision { *projection = stored.clone(); }
+            if projection.revision < stored.revision {
+                *projection = stored.clone();
+            }
             // Receipt cursor is observation availability, not an applied event.
             projection.cursor = stored.cursor;
         }
         write_projection(&tx, projection)?;
-        let task_exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)", [&projection.boss_task_id], |row| row.get(0)).map_err(storage_error)?;
-        if task_exists || selected.is_some() { write_outcome(&tx, projection)?; }
+        let task_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM a2a_tasks_v2 WHERE id = ?1)",
+                [&projection.boss_task_id],
+                |row| row.get(0),
+            )
+            .map_err(storage_error)?;
+        if task_exists || selected.is_some() {
+            write_outcome(&tx, projection)?;
+        }
         tx.commit().map_err(storage_error)?;
         Ok(UarProjectionRetention::Durable)
     }
 
     pub(super) fn publish_uar_projection(&self, projection: UarDelegatedRunProjection) {
         let status = uar_projection_task_status(&projection);
-        if let Some(tracked) = lock_a2a_recover(&self.tasks, "tasks").get_mut(&projection.boss_task_id) {
+        if let Some(tracked) =
+            lock_a2a_recover(&self.tasks, "tasks").get_mut(&projection.boss_task_id)
+        {
             tracked.task.status = status.into();
             tracked.updated_at = std::time::Instant::now();
         }

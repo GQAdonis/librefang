@@ -87,21 +87,48 @@ use std::sync::{Arc, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::types::ApiErrorResponse;
 
 fn qualified_webhook_accounts(state: &AppState) -> Vec<String> {
-    state.kernel.config_ref().sidecar_channels.iter().filter_map(|channel| {
-        let enabled = channel.env.get("WEBHOOK_DURABLE_PROFILE")
-            .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"));
-        let callback = channel.env.get("WEBHOOK_CALLBACK_URL")
-            .is_some_and(|value| !value.trim().is_empty());
-        let deliver_only = channel.env.get("WEBHOOK_DELIVER_ONLY")
-            .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"));
-        if channel.channel_type.as_deref().unwrap_or(&channel.name) != "webhook"
-            || !enabled || !callback || deliver_only
-        {
-            return None;
-        }
-        channel.env.get("WEBHOOK_ACCOUNT_ID")
-            .map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
-    }).collect()
+    state
+        .kernel
+        .config_ref()
+        .sidecar_channels
+        .iter()
+        .filter_map(|channel| {
+            let enabled = channel
+                .env
+                .get("WEBHOOK_DURABLE_PROFILE")
+                .is_some_and(|value| {
+                    matches!(
+                        value.trim().to_ascii_lowercase().as_str(),
+                        "1" | "true" | "yes" | "on"
+                    )
+                });
+            let callback = channel
+                .env
+                .get("WEBHOOK_CALLBACK_URL")
+                .is_some_and(|value| !value.trim().is_empty());
+            let deliver_only = channel
+                .env
+                .get("WEBHOOK_DELIVER_ONLY")
+                .is_some_and(|value| {
+                    matches!(
+                        value.trim().to_ascii_lowercase().as_str(),
+                        "1" | "true" | "yes" | "on"
+                    )
+                });
+            if channel.channel_type.as_deref().unwrap_or(&channel.name) != "webhook"
+                || !enabled
+                || !callback
+                || deliver_only
+            {
+                return None;
+            }
+            channel
+                .env
+                .get("WEBHOOK_ACCOUNT_ID")
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .collect()
 }
 
 /// Report the local channel route profile without implying cross-host
@@ -134,7 +161,8 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             Ok(Some(_)),
         );
         #[cfg(feature = "uar-driver")]
-        let uar_ingress_ready = librefang_llm_drivers::drivers::uar::supervised_channel_binding().is_some();
+        let uar_ingress_ready =
+            librefang_llm_drivers::drivers::uar::supervised_channel_binding().is_some();
         #[cfg(not(feature = "uar-driver"))]
         let uar_ingress_ready = false;
         if let Err(error) = result {
@@ -218,25 +246,32 @@ pub async fn reassign_channel_route(
         let config = state.kernel.config_ref().storage.clone();
         let session = match librefang_storage::shared_pool().open(&config).await {
             Ok(session) => session,
-            Err(_) => return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({"error":"channel route storage unavailable"})),
-            ),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"channel route storage unavailable"})),
+                )
+            }
         };
         let store = match librefang_storage::ChannelRouteStore::open(&session).await {
             Ok(store) => store,
-            Err(_) => return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({"error":"channel route store unavailable"})),
-            ),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"channel route store unavailable"})),
+                )
+            }
         };
         let scope = librefang_storage::ChannelScope {
             provider: request.scope.provider.clone(),
             account: request.scope.account.clone(),
             account_kind: match request.scope.account_kind {
                 librefang_channels::channel_route::AccountKind::Native => "native",
-                librefang_channels::channel_route::AccountKind::ConfiguredInstance => "configured_instance",
-            }.to_string(),
+                librefang_channels::channel_route::AccountKind::ConfiguredInstance => {
+                    "configured_instance"
+                }
+            }
+            .to_string(),
             workspace: request.scope.workspace.clone(),
             room: request.scope.room.clone(),
             thread: request.scope.thread.clone(),
@@ -244,14 +279,18 @@ pub async fn reassign_channel_route(
         };
         let current = match store.affinity(&scope).await {
             Ok(Some(current)) if current.revision == request.expected_revision => current,
-            Ok(_) => return (
-                StatusCode::CONFLICT,
-                Json(serde_json::json!({"error":"channel route revision changed"})),
-            ),
-            Err(_) => return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({"error":"channel route affinity unavailable"})),
-            ),
+            Ok(_) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({"error":"channel route revision changed"})),
+                )
+            }
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"channel route affinity unavailable"})),
+                )
+            }
         };
         let payload = serde_json::json!({
             "scope": &scope,
@@ -261,10 +300,12 @@ pub async fn reassign_channel_route(
         });
         let bytes = match serde_json::to_vec(&payload) {
             Ok(bytes) => bytes,
-            Err(_) => return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error":"cannot encode reassignment"})),
-            ),
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error":"cannot encode reassignment"})),
+                )
+            }
         };
         let identity = hex::encode(Sha256::digest(&bytes));
         let route_revision = request.expected_revision.to_string();
@@ -290,7 +331,10 @@ pub async fn reassign_channel_route(
             grant_id: &request.grant_id,
         };
         if let Err(error) = crate::channel_authority::release_channel_effect(&gate).await {
-            return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": error})));
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": error})),
+            );
         }
         let decision = librefang_storage::RouteDecision {
             outcome: librefang_storage::RouteOutcome::Selected {
@@ -299,22 +343,34 @@ pub async fn reassign_channel_route(
             reason: "gate_authorized_operator_reassignment".into(),
             binding_revision: None,
         };
-        match store.reassign(&scope, request.expected_revision, &decision).await {
-            Ok(next) => (StatusCode::OK, Json(serde_json::json!({
-                "handler": next.handler,
-                "revision": next.revision,
-            }))),
-            Err(_) => (StatusCode::CONFLICT, Json(serde_json::json!({
-                "error": "channel route revision changed after authorization; inspect the current affinity before retrying",
-            }))),
+        match store
+            .reassign(&scope, request.expected_revision, &decision)
+            .await
+        {
+            Ok(next) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "handler": next.handler,
+                    "revision": next.revision,
+                })),
+            ),
+            Err(_) => (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "error": "channel route revision changed after authorization; inspect the current affinity before retrying",
+                })),
+            ),
         }
     }
     #[cfg(not(feature = "surreal-backend"))]
     {
         let _ = (state, request);
-        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({
-            "error": "durable channel route storage is unsupported",
-        })))
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({
+                "error": "durable channel route storage is unsupported",
+            })),
+        )
     }
 }
 
@@ -373,52 +429,98 @@ pub async fn create_channel_observer(
     #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     {
         use librefang_storage::channel_actions::{ChannelActionStore, ObserverSubscriptionRequest};
-        if !matches!(&state.kernel.config_ref().storage.backend, librefang_storage::StorageBackendKind::Remote(_))
-            || !crate::channel_authority::configured_for_effects()
-            || !matches!(crate::channel_observers::ObserverTransportConfig::from_host(), Ok(Some(_)))
+        if !matches!(
+            &state.kernel.config_ref().storage.backend,
+            librefang_storage::StorageBackendKind::Remote(_)
+        ) || !crate::channel_authority::configured_for_effects()
+            || !matches!(
+                crate::channel_observers::ObserverTransportConfig::from_host(),
+                Ok(Some(_))
+            )
         {
-            return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({
-                "error": "remote shared storage, Gate and Fabric must be configured for observers",
-            })));
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "remote shared storage, Gate and Fabric must be configured for observers",
+                })),
+            );
         }
         let qualified_webhook = request.source.provider == "webhook"
-            && request.source.account_kind == librefang_channels::channel_route::AccountKind::ConfiguredInstance
-            && request.source_profile.as_deref() == Some(librefang_channels::channel_route::WEBHOOK_PROFILE)
+            && request.source.account_kind
+                == librefang_channels::channel_route::AccountKind::ConfiguredInstance
+            && request.source_profile.as_deref()
+                == Some(librefang_channels::channel_route::WEBHOOK_PROFILE)
             && qualified_webhook_accounts(&state).contains(&request.source.account);
         let complete_scope = [
-            &request.source.account, &request.source.workspace,
-            &request.source.room, &request.source.sender,
-        ].iter().all(|value| !value.trim().is_empty())
-            && request.source.thread.as_ref().is_none_or(|value| !value.trim().is_empty());
+            &request.source.account,
+            &request.source.workspace,
+            &request.source.room,
+            &request.source.sender,
+        ]
+        .iter()
+        .all(|value| !value.trim().is_empty())
+            && request
+                .source
+                .thread
+                .as_ref()
+                .is_none_or(|value| !value.trim().is_empty());
         if (request.source.provider != "discord" && !qualified_webhook)
             || !complete_scope
             || request.observer_instance_id.trim().is_empty()
             || request.recipient_grant_revision.trim().is_empty()
         {
-            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({
-                "error": "complete Discord guild or configured signed_webhook_v1 source, observer instance and recipient grant revision are required",
-            })));
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "complete Discord guild or configured signed_webhook_v1 source, observer instance and recipient grant revision are required",
+                })),
+            );
         }
-        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+        let session = match librefang_storage::shared_pool()
+            .open(&state.kernel.config_ref().storage)
+            .await
+        {
             Ok(session) => session,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer storage unavailable"})),
+                )
+            }
         };
         let store = match ChannelActionStore::open(&session).await {
             Ok(store) => store,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer store unavailable"})),
+                )
+            }
         };
         let filter_id = match crate::channel_observers::source_filter_id(&request.source) {
             Ok(filter) => filter,
-            Err(error) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":error}))),
+            Err(error) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error":error})),
+                )
+            }
         };
         let subscription_id = match crate::channel_observers::create_uar_subscription(
             &request.observer_instance_id,
             &request.source,
             &request.recipient_grant_issuer,
             &request.recipient_grant_id,
-        ).await {
+        )
+        .await
+        {
             Ok(id) => id,
-            Err(error) => return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error":error}))),
+            Err(error) => {
+                return (
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({"error":error})),
+                )
+            }
         };
         let binding = ObserverSubscriptionRequest {
             subscription_id: subscription_id.clone(),
@@ -433,40 +535,72 @@ pub async fn create_channel_observer(
             grant_revision: request.recipient_grant_revision,
         };
         match store.subscribe_observer(&binding).await {
-            Ok(saved) => (StatusCode::CREATED, Json(serde_json::json!({"subscription":saved}))),
-            Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({
-                "error":"UAR subscription was created but BossFang cursor registration failed; reconcile the returned UAR subscription before retrying",
-                "uar_subscription_id":subscription_id,
-            }))),
+            Ok(saved) => (
+                StatusCode::CREATED,
+                Json(serde_json::json!({"subscription":saved})),
+            ),
+            Err(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error":"UAR subscription was created but BossFang cursor registration failed; reconcile the returned UAR subscription before retrying",
+                    "uar_subscription_id":subscription_id,
+                })),
+            ),
         }
     }
     #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
     {
         let _ = (state, request);
-        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({"error":"observer profile is unsupported by this build"})),
+        )
     }
 }
 
 pub async fn list_channel_observers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     #[cfg(feature = "surreal-backend")]
     {
-        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+        let session = match librefang_storage::shared_pool()
+            .open(&state.kernel.config_ref().storage)
+            .await
+        {
             Ok(session) => session,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer storage unavailable"})),
+                )
+            }
         };
-        let store = match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
-            Ok(store) => store,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
-        };
+        let store =
+            match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
+                Ok(store) => store,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(serde_json::json!({"error":"observer store unavailable"})),
+                    )
+                }
+            };
         match store.list_observer_subscriptions(1000).await {
-            Ok(rows) => (StatusCode::OK, Json(serde_json::json!({"subscriptions":rows}))),
-            Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer subscriptions unavailable"}))),
+            Ok(rows) => (
+                StatusCode::OK,
+                Json(serde_json::json!({"subscriptions":rows})),
+            ),
+            Err(_) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"observer subscriptions unavailable"})),
+            ),
         }
     }
     #[cfg(not(feature = "surreal-backend"))]
     {
         let _ = state;
-        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({"error":"observer profile is unsupported by this build"})),
+        )
     }
 }
 
@@ -476,27 +610,50 @@ pub async fn unresolved_channel_observer_deliveries(
 ) -> impl IntoResponse {
     #[cfg(feature = "surreal-backend")]
     {
-        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+        let session = match librefang_storage::shared_pool()
+            .open(&state.kernel.config_ref().storage)
+            .await
+        {
             Ok(session) => session,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer storage unavailable"})),
+                )
+            }
         };
-        let store = match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
-            Ok(store) => store,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
-        };
+        let store =
+            match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
+                Ok(store) => store,
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(serde_json::json!({"error":"observer store unavailable"})),
+                    )
+                }
+            };
         match store.unresolved_observer_deliveries(&id, 1000).await {
-            Ok(rows) => (StatusCode::OK, Json(serde_json::json!({
-                "subscription_id":id,
-                "deliveries":rows,
-                "recovery":"Compare each delivery ID with Fabric and UAR receipts before operator reconciliation; claimed and uncertain copies are never reposted automatically",
-            }))),
-            Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
+            Ok(rows) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "subscription_id":id,
+                    "deliveries":rows,
+                    "recovery":"Compare each delivery ID with Fabric and UAR receipts before operator reconciliation; claimed and uncertain copies are never reposted automatically",
+                })),
+            ),
+            Err(_) => (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error":"observer subscription unavailable"})),
+            ),
         }
     }
     #[cfg(not(feature = "surreal-backend"))]
     {
         let _ = (state, id);
-        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({"error":"observer profile is unsupported by this build"})),
+        )
     }
 }
 
@@ -511,25 +668,62 @@ async fn change_channel_observer_status(
     #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     {
         use librefang_storage::channel_actions::{ChannelActionStore, ObserverStatus};
-        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+        let session = match librefang_storage::shared_pool()
+            .open(&state.kernel.config_ref().storage)
+            .await
+        {
             Ok(session) => session,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer storage unavailable"})),
+                )
+            }
         };
         let store = match ChannelActionStore::open(&session).await {
             Ok(store) => store,
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer store unavailable"})),
+                )
+            }
         };
         let subscriber = match store.get_observer_subscription(&id).await {
             Ok(Some(subscriber)) => subscriber,
-            Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
-            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error":"observer subscription unavailable"})),
+                )
+            }
+            Err(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({"error":"observer subscription unavailable"})),
+                )
+            }
         };
-        let target_status = if action == "pause" { ObserverStatus::Paused } else { ObserverStatus::Revoked };
+        let target_status = if action == "pause" {
+            ObserverStatus::Paused
+        } else {
+            ObserverStatus::Revoked
+        };
         if subscriber.status == target_status {
-            return (StatusCode::OK, Json(serde_json::json!({"subscription":subscriber})));
+            return (
+                StatusCode::OK,
+                Json(serde_json::json!({"subscription":subscriber})),
+            );
         }
-        if subscriber.status == ObserverStatus::Revoked || (action == "pause" && subscriber.status != ObserverStatus::Active) {
-            return (StatusCode::CONFLICT, Json(serde_json::json!({"error":"observer status cannot transition", "subscription_id":id})));
+        if subscriber.status == ObserverStatus::Revoked
+            || (action == "pause" && subscriber.status != ObserverStatus::Active)
+        {
+            return (
+                StatusCode::CONFLICT,
+                Json(
+                    serde_json::json!({"error":"observer status cannot transition", "subscription_id":id}),
+                ),
+            );
         }
         let target = crate::channel_observers::ObserverTarget {
             subscription_id: id.clone(),
@@ -537,29 +731,51 @@ async fn change_channel_observer_status(
             source_grant_issuer: subscriber.source_grant_issuer.clone(),
             source_grant_id: subscriber.source_grant_id.clone(),
         };
-        if let Err(error) = crate::channel_observers::change_uar_subscription(&target, action).await {
-            return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error":error, "subscription_id":id})));
+        if let Err(error) = crate::channel_observers::change_uar_subscription(&target, action).await
+        {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({"error":error, "subscription_id":id})),
+            );
         }
-        match store.set_observer_status(&id, subscriber.status, target_status).await {
-            Ok(saved) => (StatusCode::OK, Json(serde_json::json!({"subscription":saved}))),
-            Err(_) => (StatusCode::CONFLICT, Json(serde_json::json!({
-                "error":"UAR subscription changed but BossFang status did not; reconcile before retrying",
-                "subscription_id":id,
-            }))),
+        match store
+            .set_observer_status(&id, subscriber.status, target_status)
+            .await
+        {
+            Ok(saved) => (
+                StatusCode::OK,
+                Json(serde_json::json!({"subscription":saved})),
+            ),
+            Err(_) => (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "error":"UAR subscription changed but BossFang status did not; reconcile before retrying",
+                    "subscription_id":id,
+                })),
+            ),
         }
     }
     #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
     {
         let _ = (state, id, action);
-        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({"error":"observer profile is unsupported by this build"})),
+        )
     }
 }
 
-pub async fn pause_channel_observer(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+pub async fn pause_channel_observer(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
     change_channel_observer_status(state, id, "pause").await
 }
 
-pub async fn revoke_channel_observer(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+pub async fn revoke_channel_observer(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
     change_channel_observer_status(state, id, "revoke").await
 }
 
@@ -1485,6 +1701,15 @@ fn sidecar_discovery_rows() -> Vec<serde_json::Value> {
 /// reports `removed` while the channel comes back. Every file that declares
 /// the name is stripped; `false` still means "declared nowhere", which is the
 /// only case that deserves a 404.
+///
+/// When the walk leaves no reachable file stating `sidecar_channels`, it also
+/// states the explicit empty array in the first file it modified. The reload
+/// overlay (#8459/#8460) reads a key the document does not state as "keep the
+/// live value", so the key removal alone would resurrect the channel on the
+/// reload the delete triggers. Writing it only in that case — and with the
+/// section unstated everywhere else — cannot shadow anything; a root-level `[]`
+/// next to an include that still declared entries would drop them, because the
+/// root wins the include merge.
 fn remove_sidecar_block_anywhere(
     config_path: &std::path::Path,
     name: &str,
@@ -1511,9 +1736,15 @@ fn remove_sidecar_block_anywhere(
         .collect::<Result<_, String>>()?;
 
     let mut removed = false;
+    let mut modified: Vec<std::path::PathBuf> = Vec::new();
     for path in &files {
         match super::sidecar_toml::remove_sidecar_block(path, name) {
-            Ok(hit) => removed |= hit,
+            Ok(hit) => {
+                if hit {
+                    modified.push(path.clone());
+                }
+                removed |= hit;
+            }
             Err(error) => {
                 for (snapshot_path, contents) in &snapshots {
                     if let Err(restore_error) = super::sidecar_toml::restore_sidecar_file(
@@ -1531,7 +1762,67 @@ fn remove_sidecar_block_anywhere(
             }
         }
     }
+
+    // With the blocks stripped, state the empty section if nothing on disk
+    // states it any more — see the function docs for why it goes in a file
+    // this walk modified and why it must not run while an include still
+    // declares entries.
+    //
+    // Both steps run after the walk has rewritten files, and the in-loop
+    // error path restores every snapshot on failure; this one must too, or an
+    // I/O error here leaves the blocks stripped with no explicit `[]` and no
+    // way to retry out of it.
+    let finalize = (|| -> Result<(), String> {
+        if removed && !document_states_sidecar_section(config_path)? {
+            if let Some(path) = modified.first() {
+                super::sidecar_toml::state_empty_sidecar_channels(path)?;
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = finalize {
+        for (snapshot_path, contents) in &snapshots {
+            if let Err(restore_error) =
+                super::sidecar_toml::restore_sidecar_file(snapshot_path, contents.as_deref())
+            {
+                tracing::error!(
+                    path = %snapshot_path.display(),
+                    error = %restore_error,
+                    "sidecar delete: failed to restore snapshot after a partial-write failure"
+                );
+            }
+        }
+        return Err(error);
+    }
+
     Ok(removed)
+}
+
+/// Whether any file reachable from `config_path` states a `sidecar_channels` key.
+///
+/// This is the reload overlay's own question (#8459/#8460): a top-level key the
+/// document states replaces the live value wholesale, and one it does not
+/// state keeps the live value. Both delete paths ask it before writing an
+/// explicit empty section — `remove_sidecar_block_anywhere` after stripping
+/// the last block, and the reconcile branch in `delete_sidecar_channel` — because
+/// when the answer is already yes, the document itself expresses the deletion
+/// and a `[]` would instead shadow the entries an included file declares (the
+/// root wins the include merge).
+fn document_states_sidecar_section(config_path: &std::path::Path) -> Result<bool, String> {
+    let root = match std::fs::read_to_string(config_path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(format!("read {}: {error}", config_path.display())),
+    };
+    let root_doc: toml_edit::DocumentMut = root
+        .parse()
+        .map_err(|error| format!("parse {}: {error}", config_path.display()))?;
+    if root_doc.get("sidecar_channels").is_some() {
+        return Ok(true);
+    }
+    // `included_files_with_sidecars_blocking` only reports depth > 0 hits; the
+    // root was handled by the parse above.
+    Ok(!included_files_with_sidecars_blocking(config_path, true)?.is_empty())
 }
 
 /// Request body for `POST /api/channels/sidecar/{name}/configure`.
@@ -2380,14 +2671,19 @@ pub async fn configure_sidecar_channel(
             read_config_overrides, resolve_config_with_overrides, write_config_overrides,
         };
         let _config_guard = state.config_write_lock.lock().await;
-        let managed_env_keys: Vec<&str> =
-            surreal_managed_env_keys.iter().map(String::as_str).collect();
+        let managed_env_keys: Vec<&str> = surreal_managed_env_keys
+            .iter()
+            .map(String::as_str)
+            .collect();
         let mut sidecars = state.kernel.config_ref().sidecar_channels.clone();
         super::sidecar_toml::upsert_sidecar_in_vec(
             &mut sidecars,
             &instance_name,
             entry.name, // channel_type defaults to the catalog name
-            super::sidecar_toml::SidecarCommand { command: entry.command, args: entry.args },
+            super::sidecar_toml::SidecarCommand {
+                command: entry.command,
+                args: entry.args,
+            },
             &surreal_nonsecret_env,
             &managed_env_keys,
             agent.as_deref(),
@@ -2506,11 +2802,12 @@ pub async fn delete_sidecar_channel(
     // Rewrite config.toml under the same lock that gates configure and POST /api/config/set.
     let removed = {
         let _config_guard = state.config_write_lock.lock().await;
-        // `config_path` isn't read again after this block, so move it straight into the
-        // blocking task instead of cloning; `name` is still needed below for the 404 message.
+        // `name` is still needed below for the 404 message, and `config_path` by
+        // the reconcile branch below, so both are cloned into the blocking task.
         let remove_name = name.clone();
+        let remove_path = config_path.clone();
         tokio::task::spawn_blocking(move || {
-            remove_sidecar_block_anywhere(&config_path, &remove_name)
+            remove_sidecar_block_anywhere(&remove_path, &remove_name)
         })
         .await
         .map_err(|e| {
@@ -2578,6 +2875,35 @@ pub async fn delete_sidecar_channel(
                 .kernel
                 .channel_adapters_ref()
                 .retain(|key, _| key != &name && !key.starts_with(&prefix));
+        }
+
+        // Make the deletion expressible through the reload below. With no
+        // block anywhere on disk the document does not state
+        // `sidecar_channels`, and the reload overlay (#8459/#8460) reads a key
+        // the document does not state as "keep the live value" — so the
+        // reload would put the channel straight back and every repeat delete
+        // would take this same branch. State the empty section explicitly,
+        // unless a reachable file already states it: then the document's own
+        // value replaces the live list wholesale on reload, while a
+        // root-level `[]` would instead shadow the included entries (the root
+        // wins the include merge).
+        {
+            let _config_guard = state.config_write_lock.lock().await;
+            let reconcile_path = config_path.clone();
+            tokio::task::spawn_blocking(move || -> Result<(), String> {
+                if document_states_sidecar_section(&reconcile_path)? {
+                    return Ok(());
+                }
+                super::sidecar_toml::state_empty_sidecar_channels(&reconcile_path)
+            })
+            .await
+            .map_err(|e| {
+                ApiErrorResponse::internal_scrub(format!(
+                    "sidecar delete reconcile task failed: {e}"
+                ))
+                .into_json_tuple()
+            })?
+            .map_err(|e| ApiErrorResponse::internal_scrub(e).into_json_tuple())?;
         }
     }
 

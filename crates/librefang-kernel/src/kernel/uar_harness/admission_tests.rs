@@ -29,21 +29,39 @@ fn fixture() -> (UarJobAttemptReservation, A2aTask, UarDelegatedRunProjection) {
         "detached": false
     })).unwrap();
     let reservation = UarJobAttemptReservation {
-        job: JobAttemptRef { job_id: "00000000-0000-0000-0000-000000000001".into(), attempt: 1 },
-        verified_subject: projection.verified_principal.clone(), verified_tenant: None,
-        workspace_id: projection.workspace_id.clone(), boss_task_id: projection.boss_task_id.clone(),
-        harness: "uar".into(), admission_id: projection.admission_key.clone(),
-        runtime_epoch: "epoch-1".into(), request_digest: projection.request_digest.clone(),
-        definition: projection.definition.clone(), credential_ref: Some("credential-reference".into()),
-        credential_revision: Some("revision-1".into()), required_capabilities: vec![],
+        job: JobAttemptRef {
+            job_id: "00000000-0000-0000-0000-000000000001".into(),
+            attempt: 1,
+        },
+        verified_subject: projection.verified_principal.clone(),
+        verified_tenant: None,
+        workspace_id: projection.workspace_id.clone(),
+        boss_task_id: projection.boss_task_id.clone(),
+        harness: "uar".into(),
+        admission_id: projection.admission_key.clone(),
+        runtime_epoch: "epoch-1".into(),
+        request_digest: projection.request_digest.clone(),
+        definition: projection.definition.clone(),
+        credential_ref: Some("credential-reference".into()),
+        credential_revision: Some("revision-1".into()),
+        required_capabilities: vec![],
     };
-    let task = A2aTask { id: projection.boss_task_id.clone(), session_id: None,
-        status: A2aTaskStatus::Submitted.into(), messages: vec![], artifacts: vec![],
-        agent_id: None, caller_a2a_agent_id: None };
+    let task = A2aTask {
+        id: projection.boss_task_id.clone(),
+        session_id: None,
+        status: A2aTaskStatus::Submitted.into(),
+        messages: vec![],
+        artifacts: vec![],
+        agent_id: None,
+        caller_a2a_agent_id: None,
+    };
     (reservation, task, projection)
 }
 
-fn selected(reservation: &UarJobAttemptReservation, receipt: &UarDelegatedRunProjection) -> SelectedUarJob {
+fn selected(
+    reservation: &UarJobAttemptReservation,
+    receipt: &UarDelegatedRunProjection,
+) -> SelectedUarJob {
     SelectedUarJob {
         job: reservation.job.clone(),
         verified_subject: reservation.verified_subject.clone(),
@@ -69,23 +87,40 @@ async fn reopened_attempt_with_changed_credentials_reconciles_without_new_identi
     let (reservation, task, projection) = fixture();
     {
         let store = A2aTaskStore::with_persistence(10, &path);
-        store.reserve_uar_job_attempt(reservation.clone(), task, projection.clone()).unwrap();
+        store
+            .reserve_uar_job_attempt(reservation.clone(), task, projection.clone())
+            .unwrap();
     }
     let store = A2aTaskStore::with_persistence(10, &path);
     // No retained connection exists after restart. The existing branch must
     // return unknown locally without preflight, new admission or native work.
-    let result = admission::dispatch_to_store(&store, AgentId::new(), selected(&reservation, &projection), librefang_memory::task_dispatch::SelectedClaim::Existing)
-        .await.unwrap();
+    let result = admission::dispatch_to_store(
+        &store,
+        AgentId::new(),
+        selected(&reservation, &projection),
+        librefang_memory::task_dispatch::SelectedClaim::Existing,
+    )
+    .await
+    .unwrap();
     assert_eq!(result.runtime_epoch, projection.runtime_epoch);
     assert_eq!(result.admission_key, projection.admission_key);
     assert_eq!(result.request_digest, projection.request_digest);
     assert_eq!(result.recovery_state, "outcome_unknown");
     assert_eq!(result.effect_state, "effect_unconfirmed");
-    let saved = store.get_uar_job_attempt(&reservation.verified_subject, None,
-        &reservation.workspace_id, &reservation.job).unwrap().unwrap();
+    let saved = store
+        .get_uar_job_attempt(
+            &reservation.verified_subject,
+            None,
+            &reservation.workspace_id,
+            &reservation.job,
+        )
+        .unwrap()
+        .unwrap();
     assert_eq!(saved.reservation, reservation);
     assert_eq!(store.list_uar_job_attempts().unwrap().len(), 1);
-    assert!(!serde_json::to_string(&saved.projection).unwrap().contains("synthetic-secret-canary"));
+    assert!(!serde_json::to_string(&saved.projection)
+        .unwrap()
+        .contains("synthetic-secret-canary"));
 }
 
 #[tokio::test]
@@ -93,7 +128,13 @@ async fn missing_owner_refuses_before_storage_or_preflight() {
     let (reservation, _, projection) = fixture();
     let mut request = selected(&reservation, &projection);
     request.verified_subject.clear();
-    let result = admission::dispatch_to_store(&A2aTaskStore::new(10), AgentId::new(), request, librefang_memory::task_dispatch::SelectedClaim::Created).await;
+    let result = admission::dispatch_to_store(
+        &A2aTaskStore::new(10),
+        AgentId::new(),
+        request,
+        librefang_memory::task_dispatch::SelectedClaim::Created,
+    )
+    .await;
     assert!(matches!(result, Err(JobDispatchError::InvalidIdentity)));
 }
 
@@ -101,6 +142,9 @@ async fn missing_owner_refuses_before_storage_or_preflight() {
 fn ephemeral_selection_is_explicitly_unsupported() {
     let (reservation, _, projection) = fixture();
     let selected = ResolvedDispatch::Uar(Box::new(selected(&reservation, &projection)));
-    assert!(matches!(selected.require_native_ephemeral(), Err(JobDispatchError::EphemeralUnsupported)));
+    assert!(matches!(
+        selected.require_native_ephemeral(),
+        Err(JobDispatchError::EphemeralUnsupported)
+    ));
     assert!(ResolvedDispatch::Native.require_native_ephemeral().is_ok());
 }

@@ -326,6 +326,7 @@ impl LlmDriver for CodeWhaleDriver {
             };
 
             return Ok(CompletionResponse {
+                text_synthesized_from_thinking: false,
                 content: vec![ContentBlock::Text {
                     text,
                     provider_metadata: None,
@@ -348,6 +349,7 @@ impl LlmDriver for CodeWhaleDriver {
         let resolved_model =
             Self::model_flag(&request.model).unwrap_or_else(|| request.model.clone());
         Ok(CompletionResponse {
+            text_synthesized_from_thinking: false,
             content: vec![ContentBlock::Text {
                 text: trimmed.to_string(),
                 provider_metadata: None,

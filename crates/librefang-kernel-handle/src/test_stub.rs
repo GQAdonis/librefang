@@ -166,6 +166,7 @@ impl TaskQueue for KernelHandleStub {
         _description: &str,
         _assigned_to: Option<&str>,
         _created_by: Option<&str>,
+        _opts: &crate::task_queue::TaskPostOptions,
     ) -> Result<String, KernelOpError> {
         Err(KernelOpError::unavailable("stub"))
     }

@@ -600,8 +600,11 @@ fn user_role_allows_request(role: UserRole, method: &axum::http::Method, path: &
     // User role: only specific POST endpoints are allowed.
     if *method == axum::http::Method::POST {
         let agent_message = path.starts_with("/api/agents/")
-            && (path.ends_with("/message") || path.ends_with("/message/stream")
-                || path.ends_with("/uar-chat/turns") || path.ends_with("/uar-chat/cancel") || path.ends_with("/uar-chat/resume"));
+            && (path.ends_with("/message")
+                || path.ends_with("/message/stream")
+                || path.ends_with("/uar-chat/turns")
+                || path.ends_with("/uar-chat/cancel")
+                || path.ends_with("/uar-chat/resume"));
         let agent_clone = path.starts_with("/api/agents/") && path.ends_with("/clone");
         // Anchor the approval suffixes to the `/api/approvals/` prefix. These
         // suffixes are meant only for tool-call approval actions; left
@@ -707,11 +710,21 @@ fn apply_oidc_grant(
         role = %grant.role,
         "admitting request on an OIDC role claim mapped by external_auth.role_map"
     );
-    if let Some(provenance) = request.extensions().get::<crate::oauth::VerifiedOidcAuthentication>().cloned() {
+    if let Some(provenance) = request
+        .extensions()
+        .get::<crate::oauth::VerifiedOidcAuthentication>()
+        .cloned()
+    {
         // Preserve the actual configured provider and token subject, without
         // claiming tenant/actor or issuer validation not supplied by this verifier.
-        crate::mcp_attribution::establish(request, crate::mcp_attribution::McpAuthnSource::Oidc,
-            Some(format!("oidc:{}:{}", provenance.provider_id, provenance.subject)));
+        crate::mcp_attribution::establish(
+            request,
+            crate::mcp_attribution::McpAuthnSource::Oidc,
+            Some(format!(
+                "oidc:{}:{}",
+                provenance.provider_id, provenance.subject
+            )),
+        );
     }
     request.extensions_mut().insert(AuthenticatedApiUser {
         name: grant.name,
@@ -1277,14 +1290,16 @@ pub async fn reject_oversized_upload(
     next.run(request).await
 }
 
-/// Cap how many `POST /api/agents/{id}/upload` requests may be mid-flight at once.
+/// Cap how many raw-body upload requests may be mid-flight at once.
 ///
-/// `upload_file` extracts `axum::body::Bytes`, buffering the whole body into RAM before the
-/// handler runs. Nothing bounds concurrency on that path otherwise: `RequestBodyLimitLayer` and
-/// `DefaultBodyLimit` are both per-request caps, so N parallel uploads at `max_upload_size_bytes`
-/// cost `N * max_upload_size_bytes` in RSS — 40 requests against a 100 MB cap is ~4 GB. Acquiring
-/// the permit here, before `next.run` reaches the extractor, is what makes the cap effective:
-/// gating inside the handler body would run after the buffering already happened.
+/// Two routes take `axum::body::Bytes`, which buffers the whole body into RAM before the handler
+/// runs, and each applies this layer with its own permit pool: `POST /api/agents/{id}/upload`
+/// (sized by `max_upload_size_bytes` / `max_concurrent_uploads`) and `POST /api/agents/{id}/avatar`
+/// ([`crate::routes::agents::avatar::MAX_CONCURRENT_AVATAR_UPLOADS`]). Nothing bounds concurrency on
+/// either path otherwise: `RequestBodyLimitLayer` and `DefaultBodyLimit` are both per-request caps,
+/// so N parallel uploads at the route's cap cost `N * cap` in RSS — 40 requests against a 100 MB cap
+/// is ~4 GB. Acquiring the permit here, before `next.run` reaches the extractor, is what makes the
+/// cap effective: gating inside the handler body would run after the buffering already happened.
 ///
 /// A saturated pool gets a fast 429 rather than queueing, matching `try_acquire_comms_stream_permit`
 /// in `routes/network.rs` — an upload is retriable, and queuing would just hold the connection open
@@ -1825,6 +1840,10 @@ pub async fn auth(
     // carry a valid session or per-user API key (e.g. the CLI, a Vite
     // dev-proxy). After attribution the request falls through to the normal
     // is_public / token-verification flow below — there is no early return.
+    //
+    // The master-hash and per-user-key results computed here are remembered, keyed by the token they were computed for, so the main token-check path below reuses them instead of paying the Argon2id cost a second time.
+    let mut loopback_master_hash_hit: Option<(String, bool)> = None;
+    let mut loopback_user_hit: Option<(String, Option<ApiUserAuth>)> = None;
     {
         let is_loopback = request
             .extensions()
@@ -1855,16 +1874,22 @@ pub async fn auth(
                     // Fall through to normal auth — the session token will be
                     // validated again in the main token-check path below.
                 }
-                // Try per-user API keys (Argon2 verify against api_key_hash).
-                // Use the local `user_api_keys` snapshot taken at the top of
-                // `auth()` — single source of truth for this request.
-                else if let Some(user) = user_api_keys
-                    .iter()
-                    .find(|user| {
-                        crate::password_hash::verify_password(&token_str, &user.api_key_hash)
-                    })
-                    .cloned()
-                {
+                // The master key needs no per-user attribution (the main path attributes it as root), so check it before scanning the per-user table: a loopback master-key caller must not pay one failed Argon2id verify per `[[users]]` entry.
+                else if crate::server::matches_master_token(api_key.trim(), &token_str) || {
+                    let hit = !master_key_hash.is_empty()
+                        && crate::server::master_hash_matches(&master_key_hash, &token_str).await;
+                    loopback_master_hash_hit = Some((token_str.clone(), hit));
+                    hit
+                } {
+                    // Fall through to normal auth, which admits and attributes the master key.
+                }
+                // Try per-user API keys against the local `user_api_keys` snapshot taken at the top of `auth()` (single source of truth for this request).
+                // `find_user_api_key` keeps the Argon2id verifies off the async worker.
+                else if let Some(user) = {
+                    let hit = crate::server::find_user_api_key(&user_api_keys, &token_str).await;
+                    loopback_user_hit = Some((token_str.clone(), hit.clone()));
+                    hit
+                } {
                     // Apply the role gate so a Viewer/User key on loopback
                     // cannot smuggle a write it would be denied over the LAN.
                     if !user_role_allows_request(user.role, &method, path) {
@@ -1903,8 +1928,7 @@ pub async fn auth(
                         role: user.role,
                         user_id: user.user_id,
                     });
-                    // Fall through to normal auth — the token will be
-                    // re-verified in the main token-check path below.
+                    // Fall through to normal auth — the main token-check path below reuses the `loopback_user_hit` result instead of verifying again.
                 }
             }
             // No early return — loopback requests continue through the
@@ -2047,7 +2071,11 @@ pub async fn auth(
             .map(|ci| ci.0.ip().is_loopback())
             .unwrap_or(false);
         let local_mcp = crate::mcp_attribution::trusted_local(&request);
-        if if path == "/mcp" { local_mcp } else { is_loopback || auth_state.allow_no_auth } {
+        if if path == "/mcp" {
+            local_mcp
+        } else {
+            is_loopback || auth_state.allow_no_auth
+        } {
             // No auth configured + trusted origin (loopback, or explicit
             // LIBREFANG_ALLOW_NO_AUTH opt-in) means a fully-trusted local
             // operator — the same trust level as the root master credential.
@@ -2064,8 +2092,11 @@ pub async fn auth(
                 user_id: UserId(ROOT_API_KEY_USER_ID),
             });
             request.extensions_mut().insert(TrustedNoAuthCaller);
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::LocalTransport, None);
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::LocalTransport,
+                None,
+            );
             return next.run(request).await;
         }
         // A deployment whose only configured credential is `[external_auth]`
@@ -2081,9 +2112,12 @@ pub async fn auth(
             OidcOutcome::NoGrant => {}
         }
         if path == "/mcp" {
-            return Response::builder().status(StatusCode::UNAUTHORIZED)
-                .header("www-authenticate", "Bearer").header("content-type", "application/json")
-                .body(Body::from("{\"error\":\"mcp_authentication_required\"}")).unwrap_or_default();
+            return Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .header("www-authenticate", "Bearer")
+                .header("content-type", "application/json")
+                .body(Body::from("{\"error\":\"mcp_authentication_required\"}"))
+                .unwrap_or_default();
         }
         return Response::builder()
             .status(StatusCode::UNAUTHORIZED)
@@ -2163,7 +2197,9 @@ pub async fn auth(
     // the actual plaintext/hash master match establishes MasterApiKey source.
     let mut master_authenticated = if let Some(token) = api_token {
         auth_state.master_key.is_master_plaintext(token).await
-    } else { false };
+    } else {
+        false
+    };
 
     // Master-key hash (#6613). Only reached when the constant-time comparison
     // above missed, so a plaintext-configured deployment does no hash work.
@@ -2175,7 +2211,11 @@ pub async fn auth(
     // `MasterKeyState`.
     if header_auth == Some(false) && !master_key_hash.is_empty() {
         if let Some(token_str) = api_token {
-            if crate::server::master_hash_matches(&master_key_hash, token_str).await {
+            let hit = match loopback_master_hash_hit.take() {
+                Some((token, hit)) if token == token_str => hit,
+                _ => crate::server::master_hash_matches(&master_key_hash, token_str).await,
+            };
+            if hit {
                 header_auth = Some(true);
                 master_authenticated = true;
             }
@@ -2228,8 +2268,11 @@ pub async fn auth(
             }
         }
         if master_authenticated {
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::MasterApiKey, Some("service:master-api-key".into()));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::MasterApiKey,
+                Some("service:master-api-key".into()),
+            );
         } else {
             crate::mcp_attribution::establish_legacy_dashboard(&mut request);
         }
@@ -2300,8 +2343,11 @@ pub async fn auth(
                     .unwrap_or(i18n::DEFAULT_LANGUAGE);
                 return rbac_denied_response(&auth_state, &method, path, role, user_id, lang);
             }
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::DashboardSession, Some(format!("user:{user_id}")));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::DashboardSession,
+                Some(format!("user:{user_id}")),
+            );
             if let Some(name) = session.user_name {
                 request.extensions_mut().insert(AuthenticatedApiUser {
                     name,
@@ -2313,11 +2359,12 @@ pub async fn auth(
         }
         drop(sessions);
 
-        if let Some(user) = user_api_keys
-            .iter()
-            .find(|user| crate::password_hash::verify_password(token_str, &user.api_key_hash))
-            .cloned()
-        {
+        // Reuse the loopback block's scan when it ran for this same token, so no request verifies the per-user table twice.
+        let user_hit = match loopback_user_hit.take() {
+            Some((token, hit)) if token == token_str => hit,
+            _ => crate::server::find_user_api_key(&user_api_keys, token_str).await,
+        };
+        if let Some(user) = user_hit {
             if !user_role_allows_request(user.role, &method, path) {
                 // RBAC M5: `rbac_denied_response` surfaces the denial in the
                 // hash-chained audit log (best-effort via the `audit_log`
@@ -2338,8 +2385,11 @@ pub async fn auth(
                 );
             }
 
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::UserApiKey, Some(format!("user:{}", user.user_id)));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::UserApiKey,
+                Some(format!("user:{}", user.user_id)),
+            );
             request.extensions_mut().insert(AuthenticatedApiUser {
                 name: user.name,
                 role: user.role,

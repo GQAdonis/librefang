@@ -181,6 +181,15 @@ fn assert_event_matches_fixture(name: &str, fixture: &Value, event: &SidecarEven
                     .map(|version| version as u32)
             );
         }
+        SidecarEvent::SendResult { params: actual } => {
+            assert_eq!(method, "send_result", "events/{name}: variant mismatch");
+            assert_eq!(actual.action_id, params["action_id"]);
+            assert_eq!(
+                serde_json::json!(actual.native_message_ids),
+                value_or(params, "native_message_ids", serde_json::json!([]))
+            );
+            assert_eq!(actual.error.as_deref(), optional_str(params, "error"));
+        }
         SidecarEvent::Error { params: actual } => {
             assert_eq!(method, "error", "events/{name}: variant mismatch");
             assert_eq!(actual.message, params["message"]);

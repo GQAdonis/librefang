@@ -128,6 +128,37 @@ impl ReplyEnvelope {
     }
 }
 
+/// What the auto-reply pre-check decided for one inbound message.
+///
+/// The three states are not "some reply / no reply" collapsed: the engine's
+/// decision to run a turn is itself the state that matters to the caller.
+/// An empty or silent reply means the turn *ran and consumed the message*, so
+/// the ordinary dispatch must not run it again — an `Option<String>` cannot
+/// tell that apart from "the engine never claimed the message", and treating
+/// both as "not fired" re-runs the identical turn in the same channel session,
+/// duplicating the user message in history and paying a second LLM turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutoReplyOutcome {
+    /// The engine did not claim the message (auto-reply disabled, or a
+    /// suppression pattern matched). `dispatch_message` continues to the
+    /// ordinary turn.
+    NotFired,
+    /// The engine claimed the message and its turn already ran: `Some(text)`
+    /// is the reply to deliver, `None` a turn with nothing to say (silent or
+    /// empty response). Either way the message is spent — dispatching it again
+    /// would duplicate it in the same channel session.
+    Fired(Option<String>),
+    /// The engine claimed the message and its turn failed; the failure was
+    /// already logged where it happened. The message is spent for the same
+    /// reason as [`AutoReplyOutcome::Fired`]: re-dispatching would re-run the
+    /// identical turn, and the failure is not evidence that no turn ran.
+    /// The string is the error the turn failed with, so the bridge can tell
+    /// the user (unless the adapter suppresses error responses) and record a
+    /// failed delivery — the two things the ordinary path does on a kernel
+    /// failure.
+    Failed(String),
+}
+
 /// Kernel operations needed by channel adapters.
 ///
 /// Defined here to avoid circular deps (librefang-channels can't depend on librefang-kernel).
@@ -640,9 +671,28 @@ pub trait ChannelBridgeHandle: Send + Sync {
     }
 
     /// Check if auto-reply is enabled and the message should trigger one.
-    /// Returns Some(reply_text) if auto-reply fires, None otherwise.
-    async fn check_auto_reply(&self, _agent_id: AgentId, _message: &str) -> Option<String> {
-        None
+    ///
+    /// Returns [`AutoReplyOutcome::NotFired`] when the engine does not claim
+    /// the message, so `dispatch_message` may run the ordinary turn. Once the
+    /// engine claims it (`Fired` / `Failed`), that turn has consumed the
+    /// message and the caller must not run the ordinary turn as well — see
+    /// [`AutoReplyOutcome`].
+    ///
+    /// `sender` is the same [`SenderContext`] the ordinary dispatch path
+    /// builds for a channel message, and it carries the identity the tool
+    /// authorization gate reads (`channel` + `user_id`). The auto-reply runs
+    /// a full agent turn — tools included — so it must be handed the sender
+    /// it is running on behalf of, exactly as `send_message_with_sender`
+    /// hands it to a normal turn. Dropping it here silently demotes the turn
+    /// to an unidentified sender, which the RBAC gate answers with
+    /// `NeedsApproval` for every tool outside the read-only allowlist.
+    async fn check_auto_reply(
+        &self,
+        _agent_id: AgentId,
+        _message: &str,
+        _sender: &SenderContext,
+    ) -> AutoReplyOutcome {
+        AutoReplyOutcome::NotFired
     }
 
     // ── Automation: workflows, triggers, schedules, approvals ──
@@ -2122,6 +2172,15 @@ impl BridgeManager {
                                     // thing.
                                     let mut covered_by_any_adapter = false;
                                     let mut skipped: Vec<SkippedApprovalAdapter> = Vec::new();
+                                    // Adapters the #8228 narrowing suppressed,
+                                    // with the index of their `skipped` entry
+                                    // so a failed fallback below can re-label
+                                    // the reason. See the fallback after the
+                                    // loop.
+                                    let mut narrow_suppressed: Vec<(
+                                        Arc<dyn ChannelAdapter>,
+                                        usize,
+                                    )> = Vec::new();
 
                                     // #4985 / PR #4994 follow-up: scope
                                     // delivery to adapters bound to the
@@ -2153,6 +2212,16 @@ impl BridgeManager {
                                     // listener has no such fallback
                                     // semantics — each adapter must
                                     // match on its own configured key.
+                                    //
+                                    // `reported_account_id()` is passed
+                                    // alongside for the same reason
+                                    // `resolve_channel_adapter` matches
+                                    // it: adapters that stamp their own
+                                    // `metadata["account_id"]` on inbound
+                                    // (dingtalk / email / google_chat)
+                                    // are bound by that id, and the
+                                    // listener has no inbound metadata to
+                                    // fall back on.
                                     let adapter_routing = |adapter: &Arc<dyn ChannelAdapter>| {
                                         let channel_type = adapter.channel_type();
                                         let ct_str = channel_type_str(&channel_type);
@@ -2166,6 +2235,7 @@ impl BridgeManager {
                                             requesting_agent,
                                             ct_str,
                                             adapter.account_id(),
+                                            adapter.reported_account_id(),
                                         );
                                         (bound_agent, binding_peers)
                                     };
@@ -2369,6 +2439,20 @@ impl BridgeManager {
                                                 channel: ct_str.to_string(),
                                                 reason: ApprovalSkipReason::NoRouting,
                                             });
+                                            // #8418: this adapter was
+                                            // suppressed only because *some
+                                            // sibling* routes the agent. That
+                                            // evidence is routing config, not
+                                            // membership: the sibling may not
+                                            // be in the originating chat, while
+                                            // this suppressed adapter is the
+                                            // one that carried the message.
+                                            if narrow_direct_route {
+                                                narrow_suppressed.push((
+                                                    Arc::clone(adapter),
+                                                    skipped.len() - 1,
+                                                ));
+                                            }
                                             continue;
                                         }
 
@@ -2486,6 +2570,77 @@ impl BridgeManager {
                                                 channel: ct_str.to_string(),
                                                 reason: ApprovalSkipReason::DeliveryFailed,
                                             });
+                                        }
+                                    }
+
+                                    // #8418: narrowing must not turn into a
+                                    // silent drop. The narrow check only sees
+                                    // routing *config*; an agent reached by an
+                                    // explicit @-mention in a chat served by a
+                                    // bot whose own default points elsewhere
+                                    // routes through a mechanism the check
+                                    // cannot see, and the sibling that does
+                                    // show a route may not be a member of that
+                                    // chat at all. When the routing adapters
+                                    // delivered nothing, retry the direct route
+                                    // through the adapters narrowing
+                                    // suppressed: an extra attempt — in the
+                                    // limit, the pre-#8228 N-1 warnings — is a
+                                    // smaller failure than a silently dropped
+                                    // approval.
+                                    if !covered_by_any_adapter && narrow_direct_route {
+                                        if let (Some(src_sender), Some(src_channel)) = (
+                                            approval.sender_id.as_deref(),
+                                            approval.channel.as_deref(),
+                                        ) {
+                                            let target_id = approval
+                                                .chat_id
+                                                .as_deref()
+                                                .filter(|c| !c.is_empty())
+                                                .unwrap_or(src_sender)
+                                                .to_string();
+                                            let direct_recipient = ChannelUser {
+                                                platform_id: target_id,
+                                                display_name: String::new(),
+                                                librefang_user: None,
+                                            };
+                                            for (adapter, skip_idx) in &narrow_suppressed {
+                                                if channel_type_str(&adapter.channel_type())
+                                                    != src_channel
+                                                {
+                                                    continue;
+                                                }
+                                                if let Err(e) = adapter
+                                                    .send_interactive(
+                                                        &direct_recipient,
+                                                        &approval_keyboard,
+                                                    )
+                                                    .await
+                                                {
+                                                    warn!(
+                                                        adapter = adapter.name(),
+                                                        request_id = %approval.request_id,
+                                                        recipient = %direct_recipient.platform_id,
+                                                        error = %e,
+                                                        "Failed to deliver approval notification (narrowed-direct-route fallback)"
+                                                    );
+                                                    skipped[*skip_idx].reason =
+                                                        ApprovalSkipReason::DeliveryFailed;
+                                                } else {
+                                                    info!(
+                                                        adapter = adapter.name(),
+                                                        request_id = %approval.request_id,
+                                                        recipient = %direct_recipient.platform_id,
+                                                        "Delivered approval notification (narrowed-direct-route fallback to originating chat)"
+                                                    );
+                                                    covered_by_any_adapter = true;
+                                                    // One delivered keyboard is
+                                                    // the guarantee; stop before
+                                                    // piling duplicates into
+                                                    // sibling chats.
+                                                    break;
+                                                }
+                                            }
                                         }
                                     }
 
@@ -4442,8 +4597,7 @@ async fn claim_causal_handler_action(
     let Some(dispatch) = dispatch else {
         return true;
     };
-    if !dispatch.source.governed_profile(message)
-    {
+    if !dispatch.source.governed_profile(message) {
         return true;
     }
     let referenced_id = message
@@ -4492,8 +4646,7 @@ async fn publish_durable_observers(
     message: &ChannelMessage,
 ) {
     let Some(dispatch) = dispatch else { return };
-    if !dispatch.source.governed_profile(message)
-    {
+    if !dispatch.source.governed_profile(message) {
         return;
     }
     if let Err(error) = handle
@@ -4519,8 +4672,7 @@ async fn authorize_durable_handler_execution(
         return true;
     };
     // Gate governs Discord guilds and explicitly qualified signed webhooks.
-    if !dispatch.source.governed_profile(message)
-    {
+    if !dispatch.source.governed_profile(message) {
         return true;
     }
     let payload = match serde_json::to_vec(&message.content) {
@@ -4809,8 +4961,10 @@ async fn resolve_or_fallback(
     if SourceOccurrence::from_message(message).is_some() {
         let ctx = binding_context(message);
         if let Some(id) = router.resolve_before_defaults(
-            &message.channel, &message.sender.platform_id,
-            message.sender.librefang_user.as_deref(), &ctx,
+            &message.channel,
+            &message.sender.platform_id,
+            message.sender.librefang_user.as_deref(),
+            &ctx,
         ) {
             return if agent_allows_channel(handle, id, ct).await {
                 RouteResolution::plain(id)
@@ -4828,8 +4982,10 @@ async fn resolve_or_fallback(
             }
         }
         let id = router.resolve_with_context(
-            &message.channel, &message.sender.platform_id,
-            message.sender.librefang_user.as_deref(), &ctx,
+            &message.channel,
+            &message.sender.platform_id,
+            message.sender.librefang_user.as_deref(),
+            &ctx,
         );
         return match id {
             Some(id) if agent_allows_channel(handle, id, ct).await => RouteResolution::plain(id),
@@ -5995,6 +6151,17 @@ async fn dispatch_message(
         return;
     }
 
+    // Build the sender's identity once, ahead of everything below that can branch on it.
+    //
+    // Every turn this function runs from here on — the auto-reply one and the
+    // ordinary one alike — runs on behalf of this sender, and the tool
+    // authorization gate derives its `(channel, sender_id)` pair from this
+    // context. When the construction sat after the auto-reply branch instead,
+    // that branch could return without it: the turn reached the gate with no
+    // channel and no sender, and the gate answered with the guest allowlist —
+    // the seven read-only tools, everything else `NeedsApproval`.
+    let sender_ctx = build_sender_context(message, overrides.as_ref());
+
     let mut durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
         DurableRouteResult::Legacy => None,
         DurableRouteResult::Drop(reason) => {
@@ -6096,33 +6263,113 @@ async fn dispatch_message(
     // Auto-reply is a channel effect too. It happens after the durable claim
     // so a replay cannot bypass occurrence deduplication just because no LLM
     // call was needed.
-    if let Some(reply) = handle.check_auto_reply(agent_id, &text).await {
-        let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
-        let replied = send_scoped_response(
-            adapter,
-            handle,
-            durable.as_ref(),
-            &message.sender,
-            reply,
-            thread_id,
-            output_format,
-        )
-        .await;
-        handle
-            .record_delivery(
-                agent_id,
-                ct_str,
-                &message.sender.platform_id,
-                replied,
-                None,
+    //
+    // The engine's verdict has four shapes (upstream #8585): it fired with a
+    // reply, fired with nothing to say, fired and failed, or did not claim
+    // the message. Every claimed shape spends the message — falling through
+    // would run the identical turn a second time in the same session.
+    match handle.check_auto_reply(agent_id, &text, &sender_ctx).await {
+        AutoReplyOutcome::Fired(Some(reply)) => {
+            let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
+            let replied = send_scoped_response(
+                adapter,
+                handle,
+                durable.as_ref(),
+                &message.sender,
+                reply,
                 thread_id,
+                output_format,
             )
             .await;
-        if let Some(j) = journal {
-            j.record_outcome(journal_id, replied, None).await;
+            handle
+                .record_delivery(
+                    agent_id,
+                    ct_str,
+                    &message.sender.platform_id,
+                    replied,
+                    None,
+                    thread_id,
+                )
+                .await;
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, replied, None).await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), replied).await;
+            return;
         }
-        finish_durable_dispatch(handle, durable.as_ref(), replied).await;
-        return;
+        // Silence is not a failure: book it as delivered, as the ordinary
+        // path does for an empty response.
+        AutoReplyOutcome::Fired(None) => {
+            handle
+                .record_delivery(
+                    agent_id,
+                    ct_str,
+                    &message.sender.platform_id,
+                    true,
+                    None,
+                    thread_id,
+                )
+                .await;
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, true, None).await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), true).await;
+            return;
+        }
+        // Report the failure through the same handling the ordinary path's
+        // kernel-failure arm uses: a durable route keeps its uncertain outcome,
+        // a legacy route goes through `handle_send_error` and its stale-default
+        // retry.
+        AutoReplyOutcome::Failed(error) => {
+            if durable.is_some() {
+                error!(channel = ct_str, error = %error,
+                    "Durable channel auto-reply failed; route is retained and outcome is uncertain");
+                if !adapter.suppress_error_responses() {
+                    let _ = send_scoped_response(
+                        adapter,
+                        handle,
+                        durable.as_ref(),
+                        &message.sender,
+                        format!("Agent error: {error}"),
+                        thread_id,
+                        output_format,
+                    )
+                    .await;
+                }
+            } else {
+                let sender_ctx_retry = sender_ctx.clone();
+                handle_send_error(
+                    &error,
+                    agent_id,
+                    &channel_key,
+                    handle,
+                    router,
+                    adapter,
+                    &message.sender,
+                    &message.platform_message_id,
+                    ct_str,
+                    thread_id,
+                    output_format,
+                    overrides.as_ref(),
+                    |new_id| {
+                        let h = handle.clone();
+                        let t = text.clone();
+                        async move {
+                            h.send_message_with_sender(new_id, &t, &sender_ctx_retry)
+                                .await
+                        }
+                    },
+                )
+                .await;
+            }
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, false, Some(error.to_string()))
+                    .await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), false).await;
+            return;
+        }
+        AutoReplyOutcome::NotFired => {}
     }
 
     // --- Group-history drain (all dispatch gates have passed) ---
@@ -6165,9 +6412,6 @@ async fn dispatch_message(
 
     upsert_sender_into_roster(handle, message).await;
     upsert_enumerated_members_into_roster(handle, message).await;
-
-    // Build sender context to propagate identity to the agent
-    let sender_ctx = build_sender_context(message, overrides.as_ref());
 
     // Streaming path: if the adapter supports progressive output, pipe text
     // deltas directly to it instead of waiting for the full response.

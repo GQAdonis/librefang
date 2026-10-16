@@ -15,12 +15,12 @@ use librefang_types::uar_run::{JobAttemptRef, UarRunAdmission};
 
 #[cfg(feature = "uar-driver")]
 mod admission;
+#[cfg(all(test, feature = "uar-driver"))]
+mod admission_tests;
 #[cfg(feature = "uar-driver")]
 pub mod mapping;
 #[cfg(all(test, feature = "uar-driver"))]
 mod mapping_tests;
-#[cfg(all(test, feature = "uar-driver"))]
-mod admission_tests;
 
 /// In-memory, host-resolved selection. This is not a deserializable API request
 /// or proof of authentication. The mapping owner must verify owner/tenant,
@@ -119,5 +119,7 @@ pub(super) async fn dispatch_selected(
 /// Existing native stream shape, kept distinct from delegated admission.
 pub type NativeJobStream = (
     tokio::sync::mpsc::Receiver<librefang_runtime::llm_driver::StreamEvent>,
-    tokio::task::JoinHandle<crate::error::KernelResult<librefang_runtime::agent_loop::AgentLoopResult>>,
+    tokio::task::JoinHandle<
+        crate::error::KernelResult<librefang_runtime::agent_loop::AgentLoopResult>,
+    >,
 );

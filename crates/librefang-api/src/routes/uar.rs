@@ -370,7 +370,11 @@ async fn dispatch_message_send(
 
     // Selected identities never enter a native continuation, including after restart.
     if task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX) {
-        return JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, "selected_job_control_required");
+        return JsonRpcResponse::err(
+            id,
+            rpc_error::INVALID_PARAMS,
+            "selected_job_control_required",
+        );
     }
     let user_message = A2aMessage {
         role: "user".to_string(),

@@ -30,69 +30,113 @@ pub fn unknown(projection: &UarDelegatedRunProjection) -> UarDelegatedRunProject
     let mut projection = receipt(projection.clone());
     projection.effect_state = "effect_unconfirmed".into();
     projection.recovery_state = "reconciliation_required".into();
-    projection.remote_diagnostics.push(serde_json::json!({"code":"selected_observation_unknown"}));
+    projection
+        .remote_diagnostics
+        .push(serde_json::json!({"code":"selected_observation_unknown"}));
     projection
 }
 
 /// Owner checks belong to the authenticated API/worker producer. This still
 /// resolves the durable original relation; caller fields cannot allocate one.
 pub async fn observe(
-    store: &A2aTaskStore, client: &UarRunControl,
-    projection: &UarDelegatedRunProjection, after: u64,
+    store: &A2aTaskStore,
+    client: &UarRunControl,
+    projection: &UarDelegatedRunProjection,
+    after: u64,
 ) -> Result<SelectedObservation, &'static str> {
     observe_mode(store, client, projection, after, true).await
 }
 
 /// A2A task reads are snapshots; the explicit events route owns live waiting.
 pub async fn observe_available(
-    store: &A2aTaskStore, client: &UarRunControl,
-    projection: &UarDelegatedRunProjection, after: u64,
+    store: &A2aTaskStore,
+    client: &UarRunControl,
+    projection: &UarDelegatedRunProjection,
+    after: u64,
 ) -> Result<SelectedObservation, &'static str> {
     observe_mode(store, client, projection, after, false).await
 }
 
 async fn observe_mode(
-    store: &A2aTaskStore, client: &UarRunControl,
-    projection: &UarDelegatedRunProjection, after: u64, wait_for_new: bool,
+    store: &A2aTaskStore,
+    client: &UarRunControl,
+    projection: &UarDelegatedRunProjection,
+    after: u64,
+    wait_for_new: bool,
 ) -> Result<SelectedObservation, &'static str> {
-    let reservation = store.list_uar_job_attempts().map_err(|_| "selected_attempt_storage_unknown")?
-        .into_iter().find(|item| item.boss_task_id == projection.boss_task_id)
+    let reservation = store
+        .list_uar_job_attempts()
+        .map_err(|_| "selected_attempt_storage_unknown")?
+        .into_iter()
+        .find(|item| item.boss_task_id == projection.boss_task_id)
         .ok_or("selected_attempt_outcome_unknown")?;
     if reservation.verified_subject != projection.verified_principal
         || reservation.workspace_id != projection.workspace_id
-        || reservation.job.selected_task_id().as_deref() != Some(projection.boss_task_id.as_str()) {
+        || reservation.job.selected_task_id().as_deref() != Some(projection.boss_task_id.as_str())
+    {
         return Err("selected_attempt_identity_conflict");
     }
-    let saved = store.get_uar_job_attempt(&reservation.verified_subject,
-        reservation.verified_tenant.as_deref(), &reservation.workspace_id, &reservation.job)
-        .map_err(|_| "selected_attempt_storage_unknown")?.ok_or("selected_attempt_outcome_unknown")?;
+    let saved = store
+        .get_uar_job_attempt(
+            &reservation.verified_subject,
+            reservation.verified_tenant.as_deref(),
+            &reservation.workspace_id,
+            &reservation.job,
+        )
+        .map_err(|_| "selected_attempt_storage_unknown")?
+        .ok_or("selected_attempt_outcome_unknown")?;
     let original = saved.projection;
-    if store.has_uar_terminal_observation(&reservation, &original)
-        .map_err(|_| "selected_attempt_storage_unknown")? {
-        let events = store.uar_attempt_events_after(&reservation, after)
+    if store
+        .has_uar_terminal_observation(&reservation, &original)
+        .map_err(|_| "selected_attempt_storage_unknown")?
+    {
+        let events = store
+            .uar_attempt_events_after(&reservation, after)
             .map_err(|_| "selected_history_unavailable")?;
-        return Ok(SelectedObservation { delegation: original, events, history_available: true });
+        return Ok(SelectedObservation {
+            delegation: original,
+            events,
+            history_available: true,
+        });
     }
     let observed = if wait_for_new {
-        client.observe_presentation(&original, original.cursor).await
+        client
+            .observe_presentation(&original, original.cursor)
+            .await
     } else {
-        client.observe_available_presentation(&original, original.cursor).await
+        client
+            .observe_available_presentation(&original, original.cursor)
+            .await
     };
     let history_available = match observed {
         Ok((current, events)) => {
             // Cursor + typed presentation + product task outcome are one group
             // transaction. A partial group never publishes any cursor.
-            store.commit_uar_attempt_observation(&reservation, events, receipt(current)).is_ok()
+            store
+                .commit_uar_attempt_observation(&reservation, events, receipt(current))
+                .is_ok()
         }
         Err(_) => false,
     };
     if !history_available {
         // Re-read after possible concurrent observer completion; never regress
         // its cursor, receipt, or exact identities with the stale input.
-        let latest = store.get_uar_delegation(&original.boss_task_id).ok_or("selected_attempt_outcome_unknown")?;
-        store.put_uar_delegation(unknown(&latest)).map_err(|_| "selected_attempt_storage_unknown")?;
+        let latest = store
+            .get_uar_delegation(&original.boss_task_id)
+            .ok_or("selected_attempt_outcome_unknown")?;
+        store
+            .put_uar_delegation(unknown(&latest))
+            .map_err(|_| "selected_attempt_storage_unknown")?;
     }
-    let delegation = store.get_uar_delegation(&original.boss_task_id).ok_or("selected_attempt_outcome_unknown")?;
-    let events = store.uar_attempt_events_after(&reservation, after).map_err(|_| "selected_history_unavailable")?;
-    Ok(SelectedObservation { delegation, events, history_available })
+    let delegation = store
+        .get_uar_delegation(&original.boss_task_id)
+        .ok_or("selected_attempt_outcome_unknown")?;
+    let events = store
+        .uar_attempt_events_after(&reservation, after)
+        .map_err(|_| "selected_history_unavailable")?;
+    Ok(SelectedObservation {
+        delegation,
+        events,
+        history_available,
+    })
 }

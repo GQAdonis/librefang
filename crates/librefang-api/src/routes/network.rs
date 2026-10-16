@@ -551,10 +551,7 @@ pub async fn a2a_get_task(
     )
     .await
     {
-        Ok(Some(task)) => (
-            StatusCode::OK,
-            Json(task),
-        ),
+        Ok(Some(task)) => (StatusCode::OK, Json(task)),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
@@ -584,21 +581,24 @@ pub async fn a2a_cancel_task(
         &state,
         &task_id,
         api_user.as_ref().map(|user| &user.0),
-        body.as_ref().and_then(|Json(value)| value.get("expectedRevision")).and_then(serde_json::Value::as_u64),
+        body.as_ref()
+            .and_then(|Json(value)| value.get("expectedRevision"))
+            .and_then(serde_json::Value::as_u64),
     )
     .await
     {
-        Ok(Some(task)) => (
-            StatusCode::OK,
-            Json(task),
-        ),
+        Ok(Some(task)) => (StatusCode::OK, Json(task)),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
-        Err(error) if error == "selected_expected_revision_required" =>
-            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": error}))),
-        Err(error) if error == "selected_revision_conflict" =>
-            (StatusCode::CONFLICT, Json(serde_json::json!({"error": error}))),
+        Err(error) if error == "selected_expected_revision_required" => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": error})),
+        ),
+        Err(error) if error == "selected_revision_conflict" => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": error})),
+        ),
         Err(error) => ApiErrorResponse::internal(error).into_json_tuple(),
     }
 }
@@ -661,7 +661,9 @@ pub async fn a2a_list_external_agents(State(state): State<Arc<AppState>>) -> imp
 /// patterns (e.g. `"*.internal.example.com"`), or literal IPs/hostnames.
 /// Cloud metadata ranges (`169.254.0.0/16`, `100.64.0.0/10`) remain blocked
 /// unconditionally regardless of allowlist entries.
-fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), String> {
+///
+/// Hostname resolution goes through `tokio::net::lookup_host`, so a slow or unresponsive resolver parks this task instead of stalling a runtime worker thread for the full resolver timeout (the same convention as `librefang_runtime::web_fetch::check_ssrf_async`).
+async fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), String> {
     let parsed = url::Url::parse(raw_url).map_err(|e| format!("Invalid URL: {e}"))?;
 
     // Only allow http and https schemes
@@ -683,9 +685,9 @@ fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), S
     let addrs: Vec<IpAddr> = if let Ok(ip) = host.parse::<IpAddr>() {
         vec![ip]
     } else {
-        // Resolve hostname — use port 80 as a dummy for resolution
-        let socket_addr = format!("{host}:80");
-        match std::net::ToSocketAddrs::to_socket_addrs(&socket_addr.as_str()) {
+        // Resolve hostname — use port 80 as a dummy for resolution.
+        // The `"{host}:80"` string form (not a `(host, 80)` tuple) is kept so a bracketed IPv6 literal from `host_str()` such as `[::1]` still parses as a socket address and is classified below.
+        match tokio::net::lookup_host(format!("{host}:80")).await {
             Ok(iter) => iter.map(|sa| sa.ip()).collect(),
             Err(_) => {
                 // If resolution fails, we still block — don't allow unresolvable hosts
@@ -935,7 +937,7 @@ pub async fn a2a_discover_external(
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return ApiErrorResponse::bad_request(reason).into_json_tuple();
     }
 
@@ -1167,7 +1169,7 @@ async fn a2a_send_external_inner(state: Arc<AppState>, body_bytes: &[u8]) -> (St
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return json_error_tuple(StatusCode::BAD_REQUEST, "a2a_ssrf_blocked", reason);
     }
 
@@ -1254,7 +1256,7 @@ pub async fn a2a_external_task_status(
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return ApiErrorResponse::bad_request(reason).into_json_tuple();
     }
 
@@ -1400,14 +1402,23 @@ pub async fn mcp_http(
     Json(request): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(error) = crate::mcp_attribution::requested_authority_error(&headers) {
-        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
-            "mcp", error, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+        state.kernel.audit().record_with_context(
+            "system",
+            librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp",
+            error,
+            api_user.as_ref().map(|user| user.0.user_id),
+            Some("mcp".into()),
+        );
         return mcp_identity_error(&request, error);
     }
     let Some(axum::Extension(attribution)) = attribution else {
         return mcp_identity_error(&request, "mcp_authenticated_attribution_required");
     };
-    if api_user.as_ref().is_none_or(|user| user.0.role < crate::middleware::UserRole::Admin) {
+    if api_user
+        .as_ref()
+        .is_none_or(|user| user.0.role < crate::middleware::UserRole::Admin)
+    {
         return mcp_identity_error(&request, "mcp_role_not_authorized");
     }
     let mut attribution = attribution.0;
@@ -1484,8 +1495,14 @@ pub async fn mcp_http(
 
     attribution.authorized_agent_id = caller_entry.as_ref().map(|entry| entry.id.to_string());
     if let Ok(record) = serde_json::to_string(&attribution) {
-        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
-            "mcp", record, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+        state.kernel.audit().record_with_context(
+            "system",
+            librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp",
+            record,
+            api_user.as_ref().map(|user| user.0.user_id),
+            Some("mcp".into()),
+        );
     }
 
     // #6117: inbound peer scope of the turn that spawned the subprocess driver,
@@ -1670,7 +1687,8 @@ pub async fn mcp_http(
         }
         None => tools,
     };
-    let mut response = librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
+    let mut response =
+        librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
     crate::mcp_attribution::attach(&mut response, &attribution);
     Json(response)
 }
@@ -2276,13 +2294,35 @@ pub async fn comms_send(
 }
 
 /// POST /api/comms/task — Post a task to the agent task queue.
+///
+/// The body is typed ([`librefang_types::comms::CommsTaskRequest`]), and that
+/// is what splits the error contract in two:
+///
+/// * **422** — a body that is valid JSON but does not deserialize into the
+///   request type: `"priority": 1.5`, `"timeout_secs": "soon"`, or any other
+///   shape mismatch. The `Json` extractor rejects it before this handler runs,
+///   because a fractional or negative-second limit must not be rounded,
+///   clamped, or dropped on the way to a 201.
+/// * **400** — a body that deserializes but is semantically wrong: an empty
+///   `title`, or an `assigned_to` that names no known agent.
+///
+/// Sibling `POST /api/tasks` carries the same fields but reads them from an
+/// untyped `serde_json::Value`, so every body mistake there — syntax included
+/// — is its own 400. Both routes refuse the same inputs; the status differs
+/// because one body is typed and the other is inspected field by field, and
+/// this note is what makes that difference a contract rather than a surprise.
+///
+/// `priority` and `timeout_secs` are enforced, not merely recorded: they
+/// reach the claim queue's `ORDER BY` and the sweeper's per-row deadline.
 #[utoipa::path(
     post,
     path = "/api/comms/task",
     tag = "network",
     request_body = crate::types::JsonObject,
     responses(
-        (status = 200, description = "Post a task to the agent task queue", body = crate::types::JsonObject)
+        (status = 201, description = "Task enqueued", body = crate::types::JsonObject),
+        (status = 400, description = "Missing title, or an unknown assignee", body = crate::types::JsonObject),
+        (status = 422, description = "Body does not deserialize into the request type (wrong type or out-of-range value)", body = crate::types::JsonObject),
     )
 )]
 pub async fn comms_task(
@@ -2293,6 +2333,15 @@ pub async fn comms_task(
         return ApiErrorResponse::bad_request("Title is required").into_json_tuple();
     }
 
+    // The same per-task controls `task_queue_post_root` honours. Hardcoding
+    // the defaults here made this route answer 201 while silently discarding
+    // a caller's `priority` / `timeout_secs`, which is the one outcome that
+    // leaves the caller unable to tell (#7974 review).
+    let opts = librefang_kernel_handle::TaskPostOptions {
+        priority: req.priority.unwrap_or(0),
+        timeout_secs: req.timeout_secs,
+    };
+
     match state
         .kernel
         .task_post(
@@ -2300,6 +2349,7 @@ pub async fn comms_task(
             &req.description,
             req.assigned_to.as_deref(),
             Some("ui-user"),
+            &opts,
         )
         .await
     {
@@ -2308,6 +2358,15 @@ pub async fn comms_task(
             Json(serde_json::json!({
                 "ok": true,
                 "task_id": task_id,
+            })),
+        ),
+        // Mirrors `task_queue_post_root`: an unresolvable `assigned_to` is a
+        // bad request body, not a server failure, so it is reported as 400
+        // rather than falling through to the generic 500 scrub below.
+        Err(librefang_kernel_handle::KernelOpError::AgentNotFound(name)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!("Field 'assigned_to' names no known agent: '{name}'")
             })),
         ),
         Err(e) => ApiErrorResponse::internal_scrub(e).into_json_tuple(),
@@ -2340,13 +2399,48 @@ pub(crate) fn remove_toml_section(content: &str, section: &str) -> String {
 mod tests {
     use super::{
         authenticated_a2a_caller, canonical_ip, find_external_agent_by_identity,
-        hostname_matches_glob_suffix, is_cloud_metadata_ip, is_private_ip,
+        hostname_matches_glob_suffix, is_cloud_metadata_ip, is_private_ip, is_url_safe_for_ssrf,
         try_acquire_comms_stream_permit,
     };
     use librefang_kernel::MemorySubsystemApi;
     use librefang_kernel::MeshSubsystemApi;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Arc;
+
+    // The A2A SSRF gate resolves hostnames with `tokio::net::lookup_host` so it never blocks a runtime worker; these pin that the policy is unchanged by the async move.
+    #[tokio::test]
+    async fn ssrf_check_is_async_and_blocks_loopback() {
+        assert!(is_url_safe_for_ssrf("http://127.0.0.1/", &[])
+            .await
+            .is_err());
+        assert!(is_url_safe_for_ssrf("http://localhost/", &[])
+            .await
+            .is_err());
+        // A bracketed IPv6 literal must still reach classification rather than failing to resolve, and cloud metadata stays blocked even when allowlisted.
+        let err = is_url_safe_for_ssrf(
+            "http://[::ffff:169.254.169.254]/",
+            &["169.254.0.0/16".to_string()],
+        )
+        .await
+        .unwrap_err();
+        assert!(err.contains("private/internal"), "{err}");
+        let err = is_url_safe_for_ssrf("http://[::1]/", &[])
+            .await
+            .unwrap_err();
+        assert!(err.contains("private/internal"), "{err}");
+        assert!(is_url_safe_for_ssrf("http://93.184.216.34/", &[])
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn ssrf_check_rejects_unresolvable_host() {
+        // RFC 6761 reserves `.invalid`, so this never resolves.
+        let err = is_url_safe_for_ssrf("http://a2a-ssrf.invalid/", &[])
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("Cannot resolve host"), "{err}");
+    }
 
     // -----------------------------------------------------------------
     // Regression test for #3644: /api/peers must reflect the live kernel

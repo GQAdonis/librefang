@@ -313,7 +313,7 @@ update `librefang-uar-spec/src/types.rs` if `AgentManifest` shape changes.
 
 ## Important Notes
 
-- **Do not modify `librefang-cli`** without explicit instruction -- it is under active development.
+- `librefang-cli` is under active development and may be modified as needed — keep changes focused.
 - `PeerRegistry` is `Option<PeerRegistry>` on the kernel but `Option<Arc<PeerRegistry>>` on `AppState`.
 - Config fields added to `KernelConfig` MUST also be added to its `Default` impl.
 - The `AgentLoopResult` response field is `.response`, not `.response_text`.

@@ -528,14 +528,18 @@ fn spawn_background_run(
         let dispatch = uar_dispatch::Dispatch::new(state.clone(), run_id, api_user).await?;
         let resolver = dispatch.clone();
         let sender = dispatch.clone();
-        let result = state.kernel.workflow_engine().execute_run(
-            run_id,
-            move |agent_ref| resolver.resolve(agent_ref),
-            move |agent_id, message, session| {
-                let sender = sender.clone();
-                async move { sender.send(agent_id, message, session).await }
-            },
-        ).await;
+        let result = state
+            .kernel
+            .workflow_engine()
+            .execute_run(
+                run_id,
+                move |agent_ref| resolver.resolve(agent_ref),
+                move |agent_id, message, session| {
+                    let sender = sender.clone();
+                    async move { sender.send(agent_id, message, session).await }
+                },
+            )
+            .await;
         let result = dispatch.finish(result).await;
         if let Err(ref error) = result {
             tracing::warn!(run_id = %run_id, %error, "Background workflow run failed");
@@ -646,7 +650,10 @@ pub async fn run_workflow(
 
     let has_uar_targets = uar_dispatch::has_targets(&state, workflow_id).await;
     if has_uar_targets && api_user.is_none() {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"authenticated_owner_required"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error":"authenticated_owner_required"})),
+        );
     }
 
     if query.wait && query.timeout_ms.is_none() && !has_uar_targets {
@@ -875,7 +882,10 @@ pub async fn rerun_workflow_run(
 
     // `create_run` returns None when the workflow definition is gone (e.g. it was deleted after the original run); surface that as a 404.
     if uar_dispatch::has_targets(&state, workflow_id).await && api_user.is_none() {
-        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"authenticated_owner_required"})));
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error":"authenticated_owner_required"})),
+        );
     }
     let new_run_id = match engine.create_run_owned(workflow_id, input, owner).await {
         Some(rid) => rid,
@@ -943,9 +953,14 @@ pub async fn cancel_workflow_run(
 
     let delegations = match uar_dispatch::cancel(&state, run_id, api_user.as_ref()).await {
         Ok(outcomes) => outcomes,
-        Err(error) => return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({
-            "error":"uar_workflow_control_failed", "detail":error
-        }))),
+        Err(error) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "error":"uar_workflow_control_failed", "detail":error
+                })),
+            )
+        }
     };
     match state.kernel.workflow_engine().cancel_run(run_id).await {
         Ok(()) => (
@@ -1210,7 +1225,9 @@ pub async fn resume_workflow_run(
                 },
             )
             .await;
-        let result = dispatch.finish(result.map_err(|error| error.to_string())).await;
+        let result = dispatch
+            .finish(result.map_err(|error| error.to_string()))
+            .await;
         if let Err(e) = result {
             tracing::warn!(run_id = %run_id, error = %e, "Background workflow resume failed");
         }
@@ -1384,7 +1401,9 @@ pub async fn operator_action_workflow_run(
                 },
             )
             .await;
-        let result = dispatch.finish(result.map_err(|error| error.to_string())).await;
+        let result = dispatch
+            .finish(result.map_err(|error| error.to_string()))
+            .await;
         // Emit one structured event regardless of outcome so the audit
         // trail records WHO did WHAT against WHICH run, not just the
         // failures. Previously only `Err` produced a log line, which
@@ -1571,7 +1590,11 @@ pub async fn save_workflow_as_template(
         }
     };
 
-    if workflow.steps.iter().any(|step| matches!(&step.agent, StepAgent::UarBound { .. })) {
+    if workflow
+        .steps
+        .iter()
+        .any(|step| matches!(&step.agent, StepAgent::UarBound { .. }))
+    {
         return ApiErrorResponse::bad_request("UAR-bound targets cannot be represented by the native workflow template format; retain this workflow definition").into_json_tuple();
     }
     let template = workflow.to_template();

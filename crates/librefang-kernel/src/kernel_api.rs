@@ -50,6 +50,9 @@ use crate::cron::CronScheduler;
 use crate::error::{KernelError, KernelResult};
 use crate::event_bus::EventBus;
 use crate::inbox::InboxStatus;
+use crate::kernel::uar_harness::{
+    JobDispatchError, JobDispatchOutcome, NativeJobStream, ResolvedDispatch,
+};
 use crate::kernel_handle::KernelHandle;
 use crate::pairing::PairingManager;
 use crate::registry::AgentRegistry;
@@ -62,7 +65,6 @@ use crate::triggers::{Trigger, TriggerId, TriggerMatch, TriggerPattern};
 use crate::workflow::WorkflowEngine;
 use crate::DeliveryTracker;
 use crate::LibreFangKernel;
-use crate::kernel::uar_harness::{ResolvedDispatch, JobDispatchOutcome, JobDispatchError, NativeJobStream};
 
 use librefang_kernel_metering::MeteringEngine;
 use librefang_memory::MemorySubstrate;
@@ -394,7 +396,7 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     /// preference to calling `memory_substrate().delete_session(...)`
     /// directly so the side-state map does not leak across the daemon's
     /// lifetime. Returns every session id actually removed.
-    fn delete_session(&self, session_id: SessionId) -> KernelResult<Vec<SessionId>>;
+    async fn delete_session(&self, session_id: SessionId) -> KernelResult<Vec<SessionId>>;
     fn list_agent_sessions(&self, agent_id: AgentId) -> KernelResult<Vec<serde_json::Value>>;
     fn create_agent_session(
         &self,
@@ -417,9 +419,28 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         agent_id: AgentId,
         session_id: SessionId,
     ) -> KernelResult<TrajectoryBundle>;
-    fn persist_manifest_to_disk(&self, agent_id: AgentId);
+    /// Persist an agent's manifest to `agent.toml` and record the write in its version history under `change_source` (the call site's own tag for what changed).
+    /// See [`LibreFangKernel::persist_manifest_to_disk`].
+    fn persist_manifest_to_disk(&self, agent_id: AgentId, change_source: &str);
     fn reload_agent_from_disk(&self, agent_id: AgentId) -> KernelResult<()>;
-    fn update_manifest(&self, agent_id: AgentId, new_manifest: AgentManifest) -> KernelResult<()>;
+    /// Apply a caller-supplied manifest to a running agent and persist it.
+    /// `change_source` tags the version-history snapshot this write records (`api` for the control plane, `restore` for the history-restore route).
+    fn update_manifest(
+        &self,
+        agent_id: AgentId,
+        new_manifest: AgentManifest,
+        change_source: &str,
+    ) -> KernelResult<()>;
+    /// Apply a stored manifest snapshot and reconcile the runtime side effects the per-field setters run but `update_manifest` skips: background-loop stop/start on a schedule change, named-workspace creation on a workspaces change, canonical-session invalidation on a model or endpoint change, and declarative trigger reconciliation.
+    /// See [`LibreFangKernel::restore_manifest_snapshot`] for the full contract.
+    ///
+    /// Deliberately has no default body: falling back to `update_manifest` would skip the `enabled` pin and every reconciliation above, so an implementor that forgot to override it would silently disable a live agent on a `suspend` row restore.
+    fn restore_manifest_snapshot(
+        self: Arc<Self>,
+        agent_id: AgentId,
+        new_manifest: AgentManifest,
+        change_source: &str,
+    ) -> KernelResult<()>;
     /// Rename an agent and carry the new name into its IDENTITY.md front matter.
     /// See [`LibreFangKernel::rename_agent`] for the full contract.
     fn rename_agent(&self, agent_id: AgentId, new_name: String) -> KernelResult<()>;
@@ -487,7 +508,10 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     /// Explicit selected-job seam. Alternate kernels refuse selection unless
     /// they implement its durable authority; native implementations stay usable.
     /// Durable task-board classification; unavailable is never native authority.
-    async fn read_job_dispatch_intent(&self, _job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+    async fn read_job_dispatch_intent(
+        &self,
+        _job_id: &str,
+    ) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
         Err("job_dispatch_storage_unavailable".into())
     }
     async fn reconcile_selected_jobs(&self) -> Result<(), String> {
@@ -495,21 +519,34 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     }
 
     async fn send_job_message(
-        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
-    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError>
+    {
         match dispatch {
-            ResolvedDispatch::Native => self.send_message(agent_id, message).await
-                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Native => self
+                .send_message(agent_id, message)
+                .await
+                .map(JobDispatchOutcome::Native)
+                .map_err(JobDispatchError::Native),
             ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
         }
     }
     async fn send_job_message_streaming(
-        self: Arc<Self>, agent_id: AgentId, message: &str,
-        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+        self: Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        dispatch: ResolvedDispatch,
     ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
         match dispatch {
-            ResolvedDispatch::Native => self.send_message_streaming_with_routing(agent_id, message, kernel_handle).await
-                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Native => self
+                .send_message_streaming_with_routing(agent_id, message, kernel_handle)
+                .await
+                .map(JobDispatchOutcome::Native)
+                .map_err(JobDispatchError::Native),
             ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
         }
     }
@@ -1328,8 +1365,8 @@ impl KernelApi for LibreFangKernel {
     async fn clear_agent_history(&self, agent_id: AgentId) -> KernelResult<()> {
         Self::clear_agent_history(self, agent_id).await
     }
-    fn delete_session(&self, session_id: SessionId) -> KernelResult<Vec<SessionId>> {
-        Self::delete_session(self, session_id)
+    async fn delete_session(&self, session_id: SessionId) -> KernelResult<Vec<SessionId>> {
+        Self::delete_session(self, session_id).await
     }
     fn list_agent_sessions(&self, agent_id: AgentId) -> KernelResult<Vec<serde_json::Value>> {
         Self::list_agent_sessions(self, agent_id)
@@ -1365,14 +1402,27 @@ impl KernelApi for LibreFangKernel {
     ) -> KernelResult<TrajectoryBundle> {
         Self::export_session_trajectory(self, agent_id, session_id)
     }
-    fn persist_manifest_to_disk(&self, agent_id: AgentId) {
-        Self::persist_manifest_to_disk(self, agent_id);
+    fn persist_manifest_to_disk(&self, agent_id: AgentId, change_source: &str) {
+        Self::persist_manifest_to_disk(self, agent_id, change_source);
     }
     fn reload_agent_from_disk(&self, agent_id: AgentId) -> KernelResult<()> {
         Self::reload_agent_from_disk(self, agent_id)
     }
-    fn update_manifest(&self, agent_id: AgentId, new_manifest: AgentManifest) -> KernelResult<()> {
-        Self::update_manifest(self, agent_id, new_manifest)
+    fn update_manifest(
+        &self,
+        agent_id: AgentId,
+        new_manifest: AgentManifest,
+        change_source: &str,
+    ) -> KernelResult<()> {
+        Self::update_manifest(self, agent_id, new_manifest, change_source)
+    }
+    fn restore_manifest_snapshot(
+        self: Arc<Self>,
+        agent_id: AgentId,
+        new_manifest: AgentManifest,
+        change_source: &str,
+    ) -> KernelResult<()> {
+        LibreFangKernel::restore_manifest_snapshot(&self, agent_id, new_manifest, change_source)
     }
     fn rename_agent(&self, agent_id: AgentId, new_name: String) -> KernelResult<()> {
         Self::rename_agent(self, agent_id, new_name)
@@ -1454,7 +1504,10 @@ impl KernelApi for LibreFangKernel {
         Self::pending_skill_and_mcp_declarations(self, agent_id).await
     }
 
-    async fn read_job_dispatch_intent(&self, job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+    async fn read_job_dispatch_intent(
+        &self,
+        job_id: &str,
+    ) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
         LibreFangKernel::read_job_dispatch_intent(self, job_id).await
     }
     async fn reconcile_selected_jobs(&self) -> Result<(), String> {
@@ -1462,15 +1515,29 @@ impl KernelApi for LibreFangKernel {
     }
 
     async fn send_job_message(
-        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
-    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError>
+    {
         LibreFangKernel::send_job_message(self, agent_id, message, dispatch).await
     }
     async fn send_job_message_streaming(
-        self: Arc<Self>, agent_id: AgentId, message: &str,
-        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+        self: Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        dispatch: ResolvedDispatch,
     ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
-        LibreFangKernel::send_job_message_streaming(&self, agent_id, message, kernel_handle, dispatch).await
+        LibreFangKernel::send_job_message_streaming(
+            &self,
+            agent_id,
+            message,
+            kernel_handle,
+            dispatch,
+        )
+        .await
     }
 
     async fn send_message(

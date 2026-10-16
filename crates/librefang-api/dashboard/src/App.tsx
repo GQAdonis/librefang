@@ -995,7 +995,7 @@ function DashboardApp() {
         setUserRole(w.role);
       })
       .catch(() => {
-        /* unauth or no-auth mode — fine, avatar shows the icon. */
+        /* unauthenticated — fine, the avatar shows the icon. */
       });
   }, [setTerminalEnabled]);
 

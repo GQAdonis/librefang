@@ -139,9 +139,13 @@ async fn operator_status(state: &AppState) -> UarOperatorStatus {
         placement: UarPlacementSupport::default(),
         delegated_host_contexts: {
             #[cfg(feature = "uar-driver")]
-            { librefang_llm_drivers::drivers::uar::delegated_host_contexts() }
+            {
+                librefang_llm_drivers::drivers::uar::delegated_host_contexts()
+            }
             #[cfg(not(feature = "uar-driver"))]
-            { Vec::new() }
+            {
+                Vec::new()
+            }
         },
     }
 }
@@ -280,14 +284,18 @@ pub(crate) async fn uar_connect(
             }
             if let Some(contexts) = request.delegated_host_contexts {
                 #[cfg(feature = "uar-driver")]
-                if let Err(error) = librefang_llm_drivers::drivers::uar::configure_delegated_host_contexts(contexts) {
+                if let Err(error) =
+                    librefang_llm_drivers::drivers::uar::configure_delegated_host_contexts(contexts)
+                {
                     return operator_error(StatusCode::BAD_REQUEST, error);
                 }
                 #[cfg(not(feature = "uar-driver"))]
                 let _ = contexts;
             }
             #[cfg(feature = "uar-driver")]
-            if let Err(error) = librefang_llm_drivers::drivers::uar::configure_host_context_resolver(request.host_context_resolver) {
+            if let Err(error) = librefang_llm_drivers::drivers::uar::configure_host_context_resolver(
+                request.host_context_resolver,
+            ) {
                 return operator_error(StatusCode::BAD_REQUEST, error);
             }
             Json(operator_status(&state).await).into_response()

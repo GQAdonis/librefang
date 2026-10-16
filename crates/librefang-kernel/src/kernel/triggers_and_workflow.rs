@@ -345,7 +345,7 @@ impl LibreFangKernel {
 
         let targeted_job = match &event.payload {
             librefang_types::event::EventPayload::System(
-                librefang_types::event::SystemEvent::TaskPosted { task_id, .. }
+                librefang_types::event::SystemEvent::TaskPosted { task_id, .. },
             ) => Some(task_id.clone()),
             _ => None,
         };
@@ -406,8 +406,10 @@ impl LibreFangKernel {
     }
 
     fn dispatch_job_trigger_matches(
-        &self, matches: &[crate::triggers::TriggerMatch],
-        fire_time: chrono::DateTime<chrono::Utc>, targeted_job: Option<String>,
+        &self,
+        matches: &[crate::triggers::TriggerMatch],
+        fire_time: chrono::DateTime<chrono::Utc>,
+        targeted_job: Option<String>,
     ) {
         if let Some(weak) = self.self_handle.get() {
             // Pre-resolve per-trigger data before spawning so the spawned
@@ -442,7 +444,9 @@ impl LibreFangKernel {
                 let workflow_id = trigger_match.workflow_id.clone();
                 let source = trigger_match.source.clone();
                 let job = targeted_job.clone().or_else(|| match &source {
-                    crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake { task_id } => Some(task_id.clone()),
+                    crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake { task_id } => {
+                        Some(task_id.clone())
+                    }
                     _ => None,
                 });
 
@@ -582,9 +586,16 @@ impl LibreFangKernel {
                                 match claimed {
                                     Ok(Some(claimed)) => claimed,
                                     Ok(None) => continue,
-                                    Err(_) => { warn!("Task dispatch authority unavailable; no model started"); continue; }
+                                    Err(_) => {
+                                        warn!(
+                                            "Task dispatch authority unavailable; no model started"
+                                        );
+                                        continue;
+                                    }
                                 }
-                            } else { msg };
+                            } else {
+                                msg
+                            };
 
                             if let Some(ref wid_str) = workflow_id {
                                 // Workflow dispatch path: resolve workflow by UUID, then by
@@ -961,7 +972,9 @@ impl LibreFangKernel {
             // returns the full already-claimed row before any model prompt.
             for (_, task_id) in overdue {
                 matches.push(TriggerMatch {
-                    agent_id, message: String::new(), session_mode_override: None,
+                    agent_id,
+                    message: String::new(),
+                    session_mode_override: None,
                     workflow_id: None,
                     source: TriggerMatchSource::TaskBoardAssigneeWake { task_id },
                 });
@@ -1366,19 +1379,23 @@ impl LibreFangKernel {
         // SECURITY: Global workflow timeout to prevent runaway execution.
         let max_workflow_secs = cfg.triggers.max_workflow_secs;
 
-        let output = tokio::time::timeout(
+        let outcome = match tokio::time::timeout(
             std::time::Duration::from_secs(max_workflow_secs),
             self.workflows
                 .engine
                 .execute_run(run_id, resolver, send_message),
         )
         .await
-        .map_err(|_| {
-            KernelError::LibreFang(LibreFangError::Internal(format!(
-                "Workflow timed out after {max_workflow_secs}s"
-            )))
-        })?
-        .map_err(|e| {
+        {
+            Ok(outcome) => outcome,
+            Err(_elapsed) => {
+                let error = format!("Workflow timed out after {max_workflow_secs}s");
+                // Dropping `execute_run` mid-step leaves the run in `Running` with nothing driving it, so move it to the terminal `Failed` the caller is told about, as the async workflow runner does.
+                self.workflows.engine.fail_running_run(run_id, &error).await;
+                return Err(KernelError::LibreFang(LibreFangError::Internal(error)));
+            }
+        };
+        let output = outcome.map_err(|e| {
             KernelError::LibreFang(LibreFangError::Internal(format!("Workflow failed: {e}")))
         })?;
 
@@ -1760,6 +1777,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 Some("boss"),
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -1794,6 +1813,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 Some("boss"),
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -1825,6 +1846,8 @@ mod task_board_reconcile_tests {
                 "stuck",
                 "body",
                 Some(&agent.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
@@ -1876,6 +1899,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 None,
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -1908,6 +1933,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 None,
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -1937,6 +1964,8 @@ mod task_board_reconcile_tests {
                 "body",
                 None,
                 None,
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -1965,6 +1994,8 @@ mod task_board_reconcile_tests {
                 "stranded",
                 "body",
                 Some(&agent.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
@@ -2003,6 +2034,8 @@ mod task_board_reconcile_tests {
                 "addressed only",
                 "body",
                 Some(&addressed.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
@@ -2046,6 +2079,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 None,
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -2057,6 +2092,8 @@ mod task_board_reconcile_tests {
                 "older",
                 "body",
                 Some(&agent.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
@@ -2124,6 +2161,8 @@ mod task_board_reconcile_tests {
                 "body",
                 Some(&agent.to_string()),
                 None,
+                0,
+                None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -2172,6 +2211,8 @@ mod task_board_reconcile_tests {
                 "never claimed",
                 "body",
                 Some(&agent.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )
@@ -2222,6 +2263,8 @@ mod task_board_reconcile_tests {
                 "slow turn",
                 "body",
                 Some(&agent.to_string()),
+                None,
+                0,
                 None,
                 librefang_memory::TaskQueueCaps::UNLIMITED,
             )

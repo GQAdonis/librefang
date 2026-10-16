@@ -34,7 +34,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2026.9.19"
+version = "2026.10.16"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/GQAdonis/librefang"
@@ -229,12 +229,12 @@ wasmtime = { version = "48", features = [
 # (no preopens / no env / no stdio inherit / no network) per phase-7
 # assessment.md D2. These two are BossFang-exclusive — upstream does not pull
 # wasmtime-wasi*, so the version must be carried here, matched to wasmtime 48.
-wasmtime-wasi = "=48.0.2"
+wasmtime-wasi = "=48.0.6"
 # WASI HTTP bindings — required by the component linker so StarlingMonkey
 # (jco componentize) components that import `wasi:http/types@0.2.10` find
 # the interface bound at instantiation time. Without this, js-kv-counter
 # fails to instantiate even though the JS source never uses HTTP.
-wasmtime-wasi-http = "=48.0.2"
+wasmtime-wasi-http = "=48.0.6"
 
 # HTTP server (for API daemon)
 axum = { version = "0.8", features = ["ws"] }
@@ -264,8 +264,8 @@ sha2 = { version = "0.10", features = ["oid"] }
 hmac = "0.12"
 hex = "0.4"
 subtle = "2"
-ed25519-dalek = { version = "2", features = ["rand_core"] }
-x25519-dalek = { version = "2", features = ["static_secrets"] }
+ed25519-dalek = { version = "3", features = ["rand_core"] }
+x25519-dalek = { version = "3", features = ["static_secrets"] }
 hkdf = "0.12"
 rsa = "0.9.6"
 rand = "0.10"
@@ -309,7 +309,7 @@ regex-lite = "0.1"
 socket2 = "0.6.4"
 
 # Zip archive extraction
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 
 # Internationalization (i18n)
 fluent = "0.17"
