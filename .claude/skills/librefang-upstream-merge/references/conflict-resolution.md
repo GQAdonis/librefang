@@ -32,6 +32,33 @@ upstream additions (e.g. new fields) manually if needed.
 | `.github/SECRETS.md` | TAURI_SIGNING_PRIVATE_KEY descriptor | Note that BossFang uses its own minisign keypair (not upstream's) |
 | `docs/architecture/plugin-signing.md` | BossFang trust-root status | Section noting plugin-registry trust-root is not rotated; env-only override |
 
+## Name-ours, version-upstream manifests
+
+Release-tag bumps conflict with BossFang's renamed packages. Keep the BossFang name and description, take upstream's version (the fork's versions track upstream release tags).
+
+| File | Keep ours | Take upstream |
+|---|---|---|
+| `sdk/javascript/package.json` | `name: "@bossfang/sdk"`, BossFang description | `version` |
+| `sdk/rust/Cargo.toml` | `name = "bossfang-sdk"` and its comment | `version` |
+| `crates/librefang-desktop/tauri.conf.json` | everything listed above, plus `build.frontendDist` | `version` |
+| dashboard `locales/*.json` `agents.subtitle` | "BossFang" product name | every other key in the hunk (upstream's new keys) |
+
+## Fork additions inside upstream rewrites
+
+When upstream rewrites a surface the fork extended, take upstream's rewrite and re-attach the fork's hooks; never keep the fork's copy of the old surface.
+
+- `librefang-memory/src/semantic.rs`: the fork guards the vector store behind `Arc<RwLock<Option<..>>>`; upstream code that reads `&self.vector_store` must call `self.vector_store()`.
+- `librefang-memory/src/substrate.rs` task queue: the fork routes claims through `task_dispatch::claim_native_jobs` and binds every native mutation to the byte-exact `payload`. Upstream predicates (`assigned_to = completed_by`, per-row `timeout_secs` TTL) are added *alongside* the payload predicate, and new claim JSON fields (`priority`) go onto `ClaimedNativeJob`. Watch for clean-merge breaks: upstream removed `cutoff_str` from `task_reset_stuck` while the fork's guarded UPDATEs still referenced it.
+- `librefang-channels/src/bridge.rs` dispatch: the fork's durable admission / journal / claim order stays; upstream's sender-context and auto-reply changes are applied inside it (2026-10-16: `AutoReplyOutcome`'s four arms, each finishing the durable dispatch).
+- `librefang-api/src/routes/config/manage.rs` reload: the `config_store_overlay` seed → overlay → reconcile block always survives.
+- Dashboard agent editor (`AgentManifestForm.tsx`, `AgentsPage.tsx`): upstream #8554 unified the editor and removed the drawer's model section and the full-manifest drawer. The fork's UAR hooks move into the unified editor: `modelSelector` slot on `AgentManifestForm` (`UarTargetSettings` for `provider === "uar"`) and `UarCatalogNotice` above the model group.
+
+## Deploy surfaces
+
+- `deploy/helm/librefang/Chart.yaml` (upstream #8534): repoint `home` / `sources` to `github.com/GQAdonis/librefang`; keep chart `name: librefang` (resource-name prefix, internal layer).
+- `image.repository` in the Helm values and `deploy/kubernetes/**` stay identical to upstream (`ghcr.io/librefang/librefang`) until the fork publishes its own image; the release workflow's docker job still pushes to that name. Repointing only the chart would break `helm install`.
+- `articles/release-*.md` are upstream's release posts and stay verbatim.
+
 ## Take-upstream-then-perl-rewrite (new TSX with sky-blue tokens)
 
 When upstream adds a new component with inline sky-blue colours, take

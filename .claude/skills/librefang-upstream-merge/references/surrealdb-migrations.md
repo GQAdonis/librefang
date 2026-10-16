@@ -88,6 +88,14 @@ The migration registry round-trips through `bootstrap_schema()` on
 every kernel boot — a syntax error in your `.surql` will surface on
 first daemon start.
 
+## Fork-only SQLite steps in `librefang-memory/src/migration.rs`
+
+The SQLite ladder (`run_step!(N, migrate_vN)`) is upstream's, but BossFang occasionally adds its own step (2026-10-10: the workflow `cancelled` state, shipped as v62).
+When upstream later claims the same number, keep upstream's number and body, and move the fork step to the next free number above upstream's ladder (2026-10-16: fork v62 → v64, upstream v62 `task_queue.timeout_secs`, v63 `ephemeral_runs.truncated`).
+A database the fork build already stamped at N never runs upstream's step N (`run_step!` gates on `current_version < N`), so the renumbered fork step must also apply upstream's step-N DDL when it is missing and move the audit row for N back to upstream's description — the same repair upstream's own `migrate_v62` makes for its 61 renumber.
+Make the fork step idempotent so it can float to the top again on the next collision, and add a test that stamps a database at the old fork number and asserts it reaches `SCHEMA_VERSION` with upstream's column present.
+Every fork-only SQLite step also needs its SurrealDB counterpart: the 2026-10-16 sync found `027_workflow_runs.surql` still asserting `state IN [..., 'failed']` without `'cancelled'`.
+
 ## Common pitfalls
 
 - **Type-name mismatch**: SQLite `INTEGER` → SurrealQL `int`; `TEXT` → `string`; `BLOB` → `bytes`; `REAL` → `float`; `BOOLEAN` → `bool`. There's no exact map; pick the closest semantic type.

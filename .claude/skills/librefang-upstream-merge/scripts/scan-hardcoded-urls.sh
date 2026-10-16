@@ -5,7 +5,7 @@
 # four origin-repoint knobs (see references/origin-knobs.md).
 #
 # Usage:
-#   scan-hardcoded-urls.sh             # diffs HEAD^..HEAD (post-merge)
+#   scan-hardcoded-urls.sh             # mid-merge: staged result vs HEAD; otherwise HEAD^..HEAD
 #   scan-hardcoded-urls.sh <ref>       # diffs <ref>..HEAD
 #
 # Exit codes:
@@ -14,14 +14,26 @@
 
 set -euo pipefail
 
-base="${1:-HEAD^}"
+# Mid-merge (MERGE_HEAD present, nothing committed yet) `HEAD^..HEAD` is the
+# wrong range: it diffs the pre-merge branch against its own parent and reports
+# a false "ok". Scan what the merge brings into the fork's tree instead — the
+# staged merge result against the pre-merge HEAD.
+if [ -z "${1:-}" ] && git rev-parse --quiet --verify MERGE_HEAD >/dev/null 2>&1; then
+  base="HEAD"
+  range=(--cached HEAD)
+  label="staged merge result (index vs pre-merge HEAD)"
+else
+  base="${1:-HEAD^}"
+  range=("$base..HEAD")
+  label="$base..HEAD"
+fi
 
 if ! git rev-parse --quiet --verify "$base" >/dev/null 2>&1; then
   echo "[scan-urls] FAIL: base ref '$base' does not exist" >&2
   exit 1
 fi
 
-echo "[scan-urls] scanning $base..HEAD for upstream URLs that bypass the origin knobs..."
+echo "[scan-urls] scanning $label for upstream URLs that bypass the origin knobs..."
 
 # Patterns that indicate a hardcoded librefang reference in source code.
 # Each entry is "regex|context" — context explains what to do when matched.
@@ -68,11 +80,13 @@ for entry in "${patterns[@]}"; do
   # Match added lines only ($+) in the diff. Output format from
   # `grep -n` includes "lineno:content", so we then strip the
   # allow-listed files via a second pass with awk.
-  raw="$(git diff --unified=0 "$base..HEAD" -- \
+  raw="$(git diff --unified=0 "${range[@]}" -- \
             'crates/**/*.rs' \
             'crates/**/Cargo.toml' \
             'sdk/**' \
             'Cargo.toml' \
+            'deploy/**' \
+            'k8s/**' \
             '.github/workflows/*.yml' \
             'README.md' \
             'CONTRIBUTING.md' 2>/dev/null \
@@ -94,7 +108,7 @@ done
 if [ "$any_hit" = "1" ]; then
   echo
   echo "[scan-urls] affected files (excluding allow-listed rollback-constant files):"
-  changed_files="$(git diff --name-only "$base..HEAD" -- 'crates/**/*.rs' '*.toml' 'sdk/**' '.github/**' '*.md' 2>/dev/null || true)"
+  changed_files="$(git diff --name-only "${range[@]}" -- 'crates/**/*.rs' '*.toml' 'sdk/**' '.github/**' 'deploy/**' 'k8s/**' '*.md' 2>/dev/null || true)"
   printf '%s\n' "$changed_files" | while IFS= read -r f; do
     [ -n "$f" ] || continue
     # Skip allow-listed files
@@ -105,7 +119,7 @@ if [ "$any_hit" = "1" ]; then
     [ "$skip" = "1" ] && continue
 
     # Six simpler greps cover the same surface as the unbalanced alt-regex.
-    if git diff --unified=0 "$base..HEAD" -- "$f" 2>/dev/null | grep -qiE \
+    if git diff --unified=0 "${range[@]}" -- "$f" 2>/dev/null | grep -qiE \
          -e 'librefang\.ai' \
          -e 'github\.com/librefang' \
          -e '@librefang/' \

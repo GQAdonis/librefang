@@ -5,7 +5,7 @@
 # a matching SurrealDB migration; see references/surrealdb-migrations.md.
 #
 # Usage:
-#   scan-new-schema.sh                 # diffs HEAD against the previous commit (post-merge)
+#   scan-new-schema.sh                 # mid-merge: staged result vs HEAD; otherwise HEAD^..HEAD
 #   scan-new-schema.sh <ref>           # diffs <ref>..HEAD (e.g. the pre-merge HEAD)
 #
 # Exit codes:
@@ -14,18 +14,30 @@
 
 set -euo pipefail
 
-base="${1:-HEAD^}"
+# Mid-merge (MERGE_HEAD present, nothing committed yet) `HEAD^..HEAD` is the
+# wrong range: it diffs the pre-merge branch against its own parent and reports
+# a false "ok". Scan what the merge brings into the fork's tree instead — the
+# staged merge result against the pre-merge HEAD.
+if [ -z "${1:-}" ] && git rev-parse --quiet --verify MERGE_HEAD >/dev/null 2>&1; then
+  base="HEAD"
+  range=(--cached HEAD)
+  label="staged merge result (index vs pre-merge HEAD)"
+else
+  base="${1:-HEAD^}"
+  range=("$base..HEAD")
+  label="$base..HEAD"
+fi
 
 if ! git rev-parse --quiet --verify "$base" >/dev/null 2>&1; then
   echo "[scan-new-schema] FAIL: base ref '$base' does not exist" >&2
   exit 1
 fi
 
-echo "[scan-new-schema] scanning $base..HEAD for new SQLite schema..."
+echo "[scan-new-schema] scanning $label for new SQLite schema..."
 
 # Grep for schema-defining statements in the additions of the diff.
 # `git diff --unified=0` keeps context low; `^+` matches added lines.
-hits="$(git diff --unified=0 "$base..HEAD" -- '*.rs' '*.sql' 2>/dev/null \
+hits="$(git diff --unified=0 "${range[@]}" -- '*.rs' '*.sql' 2>/dev/null \
   | grep -E '^\+[^+].*(CREATE TABLE|ALTER TABLE|ADD COLUMN|CREATE INDEX|CREATE UNIQUE INDEX)' \
   || true)"
 
@@ -35,9 +47,9 @@ if [ -z "$hits" ]; then
 fi
 
 # Find which files contain the hits.
-files="$(git diff --name-only "$base..HEAD" -- '*.rs' '*.sql' 2>/dev/null \
+files="$(git diff --name-only "${range[@]}" -- '*.rs' '*.sql' 2>/dev/null \
   | while read -r f; do
-      if git diff --unified=0 "$base..HEAD" -- "$f" 2>/dev/null \
+      if git diff --unified=0 "${range[@]}" -- "$f" 2>/dev/null \
          | grep -qE '^\+[^+].*(CREATE TABLE|ALTER TABLE|ADD COLUMN|CREATE INDEX|CREATE UNIQUE INDEX)'; then
         echo "$f"
       fi
