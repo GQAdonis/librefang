@@ -128,5 +128,13 @@ librefang-testing = { path = "../librefang-testing" }
 librefang-kernel-handle = { path = "../librefang-kernel-handle" }
 wiremock = "0.6"
 
+# The private HARNESS gate drives this target against a real UAR process and
+# the default operational persistence; it has no meaning without either, so
+# cargo refuses to build it rather than producing a binary that cannot run.
+[[test]]
+name = "bauar_harness_delegation"
+path = "tests/bauar_harness_delegation.rs"
+required-features = ["uar-driver", "surreal-backend"]
+
 [lints]
 workspace = true

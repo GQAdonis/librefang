@@ -5,10 +5,6 @@
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn bauar_kernel_entry_contract() {
-    assert!(
-        cfg!(feature = "uar-driver"),
-        "real provider driver required"
-    );
     #[cfg(feature = "uar-driver")]
     enabled::run().await;
 }
@@ -53,10 +49,6 @@ mod enabled {
     }
 
     pub async fn run() {
-        assert!(
-            cfg!(feature = "surreal-backend"),
-            "default operational persistence required"
-        );
         let root = PathBuf::from(
             std::env::var_os("BAUAR_KERNEL_ROOT").expect("private gate root required"),
         );

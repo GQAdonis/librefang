@@ -181,5 +181,13 @@ windows-sys = { version = "0.61", features = [
 chrono = { workspace = true }
 which = { workspace = true }
 
+# Private full-router host for the HARNESS gate; meaningless without the UAR
+# driver and the embedded Surreal backend, so cargo refuses to build it rather
+# than producing a binary that cannot exercise either.
+[[test]]
+name = "bauar_harness_host"
+path = "tests/bauar_harness_host.rs"
+required-features = ["uar-driver", "surreal-backend"]
+
 [lints]
 workspace = true

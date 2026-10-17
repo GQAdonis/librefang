@@ -189,14 +189,6 @@ fn inside(root: &Path, path: &Path) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn bauar_private_host() {
-    assert!(
-        cfg!(feature = "uar-driver"),
-        "HARNESS fixture requires the actual UAR driver"
-    );
-    assert!(
-        cfg!(feature = "surreal-backend"),
-        "default embedded operational storage required"
-    );
     let root = required_path("BAUAR_HOST_ROOT");
     let config_path = required_path("BAUAR_HOST_CONFIG");
     let ready = root.join("ready.json");
