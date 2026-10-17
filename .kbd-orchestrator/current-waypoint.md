@@ -1,7 +1,7 @@
 # Current Waypoint
 
 **Phase**: `phase-12-sync-uar-refresh-dot-facade`
-**Stage**: `plan_complete` (projection-only, D-001); 0/5 changes
+**Stage**: `execute` in progress (projection-only, D-001); 0/5, p12-c000 dispatched
 **Created**: 2026-10-17
 **Previous phase**: `phase-11-surreal-recovery-and-uar-convergence` (closed as superseded, D-004)
 

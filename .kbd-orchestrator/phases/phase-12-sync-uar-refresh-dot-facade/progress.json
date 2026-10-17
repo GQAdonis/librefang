@@ -41,7 +41,7 @@
   "changes": [
     {
       "id": "p12-c000-default-feature-build",
-      "status": "PENDING",
+      "status": "IN_PROGRESS",
       "tasks_total": 6,
       "tasks_done": 5,
       "owner": "bossfang-feature-steward"
@@ -87,9 +87,10 @@
       ]
     }
   ],
-  "last_updated": "2026-10-17T16:52:07Z",
-  "last_updated_by": "kbd-plan (projection-only, D-001)",
+  "last_updated": "2026-10-17T17:12:49Z",
+  "last_updated_by": "kbd-execute (projection-only, D-001)",
   "sourceTool": "product-manager (phase-11 superseded closure, D-004)",
   "createdBy": "kbd-new-phase",
-  "updatedAt": "2026-10-17T15:30:45Z"
+  "updatedAt": "2026-10-17T15:30:45Z",
+  "execution_dispatched": true
 }

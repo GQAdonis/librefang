@@ -9,7 +9,7 @@ Prerequisite for every task: C-001 is merged to `main`, and this change runs on 
   - the 1.1.1 prerequisites: compiler REST is unavailable under remote ingress or the shared credential policy, and `security.provider_credentials.installation_id` plus an approved credential-owner migration are required
 
 ## 2. Remove stale prose
-- [ ] 2.1 Correct the `uar-driver` comment in `crates/librefang-kernel/Cargo.toml` and the kreuzberg comment in `.github/workflows/docker-publish.yml`.
+- [ ] 2.1 Correct the `uar-driver` comments in `crates/librefang-kernel/Cargo.toml` and `crates/librefang-cli/Cargo.toml` (CLI edit approved by the operator on 2026-10-17, comment only) and the kreuzberg comment in `.github/workflows/docker-publish.yml`.
 - [ ] 2.2 Update the upstream-merge skill gotcha that names the deleted fork, and add a "historical — superseded by connection-only UAR" note to the three architecture documents.
 
 ## 3. Live probe (human-only)

@@ -1,15 +1,16 @@
 {
   "schemaVersion": "1",
   "generatedBy": "legacy-position-projection",
-  "sourceRevision": 79,
-  "updatedAt": "2026-10-17T18:58:43Z",
+  "sourceRevision": 80,
+  "updatedAt": "2026-10-17T17:12:49Z",
   "cursor": [
-    "phase-12-sync-uar-refresh-dot-facade"
+    "phase-12-sync-uar-refresh-dot-facade",
+    "p12-c000-default-feature-build"
   ],
   "root": {
     "type": "phase",
     "id": "phase-12-sync-uar-refresh-dot-facade",
-    "status": "plan_complete",
+    "status": "execution_in_progress",
     "progress": {
       "done": 0,
       "total": 5
