@@ -2,12 +2,12 @@
   "schemaVersion": "2",
   "phase": "phase-11-surreal-recovery-and-uar-convergence",
   "started": "2026-09-27T21:00:59Z",
-  "last_updated": "2026-09-27T21:09:14Z",
-  "last_updated_by": "product-manager (phase-11 G3 hand reconciliation)",
+  "last_updated": "2026-10-17T13:13:13Z",
+  "last_updated_by": "product-manager (phase-11 superseded closure, D-004)",
   "assessment_complete": false,
   "plan_complete": false,
   "execution_dispatched": false,
-  "reflection_complete": false,
+  "reflection_complete": true,
   "changes_total": 0,
   "changes_completed": 0,
   "implementation_total": 0,
@@ -17,23 +17,26 @@
     "implementation": {
       "completed": 0,
       "total": 0,
-      "status": "PENDING"
+      "status": "SKIPPED",
+      "summary": "No KBD plan was made; the phase work landed out of band via merge 066263da7. See reflection.md."
     },
     "evidence": {
-      "status": "NOT_TRACKED",
-      "summary": null,
+      "status": "SKIPPED",
+      "summary": "Waived (D-004): branch-level test results are recorded in handoffs/codex-handoff-2026-09-27.md and the G1 report docs/upstream-merges/2026-09-27-surreal-regression.md; the consolidation merge 066263da7 was source review only and was not re-verified under this phase.",
       "blockers": []
     },
     "certification": {
-      "status": "NOT_TRACKED",
-      "summary": null,
+      "status": "SKIPPED",
+      "summary": "Waived (D-004): phase superseded before any gate ran.",
       "blockers": []
     },
     "publication": {
-      "status": "NOT_TRACKED",
-      "summary": null,
+      "status": "SKIPPED",
+      "summary": "Waived (D-004): no release was cut under this phase; G4 image publication is superseded by connection-only UAR.",
       "blockers": []
     }
   },
-  "changes": []
+  "changes": [],
+  "closed": "2026-10-17T13:13:13Z",
+  "closure": "superseded"
 }
