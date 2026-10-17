@@ -40,7 +40,7 @@ impl Dispatch {
                     step_key,
                 } => Some((
                     step_handle(step_key),
-                    (step.name.clone(), uar_bound.clone()),
+                    (step.name.clone(), uar_bound.as_ref().clone()),
                 )),
                 _ => None,
             })

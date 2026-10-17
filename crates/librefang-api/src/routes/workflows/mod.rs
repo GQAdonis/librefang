@@ -281,7 +281,7 @@ fn parse_step_agent(step: &serde_json::Value, step_name: &str) -> Result<StepAge
             serde_json::from_value(step[key].clone()).map_err(|error| error.to_string())?;
         target.validate()?;
         return Ok(StepAgent::UarBound {
-            uar_bound: target,
+            uar_bound: Box::new(target),
             step_key: step_name.to_string(),
         });
     }

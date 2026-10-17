@@ -532,6 +532,15 @@ pub fn build_reload_plan_with_caps(
         plan.hot_actions.push(HotAction::ReloadA2aConfig);
     }
 
+    // BossFang: `a2a_public_url` is read live from `config_ref()` by the A2A
+    // routes on every request, so a change needs no reload action — noop.
+    if old.a2a_public_url != new.a2a_public_url {
+        plan.noop_changes.push(format!(
+            "a2a_public_url: {:?} -> {:?} (effective on next A2A request)",
+            old.a2a_public_url, new.a2a_public_url
+        ));
+    }
+
     if field_changed(&old.fallback_providers, &new.fallback_providers) {
         plan.hot_actions.push(HotAction::ReloadFallbackProviders);
     }
@@ -1189,6 +1198,7 @@ pub fn classified_reload_fields() -> std::collections::BTreeMap<&'static str, &'
         ("mcp_runtime_store", "N"),
         ("taint_rules", "H"),
         ("a2a", "H"),
+        ("a2a_public_url", "N"),
         ("fallback_providers", "H"),
         ("credential_pools", "H"),
         ("provider_urls", "H"),

@@ -351,7 +351,9 @@ fn clamp_timeout_duration(timeout_secs: u64) -> std::time::Duration {
 pub enum StepAgent {
     /// Complete execution delegated by the authenticated API workflow driver.
     UarBound {
-        uar_bound: librefang_types::uar_run::UarWorkflowStepTarget,
+        // Boxed: the target is several times larger than every other
+        // variant, and `StepAgent` is embedded in every workflow step.
+        uar_bound: Box<librefang_types::uar_run::UarWorkflowStepTarget>,
         step_key: String,
     },
     /// Reference an agent by UUID.
@@ -434,7 +436,7 @@ fn step_agent_from_object(
             .filter(|value| !value.is_empty())
             .ok_or("UAR workflow target requires a step_key")?;
         return Ok(StepAgent::UarBound {
-            uar_bound: target,
+            uar_bound: Box::new(target),
             step_key: step_key.to_string(),
         });
     }
