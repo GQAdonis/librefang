@@ -1,25 +1,20 @@
 {
   "schemaVersion": "1",
   "generatedBy": "legacy-position-projection",
-  "sourceRevision": 75,
-  "updatedAt": "2026-10-17T13:13:13Z",
+  "sourceRevision": 76,
+  "updatedAt": "2026-10-17T15:31:12Z",
   "cursor": [
-    "phase-11-surreal-recovery-and-uar-convergence"
+    "phase-12-sync-uar-refresh-dot-facade"
   ],
   "root": {
     "type": "phase",
-    "id": "phase-11-surreal-recovery-and-uar-convergence",
-    "status": "reflect_complete",
+    "id": "phase-12-sync-uar-refresh-dot-facade",
+    "status": "assessment_ready",
     "progress": {
       "done": 0,
       "total": 0
     },
     "children": [],
-    "annotations": [
-      {
-        "source": "kbd",
-        "note": "closed as superseded (D-004); see reflection.md"
-      }
-    ]
+    "annotations": []
   }
 }
