@@ -7,11 +7,11 @@ Several comments and docs still describe the deleted `GQAdonis/universal-agent-r
 
 ## Scope
 - Record the target, its required capabilities and the two 1.1.1 deployment prerequisites in `docs/bossfang-uar-connections.md`.
-- Correct the stale prose in `crates/librefang-kernel/Cargo.toml:83`, `.github/workflows/docker-publish.yml:11` and `.claude/skills/librefang-upstream-merge/SKILL.md`.
+- Correct the stale prose in `crates/librefang-kernel/Cargo.toml:83`, `crates/librefang-cli/Cargo.toml:46`, `.github/workflows/docker-publish.yml:11` and `.claude/skills/librefang-upstream-merge/SKILL.md`.
 - Mark `docs/architecture/uar-sidecar-assessment.md`, `uar-runtime-integration-research.md` and `bossfang-rebrand-completion.md` historical where they describe the superseded model.
 - Prepare the human-only live probe.
 
-The matching comment in `crates/librefang-cli/Cargo.toml:46` is excluded: `AGENTS.md` and `constraints.md` forbid modifying `librefang-cli` without explicit operator instruction, and that is pending.
+The matching comment in `crates/librefang-cli/Cargo.toml:46` is included: the operator explicitly approved this comment-only `librefang-cli` edit on 2026-10-17, as `AGENTS.md` and `constraints.md` require.
 Owner: `bossfang-feature-steward`.
 
 ## Boundary

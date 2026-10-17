@@ -1,0 +1,9 @@
+{
+  "phase": "phase-12-sync-uar-refresh-dot-facade",
+  "dispatchedAt": "2026-10-17T17:12:49Z",
+  "backend": "hybrid",
+  "assignedChanges": ["p12-c000-default-feature-build"],
+  "pendingWork": ["p12-c000-default-feature-build", "p12-c001-upstream-sync-2026-10", "p12-c002-surreal-parity-sync-2026-10", "p12-c003-uar-1-1-0-reference", "p12-c004-dot-facade-child-phase"],
+  "round": 1,
+  "operatorApprovals": ["commit/push/PR pre-approved for all five changes", "librefang-cli comment edit in p12-c003 approved"]
+}
