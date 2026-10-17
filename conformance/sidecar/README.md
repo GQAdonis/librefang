@@ -30,6 +30,9 @@ writes full params); it exists so the Rust consumer's
 backward-compatible acceptance of the pre-capability form stays pinned.
 The Python suite documents-and-skips it on the producer side.
 
+`events/send_result.json` is the outcome frame for an action-bound durable `send`.
+The Python runtime emits it inline rather than through a protocol builder, and the Rust adapter SDK does not produce it, so both SDK suites document-and-skip it on the producer side and only the daemon's consumer side asserts it.
+
 ## Conformance contract: JSON value equality
 
 Equality is **structural JSON value equality** (same keys, same

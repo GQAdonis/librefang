@@ -201,6 +201,15 @@ fn assert_event_matches_fixture(name: &str, fixture: &Value, event: &SidecarEven
                 value_or(params, "expires_at", Value::Null)
             );
         }
+        SidecarEvent::SendResult { params: actual } => {
+            assert_eq!(method, "send_result", "events/{name}: variant mismatch");
+            assert_eq!(actual.action_id, params["action_id"]);
+            assert_eq!(
+                serde_json::to_value(&actual.native_message_ids).unwrap(),
+                value_or(params, "native_message_ids", serde_json::json!([]))
+            );
+            assert_eq!(actual.error.as_deref(), optional_str(params, "error"));
+        }
         SidecarEvent::QrStatus { params: actual } => {
             assert_eq!(method, "qr_status", "events/{name}: variant mismatch");
             assert_eq!(actual.status, params["status"]);
@@ -221,6 +230,7 @@ fn events_deserialize_into_expected_variant() {
         "qr_status.json",
         "ready_full.json",
         "ready_minimal.json",
+        "send_result.json",
         "typing.json",
     ];
     assert_eq!(

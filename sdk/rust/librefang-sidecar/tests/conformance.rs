@@ -103,9 +103,14 @@ fn corpus_present() {
 /// params), it exists so the daemon's *consumer* side stays
 /// backward-compatible. Documented producer-side skip — same as the
 /// Python SDK's `EVENT_PRODUCER_SKIP`.
+///
+/// `events/send_result.json` is the durable-send outcome the Python runtime
+/// emits for an action-bound `send`; this SDK does not produce it, so only the
+/// daemon's consumer side asserts it.
 fn event_producer_skip() -> HashSet<String> {
     let mut s = HashSet::new();
     s.insert("ready_minimal.json".to_string());
+    s.insert("send_result.json".to_string());
     s
 }
 

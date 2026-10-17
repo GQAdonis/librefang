@@ -45,7 +45,9 @@ CORPUS = Path(__file__).resolve().parents[3] / "conformance" / "sidecar" / "corp
 # it (its ready() builder always writes full params); it exists so the
 # Rust consumer's backward-compat acceptance stays pinned. Documented
 # producer-side skip — asserted on the Rust side instead.
-EVENT_PRODUCER_SKIP = {"ready_minimal.json"}
+# `send_result` has no protocol builder: `sidecar/runtime.py` emits it inline
+# after a durable `send`, so only the Rust consumer side is asserted for it.
+EVENT_PRODUCER_SKIP = {"ready_minimal.json", "send_result.json"}
 
 
 def _corpus(rel: str) -> dict:
