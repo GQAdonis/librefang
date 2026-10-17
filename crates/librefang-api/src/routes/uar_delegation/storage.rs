@@ -17,7 +17,7 @@ pub(super) fn persist_initial(
     state: &Arc<AppState>,
     task: A2aTask,
     projection: UarDelegatedRunProjection,
-) -> Result<UarDelegatedRunProjection, Response> {
+) -> Result<UarDelegatedRunProjection, Box<Response>> {
     let task_id = projection.boss_task_id.clone();
     let retention = state
         .kernel
@@ -49,7 +49,7 @@ pub(super) fn persist_initial(
 pub(super) fn persist_projection(
     state: &Arc<AppState>,
     projection: UarDelegatedRunProjection,
-) -> Result<UarDelegatedRunProjection, Response> {
+) -> Result<UarDelegatedRunProjection, Box<Response>> {
     let task_id = projection.boss_task_id.clone();
     let retention = state
         .kernel
@@ -78,7 +78,7 @@ pub(super) fn persist_projection(
 pub(super) fn persist_and_sync(
     state: &Arc<AppState>,
     projection: UarDelegatedRunProjection,
-) -> Result<UarDelegatedRunProjection, Response> {
+) -> Result<UarDelegatedRunProjection, Box<Response>> {
     let projection = persist_projection(state, projection)?;
     Ok(projection)
 }
@@ -90,17 +90,17 @@ pub(super) fn saved_view(
 ) -> Response {
     match persist_and_sync(state, projection) {
         Ok(projection) => (status, Json(projection)).into_response(),
-        Err(response) => response,
+        Err(response) => *response,
     }
 }
 
-fn persistence_error(task_id: &str, _error: &str) -> Response {
+fn persistence_error(task_id: &str, _error: &str) -> Box<Response> {
     // Storage errors can include trigger diagnostics; keep credential material
     // out of the HTTP/log projection even on interrupted writes.
     tracing::error!(task_id, "failed to persist UAR delegation");
-    api_error(
+    Box::new(api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "delegation_persistence_failed",
         "The UAR delegation projection could not be committed",
-    )
+    ))
 }

@@ -234,7 +234,7 @@ pub(crate) mod enabled {
             pending,
         ) {
             Ok(projection) => projection,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         match client.admit(&admission, &prepared, &pending).await {
             Ok(mut projection) => {
@@ -262,7 +262,7 @@ pub(crate) mod enabled {
                 refused.admission_state = "refused".to_string();
                 refused.execution_state = "failed".to_string();
                 if let Err(response) = persist_and_sync(&state, refused) {
-                    return response;
+                    return *response;
                 }
                 client_error(error)
             }
@@ -310,7 +310,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         if super::observation::is_selected(&projection) {
             return super::observation::lookup_response(&state, projection).await;
@@ -339,7 +339,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         super::observation::response(&state, &projection, query.after).await
     }
@@ -351,7 +351,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         let result = state
             .uar_run_control
@@ -372,7 +372,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         let result = if super::observation::is_selected(&projection) {
             let Some(revision) = body
@@ -410,7 +410,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         let result = state
             .uar_run_control
@@ -426,7 +426,7 @@ pub(crate) mod enabled {
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         if super::observation::is_selected(&projection) {
             return api_error(
@@ -446,7 +446,7 @@ pub(crate) mod enabled {
                         projection: Box::new(projection),
                     })
                     .into_response(),
-                    Err(response) => response,
+                    Err(response) => *response,
                 }
             }
             Ok(unsupported @ UarSteerOutcome::Unsupported { .. }) => {
@@ -509,21 +509,21 @@ pub(crate) mod enabled {
         state: &Arc<AppState>,
         task_id: &str,
         api_user: Option<&Extension<AuthenticatedApiUser>>,
-    ) -> Result<(A2aTask, UarDelegatedRunProjection), Response> {
+    ) -> Result<(A2aTask, UarDelegatedRunProjection), Box<Response>> {
         let store = state.kernel.a2a_tasks();
         let Some(task) = store.get(task_id) else {
-            return Err(delegation_not_found(task_id));
+            return Err(Box::new(delegation_not_found(task_id)));
         };
         if !can_access(&task, api_user) {
-            return Err(delegation_not_found(task_id));
+            return Err(Box::new(delegation_not_found(task_id)));
         }
         let Some(projection) = store.get_uar_delegation(task_id) else {
-            return Err(delegation_not_found(task_id));
+            return Err(Box::new(delegation_not_found(task_id)));
         };
         if super::observation::is_selected(&projection)
             && !super::observation::owns_selected(state, &projection, api_user)
         {
-            return Err(delegation_not_found(task_id));
+            return Err(Box::new(delegation_not_found(task_id)));
         }
         Ok((task, projection))
     }

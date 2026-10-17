@@ -149,7 +149,7 @@ pub async fn get(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     match target(&state, id) {
         Ok(target) => {
@@ -171,7 +171,7 @@ pub async fn save(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     if user
         .as_ref()

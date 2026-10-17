@@ -391,6 +391,26 @@ pub async fn task_queue_patch(
     }
 }
 
+// Read errors and unsupported payloads never authorize a native requeue/delete.
+// The substrate still performs byte-exact predicates to close read/write races.
+async fn selected_mutation_refusal(
+    state: &AppState,
+    id: &str,
+) -> Option<(StatusCode, Json<serde_json::Value>)> {
+    use librefang_memory::task_dispatch::JobDispatchState;
+    match state.kernel.read_job_dispatch_intent(id).await {
+        Ok(Some(JobDispatchState::Selected(_))) => Some((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error":"selected_job_original_control_required"})),
+        )),
+        Ok(Some(JobDispatchState::Unknown)) | Err(_) => Some((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error":"job_dispatch_storage_unknown"})),
+        )),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse_page_param, resolve_task_creator, retry_not_applied_response};
@@ -435,25 +455,5 @@ mod tests {
             resolve_task_creator(None, Some("legacy-agent")),
             Some("legacy-agent".to_string())
         );
-    }
-}
-
-// Read errors and unsupported payloads never authorize a native requeue/delete.
-// The substrate still performs byte-exact predicates to close read/write races.
-async fn selected_mutation_refusal(
-    state: &AppState,
-    id: &str,
-) -> Option<(StatusCode, Json<serde_json::Value>)> {
-    use librefang_memory::task_dispatch::JobDispatchState;
-    match state.kernel.read_job_dispatch_intent(id).await {
-        Ok(Some(JobDispatchState::Selected(_))) => Some((
-            StatusCode::CONFLICT,
-            Json(serde_json::json!({"error":"selected_job_original_control_required"})),
-        )),
-        Ok(Some(JobDispatchState::Unknown)) | Err(_) => Some((
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({"error":"job_dispatch_storage_unknown"})),
-        )),
-        _ => None,
     }
 }

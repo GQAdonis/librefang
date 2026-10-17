@@ -99,7 +99,7 @@ pub(super) async fn response(
             Ok(delegation) => {
                 Json(serde_json::json!({"delegation":delegation,"events":events})).into_response()
             }
-            Err(response) => response,
+            Err(response) => *response,
         },
         Err(error) => {
             if let Some(recovered) = UarRunClient::recovery_projection(projection, &error) {
@@ -176,7 +176,7 @@ pub(super) fn control_result(
                     })),
                 )
                     .into_response(),
-                Err(response) => response,
+                Err(response) => *response,
             }
         }
     }

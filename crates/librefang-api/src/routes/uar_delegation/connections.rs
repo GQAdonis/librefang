@@ -117,7 +117,7 @@ pub(crate) async fn refresh(
             api_user.as_ref(),
         ) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
         let instance = match (librefang_types::config::UarConfig {
             instances: vec![request.instance],

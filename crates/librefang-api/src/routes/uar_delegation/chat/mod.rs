@@ -32,12 +32,12 @@ fn authorized(
     state: &Arc<AppState>,
     id: &str,
     user: Option<&Extension<AuthenticatedApiUser>>,
-) -> Result<AgentId, Response> {
+) -> Result<AgentId, Box<Response>> {
     let id = id
         .parse::<AgentId>()
-        .map_err(|_| failure("invalid_agent_id"))?;
+        .map_err(|_| Box::new(failure("invalid_agent_id")))?;
     if user.is_none() || !crate::routes::can_access_agent(state, id, user) {
-        return Err(failure("agent_not_found"));
+        return Err(Box::new(failure("agent_not_found")));
     }
     Ok(id)
 }

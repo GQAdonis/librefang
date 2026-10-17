@@ -233,7 +233,7 @@ pub async fn start(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     match begin(state, id, user, request).await {
         Ok(row) => Json(row).into_response(),
@@ -248,7 +248,7 @@ pub async fn list(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let sid = match session(&state, id, query.session_id.as_deref()) {
         Ok(sid) => sid,
@@ -264,7 +264,7 @@ pub async fn stop(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let sid = match session(&state, id, query.session_id.as_deref()) {
         Ok(sid) => sid,
@@ -290,7 +290,7 @@ pub async fn resume(
 ) -> Response {
     let id = match authorized(&state, &id, user.as_ref()) {
         Ok(id) => id,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let sid = match session(&state, id, query.session_id.as_deref()) {
         Ok(sid) => sid,
