@@ -26,6 +26,7 @@ import {
 } from "./StepAgentBinding";
 import type { AgentItem } from "../api";
 import type { CanvasNodeData } from "../lib/canvas";
+import { emptyUarWorkflowTarget } from "../lib/uarWorkflowTarget";
 
 const AGENTS = [
   { id: "id-research", name: "researcher", state: "Running" },
@@ -63,7 +64,7 @@ function last(values: StepAgentBindingValue[]): StepAgentBindingValue {
 const SKILLS = ["browser-automation", "pdf-extract"];
 
 const EMPTY: StepAgentBindingValue = {
-  uarBound: false,
+  uarBound: emptyUarWorkflowTarget(),
   source: "instance",
   agentId: "",
   agentName: "",
@@ -81,6 +82,7 @@ describe("bindingFromNodeData", () => {
       agentType: "",
       sessionMode: "",
       requiredSkills: "",
+      uarBound: emptyUarWorkflowTarget(),
     });
   });
 
@@ -98,6 +100,7 @@ describe("bindingFromNodeData", () => {
       agentType: "researcher",
       sessionMode: "",
       requiredSkills: "",
+      uarBound: emptyUarWorkflowTarget(),
     });
   });
 
@@ -275,6 +278,7 @@ describe("switchAgentSource", () => {
       agentType: "",
       sessionMode: "",
       requiredSkills: "",
+      uarBound: emptyUarWorkflowTarget(),
     });
   });
 
