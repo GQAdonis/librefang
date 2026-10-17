@@ -1,0 +1,12 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-10-17T16:36:19Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "13 candidates; adopt: upstream-merge skill (G1), UAR 1.1.0 image (G2), config store for dot settings, signed webhook durable sidecar as v1 adapter, UAR schedules+followups (Q4' UAR owns), UAR durable budgets, UAR collaboration team/mailbox API, librefang-testing fakes. Build: K07 task projection+receipts, K08 conversation facade, owner/destination binding+dedup over UAR followups, per-run depth/fan-out in BossFang adapter. Q6: deny unowned under dot profile, no quarantine; inventory all ownerless write paths post-sync (template instantiate, wizard, /btw) and require authenticated task creators. Q5 config-store caveats (non-scoped keys, reload path, refuse on SQLite, dedicated audited owner-binding route). Review (harness-native, 2 rounds): round-2 BLOCK accepted at cap; CRITICAL resolved by operator via Q4'. G3 is a child phase planned on post-sync tree; C-000 (dead-code build break) precedes G1.",
+  "skipped": false,
+  "skipReason": null
+}

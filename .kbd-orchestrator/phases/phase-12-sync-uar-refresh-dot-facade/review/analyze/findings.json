@@ -1,0 +1,56 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "claude-opus-5-5 (harness-native subagent)",
+  "isolation_mode": "harness-native",
+  "producer_model": "claude-opus-5-5",
+  "cross_model_check": "same-model-collision",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "library-candidates.json",
+      "claim": "Round-1 CRITICAL is only partly resolved: UAR 1.1.0 durable follow-ups (owner-controlled wakes into a durable conversation inbox, with quiet hours) are still not evaluated, yet build_required keeps the 'Owner notification gate (quiet hours, sensitivity, dedup)' and 'Durable continuation and wake records' as builds with no candidate. The Q4' double-scheduling analysis covers schedules only.",
+      "evidence": "Round-1 finding named 'follow-ups' explicitly. At UAR v1.1.0 (commit d815ef72), src/server.rs:1453-1455 builds a FollowupController and :1869 nests /api/uar/followups. src/uar/api/followups.rs:18-22 exposes create/list/show/edit/control plus /inbox/{conversation} and /inbox/{conversation}/{item}/acknowledge. src/uar/runtime/followups/mod.rs:1 reads '//! Owner-controlled follow-ups into a durable conversation inbox'. quiet_hours.rs implements IANA-zone quiet hours, and controller.rs:158 has a scan_once scanner. assistant_capabilities.rs:151 advertises followups. library-candidates.json has no follow-up candidate. Its build_required says 'notify_owner_bg picks first owner; no existing gate'. The correction section never mentions follow-ups, so #156's 'do not schedule the same obligation independently' rule is unaddressed for this second UAR scanner under both Q4' options. The round-1 asks to relate continuations to UAR checkpoint.resume and to evaluate durable approvals also have no candidate or verdict: approval.read/decide and checkpoint.list/resume appear only as a mention in the correction prose.",
+      "suggested_fix": "Add candidates with verdicts for UAR follow-ups/inbox (fit: notification gate, wake records, K08 inbox), checkpoint resume (fit: continuation records) and durable approvals. Extend Q4' so each option says which system owns follow-up wakes and how the other system's scanner is kept off dot work. Re-derive build_required from that."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "line": 139,
+      "claim": "Option (a) of Q4' depends on a disable mechanism BossFang does not control: UAR's schedule_unsupported is derived from its storage backend, not from a toggle, and the native schedule skill is registered unconditionally.",
+      "evidence": "analysis.md: 'the bound UAR instance must report `schedule_unsupported` or the profile must refuse UAR native schedule-skill use'. UAR v1.1.0 src/uar/runtime/schedules/controller.rs:42 is `pub fn supported(&self) -> bool { self.require_store().is_ok() }`, so any durable-backend instance reports schedules as supported. server.rs:1450-1452 registers native_skills::schedules on every boot. CLAUDE.md and the goals say BossFang never bundles, installs or supervises UAR, and an external UAR is externally owned. The analysis names no BossFang-side lever, such as binding skill allowlists or agent-definition tool grants, that would stop a UAR agent creating a schedule.",
+      "suggested_fix": "Identify the concrete lever, for example excluding the schedule (and follow-up) native skills from the dot agent definitions or bindings BossFang submits, and verify it in UAR source. If none exists, state that option (a) cannot fully prevent double scheduling, which changes the Q4' trade-off presented to the operator."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "line": 184,
+      "claim": "Option (b) of Q4' says BossFang 'projects occurrences into owner task views', but UAR 1.1.0's schedule API has no occurrence read surface, and option (b) contradicts the goal text that BossFang owns continuation records.",
+      "evidence": "UAR v1.1.0 src/uar/api/schedules.rs:18-20 has only '/', '/{id}' and '/{id}/{operation}' routes, and assistant_capabilities.rs:97-103 lists schedule.create/list/read/update/pause/resume/cancel, with no occurrence listing or history. Occurrence data is reachable only indirectly, for example through observer_controller.attach_schedules (server.rs:1449), which the analysis does not examine. goals.md G3: 'BossFang owns the product facade, adapters, task projections and continuation/notification records; UAR stays the execution and admission authority.'",
+      "suggested_fix": "Show how BossFang reads occurrences under (b), whether through observer events, run listings or something else, with UAR source evidence. State explicitly that (b) revises the G3 ownership split, so the operator decides with that in view."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "line": 150,
+      "claim": "Correction 1 says 'one production write path creates unowned workflows', but other production sources of ownerless turns and rows were cited in round 1 and are dropped without comment.",
+      "evidence": "crates/librefang-kernel/src/wizard.rs:160 sets `owner: None` on wizard-drafted AgentManifests. This is production code (`#[cfg(test)]` starts at :310), and their turns fall back to default_owner, then to unowned. crates/librefang-kernel/src/kernel/messaging.rs:872 documents that the channel-bridge /btw path 'always calls through with `owner: None`'. analysis.md:52 itself says unowned rows come from 'any turn with no authenticated caller, no manifest `owner` and no `default_owner`'. The corrected write-path inventory names only the template-instantiate route.",
+      "suggested_fix": "Replace 'one production write path' with an inventory of all non-test ownerless sources: template instantiate, wizard manifests, the /btw ephemeral path, and unauthenticated task posts. Require the dot profile to stamp or refuse at each one, re-verified on the post-sync tree."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "library-candidates.json",
+      "claim": "The JSON still carries the stale and imprecise UAR evidence that the correction section says was fixed, and the correction itself mislabels the tag SHA.",
+      "evidence": "cand-009 evidence still cites 'UAR src/server.rs:1867' for /api/v1/collaboration. At v1.1.0, :1845 is collaboration and :1867 is `.nest(\"/api/uar/schedules\"`. Its other paths are still unqualified ('team_execution.rs:20-45'). analysis.md:127 says 'verified at tag `v1.1.0` = `3bdb9435`', but 3bdb9435 is the annotated tag object, and the tagged commit is d815ef72, the SHA cand-010 cites. Downstream stages consume the JSON, not the prose corrections.",
+      "suggested_fix": "Update the cand-009 evidence to 'universal-agent-runtime@v1.1.0:src/server.rs:1845' plus qualified paths, and cite commit d815ef72 consistently."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "analysis.md",
+      "line": 21,
+      "claim": "The pre-correction sections still state superseded conclusions, such as 'Everything G1-G3 need already exists inside BossFang or UAR 1.1.0' with only cron.rs as the scheduler, 'Limits exist only on the team definition and binding', and Q11 including budgets, so a reader taking the top half alone gets the wrong plan inputs.",
+      "evidence": "analysis.md:91-92 and :116-118 versus the correction at :143-146 and :189. The document relies on 'the corrections below supersede the sections above where they conflict' rather than editing the conflicting statements.",
+      "suggested_fix": "Edit the superseded statements in place, or mark them struck, so the Plan stage cannot pick up the stale versions."
+    }
+  ]
+}

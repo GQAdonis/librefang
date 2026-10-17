@@ -1,0 +1,59 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "claude-opus-5-5 (harness-native subagent)",
+  "isolation_mode": "harness-native",
+  "producer_model": "claude-opus-5-5",
+  "cross_model_check": "same-model-collision",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "library-candidates.json",
+      "claim": "UAR 1.1.0's dot assistant surface (durable schedules, checkpoint resume, durable budgets, durable approvals, follow-ups, supervisor recovery) was never inspected, so two build_required items and the Q4 single-scheduler decision rest on an incomplete landscape.",
+      "evidence": "UAR tag v1.1.0 (d815ef72, the commit the recommended image is built from) ships openspec/specs/dot-durable-schedules, dot-checkpoint-resume, dot-durable-budgets, dot-spend-settlement, dot-supervisor-recovery and dot-memory-controls, implemented in src/uar/domain/schedules.rs, src/uar/runtime/schedules/calendar.rs, src/uar/runtime/cost_budget.rs, and advertised by src/uar/api/assistant_capabilities.rs:96-117 (schedule.create/list/update/pause/resume/cancel on /api/uar/schedules/, checkpoint.list/resume on /api/uar/runs/{run_id}/resume/{checkpoint_id}, approval.read/decide). library-candidates.json has no candidate for any of them, yet build_required lists 'Durable continuation and wake records' and 'Per-run depth/fan-out/budget enforcement', and analysis.md says 'Everything G1-G3 need already exists inside BossFang or UAR 1.1.0' while citing only the collaboration API. Issue #156 says 'Do not schedule the same obligation independently in BossFang and UAR' and 'Observe/reattach only when the negotiated execution profile supports it'; with Q4 making BossFang the scheduler, the plan needs an explicit rule for UAR's live schedule routes, and the continuation design needs to state how it relates to UAR checkpoint resume. Neither is addressed.",
+      "suggested_fix": "Add candidates for the UAR assistant capabilities (schedules, checkpoint resume, durable budgets/spend settlement, durable approvals) with verdicts. For schedules, record how the dot facade keeps UAR schedules unused or refused under Q4. For continuations, state whether BossFang wakes resume through UAR checkpoint.resume or replace it. For Q11, state whether aggregate budgets go to UAR's durable reservations and BossFang enforces only depth and fan-out."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "The Q6 claim that the production code creates no unowned rows outside unauthenticated turns is wrong: the workflow.rs:7378 literal it calls test code is the production template-instantiation path, so the plan will miss a write path that creates unowned workflows.",
+      "evidence": "analysis.md: 'The `owner: None` literals in `cron.rs:1466` and `workflow.rs:7378+` are in test modules'. In crates/librefang-kernel/src/workflow.rs the test module starts at line 7592. Line 7378 is inside `pub fn instantiate` (line 7314), which `crates/librefang-api/src/routes/workflows/templates.rs:143` calls before `register_workflow(workflow)` at line ~166 without stamping the caller's owner. Other non-test `owner: None` sites also exist (wizard.rs:160 for agent manifests, kernel/messaging.rs:872).",
+      "suggested_fix": "Correct the claim. Add the template-instantiate route, and any other non-test owner-less constructor, to the dot-profile 'always stamp an owner' write-path inventory."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "Q6 says tasks are 'the same' as workflows, but task ownership is a free-form `created_by` string that unauthenticated callers can set in the request body, so 'deny unowned rows' does not make task scoping fail-closed.",
+      "evidence": "analysis.md: '`resolve_task_creator` (`routes/task_queue.rs:225-232`) returns `None` for unauthenticated posts.' The code is `api_user.map(|user| user.user_id.to_string()).or_else(|| supplied.map(str::to_string))`, and the in-file test asserts `resolve_task_creator(None, Some(\"legacy-agent\"))` returns the body value. Workflows use `Option<Principal>`, while tasks use an unvalidated string. Under the dot profile, a body-supplied `created_by` equal to the bound owner's id would count as owned.",
+      "suggested_fix": "State that, under the dot profile, the task creator must come only from the authenticated principal or the agent's principal, and that a body-supplied `created_by` is ignored or rejected. Note the type mismatch (string vs Principal) the scoping change must reconcile."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "The Q5 mapping onto the config store leaves out properties that conflict with a single owner per data plane: keys can be scoped per host, the store is overlaid into the kernel only at boot through on-demand sessions, sqlite parity is deferred, and allowlisted keys can be rewritten at runtime through config_set.",
+      "evidence": "crates/librefang-api/src/config_store_overlay.rs: 'Primary operator-controlled scope for host-local config overrides' (`BOSSFANG_CONFIG_STORE_SCOPE`, `config_overrides_store_key()`). Its header says 'The kernel holds no operational SurrealDB session', with boot order 'seed → overlay → connect'. config_store.rs:36-37 says 'A `sqlite-backend` parity implementation is intentionally deferred'. analysis.md only says the store 'is system-scoped, which fits #156's single-owner-per-data-plane v1' and that the owner binding is 'not a credential'. It never says who may rebind the owner or how a replica with a different scope agrees on it.",
+      "suggested_fix": "Specify that the owner binding key is not host-scoped, how a runtime change reaches the kernel (hot reload vs restart, per build_reload_plan), what authorization a rebind needs, plus an audit record, and the sqlite-backend behaviour (refuse the profile)."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "The Q3 and Q6 recommendations rest on pre-sync code in files the G1 merge conflicts on, and they ignore the two upstream commits the assess review flagged as bearing directly on WP1/WP2.",
+      "evidence": "The assess handoff and assessment review correction 1: 'G3 planning must re-baseline its WP status table on the post-sync tree', naming 837f6e40f (#8526, scopes channel_send) and 8afd864e5 (#8583, records tool dispatch identity for owner assertions). analysis.md cites routes/task_queue.rs (listed as a hard conflict) and the channel receipt path (channels/src/bridge.rs is a conflict file and was touched by 8c347f37f), and never mentions #8526 or #8583. The only mitigation is 'planned against the post-sync tree' for the G3 child.",
+      "suggested_fix": "Mark the Q3 and Q6 evidence as provisional pending the post-G1 re-read. Add an explicit plan step to re-verify sidecar.rs, webhook.py, task_queue.rs and workflow.rs ownership after the merge, folding in #8526 and #8583."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "analysis.md",
+      "claim": "The webhook 'native receipt' that Q3 recommends is a message id the callback receiver itself reports, so the receipt is only as trustworthy as the KnowMe client endpoint. This trust assumption is not stated.",
+      "evidence": "webhook.py:954 `native_id = _resp.get(\"message_id\")` from the callback POST response, and module doc line 99 ('JSON {\"action_id\": <same action>, \"message_id\": <native id>}'). analysis.md: 'every message is owner-bound and signed by construction', but outbound signing (webhook.py:919) authenticates BossFang to the receiver, not the receiver's receipt to BossFang.",
+      "suggested_fix": "Record that the v1 receipt is receiver-attested, and decide whether the callback response must be signed or tied to the action_id for K07 evidence."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "analysis.md",
+      "claim": "The UAR landscape evidence is partly stale or imprecise: line citations come from the uncommitted 1.1.1 working tree rather than the v1.1.0 tag the image is built from, the evidence paths are not qualified with the UAR repo, and 'no remote branch' is false.",
+      "evidence": "The analysis cites `src/server.rs:1867` for `/api/v1/collaboration`. At tag v1.1.0 it is line 1845, and the working tree has src/server.rs modified (+115/-46). Packet cited_paths marks team_execution.rs and team_mailbox.rs as MISSING because they are unqualified UAR paths. `git branch -r` shows origin/codex/uar-1-1-0-kubo-conformance at 91a091d6, the same commit as origin/main, so the branch exists remotely and only the 1.1.1 changes are uncommitted. The 1.1.1 proposal also modifies dot-durable-budgets and dot-durable-ingestion, which analysis.md omits from its v1.1.1 summary.",
+      "suggested_fix": "Cite UAR paths as `universal-agent-runtime@v1.1.0:<path>:<line>`, reword to 'no 1.1.1 commit, tag or image', and list the dot-durable modifications in the 1.1.1 summary."
+    }
+  ]
+}

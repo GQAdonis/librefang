@@ -12,3 +12,32 @@ Details are in `assessment.md` under "Stage-gate note".
 **Alternatives:** Keep retrying runtime commands (rejected: each append is permanent, and the reducer defect is in the tool, not the project) · Stop the phase until the journal is repaired (rejected: the assessment is independent of the journal, and projections stay authoritative for this repo today).
 
 **Learn more:** `assessment.md` "Stage-gate note" and Open Question Q1.
+
+## D-002 · Operator answers to Q1–Q9 and analyze recommendations          [analyze · 2026-10-17]
+
+**TL;DR:** The operator chose: projection-only KBD state, a G3 child phase, #156 reopened as G3's tracker, BossFang-owned scheduling, settings as profile flag plus config section plus the authoritative settings database, and fixtures in `librefang-testing`. Analyze recommends: the signed webhook durable profile as the v1 adapter (Q3), denying unowned rows under the profile with no quarantine (Q6), and adopting UAR 1.1.0's existing team and mailbox APIs (Q8).
+
+**Why:** Each recommendation is grounded in code evidence in `analysis.md`.
+Unowned rows are a live documented state (`workflow.rs:186`), not deprecated data.
+Only the webhook durable profile and the Discord sidecars advertise `native_send_receipt`.
+The UAR v1.1.1 work adds no capabilities, and team and mailbox already shipped in 1.1.0.
+
+**Alternatives:** Discord as the v1 adapter (deferred to second qualification) · quarantine table for unowned rows (rejected: migration cost for no v1 benefit) · wait for UAR 1.1.1 (rejected for G2 now: unpublished, breaking credential migration).
+
+**Still open:** Q10 (G2 image 1.1.0 now, re-target at 1.1.1) and Q11 (BossFang enforces per-run limits), both with recommendations.
+
+**Learn more:** `analysis.md`, `library-candidates.json`.
+
+## D-003 · Scheduling, follow-ups and wakes move to UAR; G2 targets UAR 1.1.0; BossFang enforces per-run depth and fan-out          [analyze · 2026-10-17]
+
+**TL;DR:** After review found that UAR 1.1.0 already ships durable schedules and follow-ups, the operator reversed Q4: UAR owns scheduling, follow-ups and wakes for the dot profile (Q4′).
+G2 targets `ghcr.io/prometheus-ags/universal-agent-runtime:1.1.0@sha256:064f5004…`, with 1.1.1 re-targeted later (Q10).
+BossFang's team adapter enforces per-run depth and fan-out, with budgets on UAR durable budgets (Q11).
+
+**Why:** UAR at `d815ef72` implements `dot-durable-schedules` (occurrence dedup, DST handling, overlap guard, budget-gated admission) and `FollowupController` (durable inbox, quiet hours).
+#156 forbids scheduling an obligation in both systems.
+Rebuilding these in BossFang was G3's largest single item.
+
+**Alternatives:** BossFang owns scheduling (the original Q4 answer; rejected after the evidence, since it needs a full scheduler build plus a UAR disable lever) · wait for UAR 1.1.1 (rejected: unpublished, breaking migration) · a UAR issue for per-run limits first (rejected as a v1 blocker).
+
+**Learn more:** `analysis.md` "Unresolved review findings (round 2)" and "Operator resolution".
