@@ -2763,30 +2763,32 @@ mod tests {
         let recent_unix = now_unix - 86_400; // 1 day ago
 
         // Insert directly to control finished_at precisely.
+        // Empty payload is the legacy native classification; retention only
+        // ever deletes native rows, so a nonempty unknown payload would be kept.
         {
             let conn = substrate.pool.get().unwrap();
             conn.execute(
                 "INSERT INTO task_queue (id, agent_id, task_type, payload, status, created_at, completed_at, finished_at) \
-                 VALUES ('old-done', 'a', 't', x'00', 'completed', ?1, ?1, ?2)",
+                 VALUES ('old-done', 'a', 't', x'', 'completed', ?1, ?1, ?2)",
                 rusqlite::params![chrono::Utc::now().to_rfc3339(), old_unix],
             )
             .unwrap();
             conn.execute(
                 "INSERT INTO task_queue (id, agent_id, task_type, payload, status, created_at, completed_at, finished_at) \
-                 VALUES ('old-failed', 'a', 't', x'00', 'failed', ?1, NULL, ?2)",
+                 VALUES ('old-failed', 'a', 't', x'', 'failed', ?1, NULL, ?2)",
                 rusqlite::params![chrono::Utc::now().to_rfc3339(), old_unix],
             )
             .unwrap();
             conn.execute(
                 "INSERT INTO task_queue (id, agent_id, task_type, payload, status, created_at, completed_at, finished_at) \
-                 VALUES ('recent-done', 'a', 't', x'00', 'completed', ?1, ?1, ?2)",
+                 VALUES ('recent-done', 'a', 't', x'', 'completed', ?1, ?1, ?2)",
                 rusqlite::params![chrono::Utc::now().to_rfc3339(), recent_unix],
             )
             .unwrap();
             // Pending row must NEVER be pruned regardless of age.
             conn.execute(
                 "INSERT INTO task_queue (id, agent_id, task_type, payload, status, created_at) \
-                 VALUES ('pending-old', 'a', 't', x'00', 'pending', ?1)",
+                 VALUES ('pending-old', 'a', 't', x'', 'pending', ?1)",
                 rusqlite::params![chrono::Utc::now().to_rfc3339()],
             )
             .unwrap();

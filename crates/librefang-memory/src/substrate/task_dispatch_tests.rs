@@ -103,7 +103,7 @@ async fn selected_preflight_pause_and_restart_never_release_to_native() {
     );
     // No A2A reservation/network submission exists yet: preflight is paused.
     assert!(store
-        .task_claim_native_wake(&[job.clone()], "worker", None)
+        .task_claim_native_wake(std::slice::from_ref(&job), "worker", None)
         .await
         .unwrap()
         .is_empty());
@@ -150,7 +150,7 @@ async fn native_exact_winner_survives_retry_and_is_not_a_second_loop_grant() {
     assert_eq!(rows[0].id, job);
     assert_eq!(rows[0].status, "in_progress");
     assert!(store
-        .task_claim_native_wake(&[job.clone()], "worker", None)
+        .task_claim_native_wake(std::slice::from_ref(&job), "worker", None)
         .await
         .unwrap()
         .is_empty());
@@ -172,7 +172,7 @@ async fn native_exact_winner_survives_retry_and_is_not_a_second_loop_grant() {
     );
     assert_eq!(
         store
-            .task_claim_native_wake(&[job.clone()], "worker", None)
+            .task_claim_native_wake(std::slice::from_ref(&job), "worker", None)
             .await
             .unwrap()
             .len(),

@@ -70,7 +70,7 @@ async fn native_exact_rows_are_claimed_once_before_prompt() {
     let first = post(&kernel, Some(agent), "requested job").await;
     let unrelated = post(&kernel, Some(agent), "unrelated job").await;
     let prompt = kernel
-        .claim_native_job_prompt(agent, &[first.clone()])
+        .claim_native_job_prompt(agent, std::slice::from_ref(&first))
         .await
         .unwrap()
         .unwrap();
@@ -89,7 +89,7 @@ async fn native_exact_rows_are_claimed_once_before_prompt() {
         "in_progress"
     );
     assert!(kernel
-        .claim_native_job_prompt(agent, &[first.clone()])
+        .claim_native_job_prompt(agent, std::slice::from_ref(&first))
         .await
         .unwrap()
         .is_none());
@@ -120,7 +120,7 @@ async fn committed_selection_without_private_attempt_never_becomes_native() {
     );
     kernel.reconcile_selected_jobs().await.unwrap();
     assert!(kernel
-        .claim_native_job_prompt(agent, &[job.clone()])
+        .claim_native_job_prompt(agent, std::slice::from_ref(&job))
         .await
         .unwrap()
         .is_none());

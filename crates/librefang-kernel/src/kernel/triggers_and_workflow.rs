@@ -2089,23 +2089,27 @@ mod task_board_reconcile_tests {
 
         let matches = kernel.reconcile_pending_task_wakes().await;
 
-        assert_eq!(matches.len(), 1);
+        // BossFang: every overdue task is dispatched under its own exact id,
+        // and the dispatcher claims that row before any prompt is built, so
+        // the match carries no prompt text of its own. The whole backlog is
+        // dispatched, longest-waiting first.
+        let sources: Vec<_> = matches.iter().map(|m| m.source.clone()).collect();
         assert_eq!(
-            matches[0].source,
-            crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake {
-                task_id: older.clone()
-            },
-            "the wake must be keyed on the longest-waiting task, not the smallest id"
+            sources,
+            vec![
+                crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake {
+                    task_id: older.clone()
+                },
+                crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake {
+                    task_id: younger.clone()
+                },
+            ],
+            "the backlog must be dispatched oldest first, not in id order"
         );
+        assert!(matches.iter().all(|m| m.agent_id == agent));
         assert!(
-            matches[0].message.contains(&older) && !matches[0].message.contains(&younger),
-            "the prompt must name the oldest task: {}",
-            matches[0].message
-        );
-        assert!(
-            matches[0].message.contains('2'),
-            "the prompt must report the full backlog count: {}",
-            matches[0].message
+            matches.iter().all(|m| m.message.is_empty()),
+            "the dispatcher supplies the claimed rows, never the match"
         );
     }
 
