@@ -1,0 +1,275 @@
+{
+  "phase": "phase-12-sync-uar-refresh-dot-facade",
+  "generated_at": "2026-10-17T17:00:00Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 2,
+      "tier4": 0,
+      "in_repo": 14
+    }
+  },
+  "gaps_addressed": [
+    "G1-sync",
+    "G2-uar-image",
+    "G3-WP1-adapter",
+    "G3-WP3-ownership",
+    "G3-WP5-scheduler",
+    "G3-dot-settings",
+    "G3-fixtures",
+    "G3-WP6-teams"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "librefang-upstream-merge skill (single full merge)",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "G1-sync",
+      "verdict": "adopt",
+      "coverage_estimate": 1.0,
+      "evidence": [
+        ".claude/skills/librefang-upstream-merge/SKILL.md",
+        "assessment.md G1"
+      ],
+      "risks": [
+        "28 conflicts",
+        "SQLite v62/v63 collision",
+        "uar.rs:1176 CompletionResponse break"
+      ],
+      "decision_rationale": "Existing sync procedure; one complete merge of 103 commits, no cherry-picks."
+    },
+    {
+      "id": "cand-002",
+      "name": "BossFang config store (librefang-storage config_store, Bootstrap/Runtime provenance)",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "G3-dot-settings",
+      "verdict": "adopt",
+      "coverage_estimate": 0.9,
+      "evidence": [
+        "crates/librefang-storage/src/config_store.rs:1-37"
+      ],
+      "risks": [
+        "system-scoped only (fits single-owner v1)",
+        "not a secrets store"
+      ],
+      "decision_rationale": "Already implements Q5: config.toml seeds, DB authoritative after copy, revision-gated override."
+    },
+    {
+      "id": "cand-003",
+      "name": "Signed webhook sidecar, durable profile",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "G3-WP1-adapter",
+      "verdict": "adopt",
+      "coverage_estimate": 0.8,
+      "evidence": [
+        "sdk/python/librefang/sidecar/adapters/webhook.py:642-647",
+        "crates/librefang-channels/src/sidecar.rs:2438-2448",
+        "commit 8c347f37f"
+      ],
+      "risks": [
+        "reactions/threads must return typed Unsupported"
+      ],
+      "decision_rationale": "Recommended v1 receipt-capable adapter (Q3): owner-bound, signed, real-service testable without third-party accounts."
+    },
+    {
+      "id": "cand-004",
+      "name": "Discord sidecar",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "G3-WP1-adapter",
+      "verdict": "reference",
+      "coverage_estimate": 0.6,
+      "evidence": [
+        "sdk/python/librefang/sidecar/adapters/discord.py:396-400",
+        "commit bcdb61764"
+      ],
+      "risks": [
+        "no reactions/interactive",
+        "needs bot token for real-service test",
+        "multi-user channels vs single owner"
+      ],
+      "decision_rationale": "Second adapter to qualify after v1."
+    },
+    {
+      "id": "cand-005",
+      "name": "BossFang cron scheduler (kernel/src/cron.rs, cron 0.17)",
+      "kind": "pattern",
+      "registry": "crates",
+      "fit_for_gap": "G3-WP5-scheduler",
+      "verdict": "reject",
+      "coverage_estimate": 0.5,
+      "evidence": [
+        "crates/librefang-kernel/src/cron.rs",
+        "crates/librefang-kernel/Cargo.toml:58"
+      ],
+      "risks": [
+        "in-memory task_registry has no replay; continuations must be built"
+      ],
+      "decision_rationale": "Operator decision Q4: BossFang owns scheduling; extend with durable continuation/wake records. Re-raised as Q4-prime after review found UAR 1.1.0 durable schedules. Resolved: Q4-prime chose UAR ownership; cron.rs is not used for dot work."
+    },
+    {
+      "id": "cand-006",
+      "name": "apalis",
+      "kind": "library",
+      "registry": "crates",
+      "fit_for_gap": "G3-WP5-scheduler",
+      "verdict": "reject",
+      "evidence": [
+        "cargo search: apalis 1.0.0"
+      ],
+      "risks": [
+        "second scheduler",
+        "no SurrealDB store"
+      ],
+      "decision_rationale": "Conflicts with Q4 single scheduler authority."
+    },
+    {
+      "id": "cand-007",
+      "name": "tokio-cron-scheduler",
+      "kind": "library",
+      "registry": "crates",
+      "fit_for_gap": "G3-WP5-scheduler",
+      "verdict": "reject",
+      "evidence": [
+        "cargo search: tokio-cron-scheduler 0.15.1"
+      ],
+      "risks": [
+        "duplicates cron.rs"
+      ],
+      "decision_rationale": "Existing cron.rs already covers cron parsing and persistence."
+    },
+    {
+      "id": "cand-008",
+      "name": "librefang-testing deterministic provider fakes",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "G3-fixtures",
+      "verdict": "adopt",
+      "coverage_estimate": 0.4,
+      "evidence": [
+        "crates/librefang-testing"
+      ],
+      "risks": [
+        "calendar/email fakes must be written"
+      ],
+      "decision_rationale": "Operator decision Q7."
+    },
+    {
+      "id": "cand-009",
+      "name": "UAR 1.1.0 collaboration API (/api/v1/collaboration: team planning, mailbox, team execution)",
+      "kind": "service",
+      "registry": "none",
+      "repo_url": "https://github.com/Prometheus-AGS/universal-agent-runtime",
+      "fit_for_gap": "G3-WP6-teams",
+      "verdict": "adopt",
+      "coverage_estimate": 0.7,
+      "evidence": [
+        "UAR d815ef72 (v1.1.0) src/server.rs:1845 collaboration nest",
+        "UAR src/uar/api/collaboration/team_mailbox.rs",
+        "UAR src/uar/api/collaboration/team_execution.rs",
+        "UAR src/uar/api/capabilities.rs"
+      ],
+      "risks": [
+        "workspace-scoped, not run-scoped",
+        "no per-run depth/fan-out/budget limits"
+      ],
+      "decision_rationale": "Team/mailbox APIs already exist in 1.1.0 and are unchanged in 1.1.1; BossFang enforces per-run limits (Q11)."
+    },
+    {
+      "id": "cand-010",
+      "name": "ghcr.io/prometheus-ags/universal-agent-runtime:1.1.0@sha256:064f5004fb3ba76506abce5cf81285b2a8aa3e54fa5a22e2c2bfc97b1211e43b",
+      "kind": "service",
+      "registry": "none",
+      "fit_for_gap": "G2-uar-image",
+      "verdict": "adopt",
+      "coverage_estimate": 1.0,
+      "evidence": [
+        "anonymous GHCR HEAD digest",
+        "UAR source d815ef72 capabilities"
+      ],
+      "risks": [
+        "static contract fit only; live probe pending",
+        "1.1.1 unpublished with breaking credential migration"
+      ],
+      "decision_rationale": "Latest published image (Q10 recommendation)."
+    },
+    {
+      "id": "cand-011",
+      "name": "UAR 1.1.0 dot durable schedules (/api/uar/schedules/, ScheduleController, native schedule skill)",
+      "kind": "service",
+      "registry": "none",
+      "repo_url": "https://github.com/Prometheus-AGS/universal-agent-runtime",
+      "fit_for_gap": "G3-WP5-scheduler",
+      "verdict": "adopt",
+      "coverage_estimate": 0.85,
+      "evidence": [
+        "UAR v1.1.0 src/uar/api/assistant_capabilities.rs schedule.*",
+        "src/server.rs:1446-1450,1867",
+        "openspec/specs/dot-durable-schedules"
+      ],
+      "risks": [
+        "conflicts with Q4 answer (BossFang owns); double-scheduling unless disabled for dot profile"
+      ],
+      "decision_rationale": "Pending Q4-prime: recommended adopt if operator moves scheduling to UAR; otherwise must be disabled for dot work."
+    },
+    {
+      "id": "cand-012",
+      "name": "UAR 1.1.0 dot durable budgets + spend settlement",
+      "kind": "service",
+      "registry": "none",
+      "repo_url": "https://github.com/Prometheus-AGS/universal-agent-runtime",
+      "fit_for_gap": "G3-WP6-teams",
+      "verdict": "adopt",
+      "coverage_estimate": 0.8,
+      "evidence": [
+        "UAR v1.1.0 openspec/specs/dot-durable-budgets",
+        "openspec/specs/dot-spend-settlement"
+      ],
+      "risks": [
+        "1.1.1 changes dot-durable-budgets"
+      ],
+      "decision_rationale": "Per-run budget admission via durable shared reservations; BossFang keeps only depth/fan-out limits."
+    },
+    {
+      "id": "cand-013",
+      "name": "UAR 1.1.0 durable follow-ups (/api/uar/followups, FollowupController, native followup skill)",
+      "kind": "service",
+      "registry": "none",
+      "repo_url": "https://github.com/Prometheus-AGS/universal-agent-runtime",
+      "fit_for_gap": "G3-WP5-continuations-notification",
+      "verdict": "adopt",
+      "coverage_estimate": 0.7,
+      "evidence": [
+        "UAR d815ef72 src/server.rs:1453-1458,1869"
+      ],
+      "risks": [
+        "second UAR scanner; overlaps BossFang continuation and notification builds"
+      ],
+      "decision_rationale": "Pending Q4-prime (widened): adopt under option (b)."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "K07 task projection and normalized receipts",
+      "why_no_candidate": "BossFang-specific product projection over UAR run state"
+    },
+    {
+      "need": "Owner/destination binding and dedup over UAR follow-up deliveries",
+      "why_no_candidate": "notify_owner_bg picks first owner; no existing gate"
+    },
+    {
+      "need": "K08 conversation facade routes",
+      "why_no_candidate": "No conversation routes exist"
+    },
+    {
+      "need": "Per-run depth/fan-out enforcement in BossFang team adapter (budgets adopt cand-012)",
+      "why_no_candidate": "UAR limits are per team definition/binding only"
+    }
+  ]
+}
