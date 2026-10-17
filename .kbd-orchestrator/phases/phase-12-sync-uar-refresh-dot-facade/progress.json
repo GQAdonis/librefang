@@ -43,7 +43,7 @@
       "id": "p12-c000-default-feature-build",
       "status": "PENDING",
       "tasks_total": 6,
-      "tasks_done": 0,
+      "tasks_done": 5,
       "owner": "bossfang-feature-steward"
     },
     {
