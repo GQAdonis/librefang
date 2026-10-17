@@ -76,3 +76,15 @@ None of these blocks M1–M4 or G4; question 5 must be answered before M5a in ph
 **Alternatives:** S2a now (rejected: needs UAR work and a network path into BossFang approvals) · S2b (rejected for now: UAR policy, not BossFang, would decide tool effects) · M5a–M5c in phase-11 (rejected: too large next to the SurrealDB recovery) · One-release deprecated alias for the nested behaviour (rejected: keeps a known-broken path alive for another release).
 
 **Learn more:** ADR 0001 "Options considered", "Decision" and "Migration"; `analysis.md` in this phase directory.
+
+## D-004 · Close phase-11 as superseded and reconcile the root waypoint          [reflect · 2026-10-17]
+
+**TL;DR:** Phase-11 closes without a KBD assess/plan/execute cycle: G1, G2 and G5 were met out of band, G4 is superseded, and this closure meets G3.
+
+**Why:** The phase-11 work landed on `main` through merge `066263da7` (2026-10-11), and the Agent Fabric Convergence phase, tracked in its own KBD root under `docs/plans/agent-fabric-convergence/`, replaced the UAR sidecar and image-pin model with connection-only borrowing.
+The root waypoint still said `/kbd-assess phase-11-…` at revision 74, which would have measured against obsolete goals.
+Dispositions and carry-forward items are in `reflection.md`.
+
+**Alternatives:** Re-assess phase-11 as written (rejected: G4 targets an architecture that no longer exists, and G1/G2/G5 are already merged) · Delete the phase directory (rejected: loses the handoff and decision history).
+
+**Learn more:** `reflection.md` and `handoffs/codex-handoff-2026-09-27.md` in this phase directory.

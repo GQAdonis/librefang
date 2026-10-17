@@ -1,20 +1,25 @@
 {
   "schemaVersion": "1",
   "generatedBy": "legacy-position-projection",
-  "sourceRevision": 74,
-  "updatedAt": "2026-09-27T21:09:14Z",
+  "sourceRevision": 75,
+  "updatedAt": "2026-10-17T13:13:13Z",
   "cursor": [
     "phase-11-surreal-recovery-and-uar-convergence"
   ],
   "root": {
     "type": "phase",
     "id": "phase-11-surreal-recovery-and-uar-convergence",
-    "status": "assessment_ready",
+    "status": "reflect_complete",
     "progress": {
       "done": 0,
       "total": 0
     },
     "children": [],
-    "annotations": []
+    "annotations": [
+      {
+        "source": "kbd",
+        "note": "closed as superseded (D-004); see reflection.md"
+      }
+    ]
   }
 }
