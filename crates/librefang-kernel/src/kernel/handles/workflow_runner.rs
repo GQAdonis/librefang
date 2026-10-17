@@ -155,6 +155,16 @@ fn build_created_workflow(
                 step.name
             ));
         }
+        // A UAR-bound step only runs under the authenticated workflow API
+        // driver; the kernel path a tool-created workflow runs on refuses it
+        // at execution, so accepting it here would persist a workflow that
+        // can never run. The target is not advertised in the tool schema.
+        if matches!(step.agent, crate::workflow::StepAgent::UarBound { .. }) {
+            return Err(format!(
+                "step '{}' uses a UAR-bound target, which only the authenticated workflow API can create",
+                step.name
+            ));
+        }
         if step.timeout_secs > MAX_CREATED_STEP_TIMEOUT_SECS {
             return Err(format!(
                 "step '{}' timeout_secs={} exceeds the {MAX_CREATED_STEP_TIMEOUT_SECS}s per-step ceiling",
@@ -1064,12 +1074,41 @@ mod tests {
         let agent_doc = step_props["agent"]["description"]
             .as_str()
             .expect("the agent property must be documented");
-        for routing_key in crate::workflow::STEP_AGENT_ROUTING_KEYS {
+        // `uar_bound` is accepted only by the authenticated workflow API, and
+        // `workflow_create` refuses it (asserted below), so it is the one
+        // routing key the tool schema must not advertise.
+        for routing_key in crate::workflow::STEP_AGENT_ROUTING_KEYS
+            .into_iter()
+            .filter(|key| *key != "uar_bound")
+        {
             assert!(
                 agent_doc.contains(&format!("\"{routing_key}\"")),
                 "the agent binding doc must name the `{routing_key}` routing key, got: {agent_doc}"
             );
         }
+        assert!(
+            !agent_doc.contains("\"uar_bound\""),
+            "the tool must not advertise a routing key it refuses, got: {agent_doc}"
+        );
+        let refused = build_created_workflow_for_test(&spec(serde_json::json!([{
+            "name": "review",
+            "agent": {
+                "uar_bound": {
+                    "targetBindingId": "binding-1",
+                    "workspaceId": "workspace-1",
+                    "definition": {"id": "reviewer", "version": "1", "digest": "sha256:abc"}
+                },
+                "step_key": "review"
+            },
+            "prompt_template": "Review {{input}}",
+        }])))
+        .expect_err("workflow_create must refuse a UAR-bound step");
+        assert!(
+            refused.contains("step 'review'")
+                && refused.contains("UAR-bound")
+                && refused.contains("authenticated workflow API"),
+            "unexpected refusal: {refused}"
+        );
     }
 
     /// Pins the operator-facing timeout text format.

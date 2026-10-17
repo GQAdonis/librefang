@@ -1,0 +1,8 @@
+{
+  "method": "send_result",
+  "params": {
+    "action_id": "act-1",
+    "native_message_ids": ["m-1", "m-2"],
+    "error": null
+  }
+}

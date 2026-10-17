@@ -13,7 +13,7 @@ export function UarChatControl({ agentId, sessionId }: { agentId: string; sessio
   const decide = useUarChatDecision(agentId, sessionId);
   const turns = query.data?.turns ?? [];
   const active = turns.find((turn) => !["completed", "failed", "cancelled"].includes(turn.executionState));
-  const latest = active ?? turns.at(-1);
+  const latest = active ?? turns[turns.length - 1];
   const pending = active?.executionState === "input_required" ? active.pendingApproval : undefined;
   const approvalId = pending?.type === "agui.tool_call.approval_required" && typeof pending.data.approval_id === "string"
     ? pending.data.approval_id : undefined;

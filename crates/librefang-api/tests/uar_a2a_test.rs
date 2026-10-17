@@ -2,8 +2,12 @@
 //!
 //! Validates Phase 3 of the UAR integration plan: that the A2A endpoints
 //! described in `crates/librefang-api/src/routes/uar.rs` are wired into the
-//! main router, return the correct shapes, and remain unauthenticated even
-//! when an API key is configured.
+//! main router and return the correct shapes. Only the well-known agent card
+//! stays public when an API key is configured; `/a2a` and the discovery routes
+//! go through the normal auth gate (upstream #3781). In open mode the auth
+//! layer fails closed for a caller without a loopback peer, so open-mode
+//! requests here carry a loopback `ConnectInfo`, as a real localhost
+//! connection would.
 //!
 //! Tests that require live LLM calls are intentionally omitted — the
 //! `message/send` JSON-RPC method is exercised via tasks/get + tasks/cancel
@@ -67,6 +71,19 @@ async fn start_uar_harness(api_key: &str) -> UarHarness {
     }
 }
 
+/// Present the request as coming from a localhost peer. `Router::oneshot`
+/// bypasses the connection layer that normally attaches `ConnectInfo`, and
+/// the auth middleware treats its absence as a non-loopback caller.
+fn loopback(mut request: Request<Body>) -> Request<Body> {
+    request
+        .extensions_mut()
+        .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+            [127, 0, 0, 1],
+            0,
+        ))));
+    request
+}
+
 async fn body_json(response: axum::response::Response) -> serde_json::Value {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -102,8 +119,21 @@ async fn well_known_agent_card_is_unauthenticated_and_returns_card() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn discovery_agents_returns_artifacts_array_unauthenticated() {
+async fn discovery_agents_requires_auth_and_returns_artifacts_array() {
     let harness = start_uar_harness("secret-key").await;
+
+    let anonymous = harness
+        .app
+        .clone()
+        .oneshot(loopback(
+            Request::builder()
+                .uri("/api/uar/discovery/agents")
+                .body(Body::empty())
+                .unwrap(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
 
     let response = harness
         .app
@@ -111,6 +141,7 @@ async fn discovery_agents_returns_artifacts_array_unauthenticated() {
         .oneshot(
             Request::builder()
                 .uri("/api/uar/discovery/agents")
+                .header("authorization", "Bearer secret-key")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -136,14 +167,14 @@ async fn a2a_rejects_non_jsonrpc_requests() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .method("POST")
                 .uri("/a2a")
                 .header("content-type", "application/json")
                 .body(Body::from(payload.to_string()))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -168,14 +199,14 @@ async fn a2a_unknown_method_returns_method_not_found() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .method("POST")
                 .uri("/a2a")
                 .header("content-type", "application/json")
                 .body(Body::from(payload.to_string()))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -200,14 +231,14 @@ async fn a2a_tasks_get_unknown_returns_task_not_found() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .method("POST")
                 .uri("/a2a")
                 .header("content-type", "application/json")
                 .body(Body::from(payload.to_string()))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -230,14 +261,14 @@ async fn a2a_tasks_cancel_unknown_returns_task_not_found() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .method("POST")
                 .uri("/a2a")
                 .header("content-type", "application/json")
                 .body(Body::from(payload.to_string()))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -253,12 +284,12 @@ async fn agent_card_route_returns_400_for_invalid_id() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .uri("/api/uar/discovery/agents/not-a-uuid/card")
                 .body(Body::empty())
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -272,13 +303,74 @@ async fn agent_card_route_returns_404_for_missing_agent() {
     let response = harness
         .app
         .clone()
-        .oneshot(
+        .oneshot(loopback(
             Request::builder()
                 .uri(format!("/api/uar/discovery/agents/{}/card", unknown_id))
                 .body(Body::empty())
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a2a_requires_auth_when_api_key_is_configured() {
+    let harness = start_uar_harness("secret-key").await;
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 13,
+        "method": "tasks/get",
+        "params": { "id": "ghost-task-id" }
+    });
+    let request = |auth: Option<&str>| {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/a2a")
+            .header("content-type", "application/json");
+        if let Some(auth) = auth {
+            builder = builder.header("authorization", auth);
+        }
+        loopback(builder.body(Body::from(payload.to_string())).unwrap())
+    };
+
+    let anonymous = harness.app.clone().oneshot(request(None)).await.unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+
+    let authorized = harness
+        .app
+        .clone()
+        .oneshot(request(Some("Bearer secret-key")))
+        .await
+        .unwrap();
+    assert_eq!(authorized.status(), StatusCode::OK);
+    assert_eq!(body_json(authorized).await["error"]["code"], -32001);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a2a_open_mode_refuses_a_non_loopback_caller() {
+    // Open mode (no api_key) admits only localhost; a request without a
+    // loopback peer must fail closed rather than reach an LLM-backed method.
+    let harness = start_uar_harness("").await;
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "tasks/get",
+        "params": { "id": "ghost-task-id" }
+    });
+
+    let response = harness
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/a2a")
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

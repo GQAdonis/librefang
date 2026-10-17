@@ -25,6 +25,7 @@ pub(super) async fn selected_models() -> (Vec<Value>, Value) {
     }
 }
 
+#[cfg(feature = "uar-driver")]
 fn row(id: String, detail: &Value) -> Value {
     json!({
         "id": id, "display_name": detail.get("name").and_then(Value::as_str).unwrap_or(&id),
@@ -43,6 +44,7 @@ fn row(id: String, detail: &Value) -> Value {
     })
 }
 
+#[cfg(feature = "uar-driver")]
 fn rows(catalog: &Value) -> Vec<Value> {
     // The admitted endpoint may expose the UAR grouped catalog or an
     // OpenAI-compatible served-alias catalog. Never substitute static models.

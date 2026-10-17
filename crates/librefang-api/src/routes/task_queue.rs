@@ -162,7 +162,9 @@ pub async fn task_queue_delete(
     Path(id): Path<String>,
     lang: Option<axum::Extension<RequestLanguage>>,
 ) -> impl IntoResponse {
-    if let Some(response) = selected_mutation_refusal(&state, &id).await { return response; }
+    if let Some(response) = selected_mutation_refusal(&state, &id).await {
+        return response;
+    }
 
     let err_task_not_found = {
         let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
@@ -183,7 +185,9 @@ pub async fn task_queue_retry(
     Path(id): Path<String>,
     lang: Option<axum::Extension<RequestLanguage>>,
 ) -> impl IntoResponse {
-    if let Some(response) = selected_mutation_refusal(&state, &id).await { return response; }
+    if let Some(response) = selected_mutation_refusal(&state, &id).await {
+        return response;
+    }
 
     let (err_task_not_found, err_task_not_retryable) = {
         let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
@@ -352,7 +356,9 @@ pub async fn task_queue_patch(
     lang: Option<axum::Extension<RequestLanguage>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    if let Some(response) = selected_mutation_refusal(&state, &id).await { return response; }
+    if let Some(response) = selected_mutation_refusal(&state, &id).await {
+        return response;
+    }
 
     let err_not_found = {
         let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
@@ -382,6 +388,26 @@ pub async fn task_queue_patch(
         ),
         Ok(false) => ApiErrorResponse::not_found(err_not_found).into_json_tuple(),
         Err(e) => map_kernel_op_err(e).into_json_tuple(),
+    }
+}
+
+// Read errors and unsupported payloads never authorize a native requeue/delete.
+// The substrate still performs byte-exact predicates to close read/write races.
+async fn selected_mutation_refusal(
+    state: &AppState,
+    id: &str,
+) -> Option<(StatusCode, Json<serde_json::Value>)> {
+    use librefang_memory::task_dispatch::JobDispatchState;
+    match state.kernel.read_job_dispatch_intent(id).await {
+        Ok(Some(JobDispatchState::Selected(_))) => Some((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error":"selected_job_original_control_required"})),
+        )),
+        Ok(Some(JobDispatchState::Unknown)) | Err(_) => Some((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error":"job_dispatch_storage_unknown"})),
+        )),
+        _ => None,
     }
 }
 
@@ -429,18 +455,5 @@ mod tests {
             resolve_task_creator(None, Some("legacy-agent")),
             Some("legacy-agent".to_string())
         );
-    }
-}
-
-// Read errors and unsupported payloads never authorize a native requeue/delete.
-// The substrate still performs byte-exact predicates to close read/write races.
-async fn selected_mutation_refusal(state: &AppState, id: &str) -> Option<(StatusCode, Json<serde_json::Value>)> {
-    use librefang_memory::task_dispatch::JobDispatchState;
-    match state.kernel.read_job_dispatch_intent(id).await {
-        Ok(Some(JobDispatchState::Selected(_))) => Some((StatusCode::CONFLICT,
-            Json(serde_json::json!({"error":"selected_job_original_control_required"})))),
-        Ok(Some(JobDispatchState::Unknown)) | Err(_) => Some((StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({"error":"job_dispatch_storage_unknown"})))),
-        _ => None,
     }
 }

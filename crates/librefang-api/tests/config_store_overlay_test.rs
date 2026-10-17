@@ -420,7 +420,11 @@ use librefang_api::config_store_overlay::{
 };
 use std::collections::BTreeMap;
 
-static CONFIG_STORE_SCOPE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Serializes every test that reads or mutates the process-wide scope env.
+/// An async mutex, because the async holders keep it across store I/O
+/// (a std guard held over `.await` can stall the runtime), and it does not
+/// poison, so one failing test cannot cascade into the others.
+static CONFIG_STORE_SCOPE_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 struct ConfigStoreScopeEnvGuard {
     bossfang: Option<std::ffi::OsString>,
@@ -451,7 +455,7 @@ impl Drop for ConfigStoreScopeEnvGuard {
 
 #[test]
 fn config_overrides_key_preserves_legacy_and_prefers_bossfang_scope() {
-    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.blocking_lock();
     let _env = ConfigStoreScopeEnvGuard::capture();
     std::env::remove_var(CONFIG_STORE_SCOPE_ENV);
     std::env::remove_var(LEGACY_CONFIG_STORE_SCOPE_ENV);
@@ -472,7 +476,7 @@ fn config_overrides_key_preserves_legacy_and_prefers_bossfang_scope() {
 
 #[test]
 fn config_overrides_key_rejects_invalid_explicit_scope() {
-    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.blocking_lock();
     let _env = ConfigStoreScopeEnvGuard::capture();
     std::env::set_var(LEGACY_CONFIG_STORE_SCOPE_ENV, "valid-fallback");
     std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss:a");
@@ -518,6 +522,9 @@ fn config_overrides_resolve_applies_allowlisted_and_skips_blocked() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn config_overrides_store_round_trip() {
+    // The store key follows the scope env; hold the lock so a concurrent
+    // scope test cannot move it between the write and the read.
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().await;
     let tmp = tempfile::tempdir().unwrap();
     let storage = StorageConfig::embedded_default(tmp.path().join("operational"));
 
@@ -535,7 +542,7 @@ async fn config_overrides_store_round_trip() {
 
 #[tokio::test]
 async fn config_overrides_store_isolates_explicit_host_scopes() {
-    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().await;
     let _env = ConfigStoreScopeEnvGuard::capture();
     std::env::remove_var(LEGACY_CONFIG_STORE_SCOPE_ENV);
     let tmp = tempfile::tempdir().unwrap();
@@ -558,6 +565,8 @@ async fn config_overrides_store_isolates_explicit_host_scopes() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn config_overrides_overlay_applies_to_live_kernel() {
+    // Same store-key dependency as the round trip above.
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().await;
     let tmp = tempfile::tempdir().unwrap();
     let storage = StorageConfig::embedded_default(tmp.path().join("operational"));
     // config.toml baseline the overlay merges onto (kernel reads it at home_dir).

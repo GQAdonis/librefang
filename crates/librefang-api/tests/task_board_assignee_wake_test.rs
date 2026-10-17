@@ -75,10 +75,12 @@ async fn assigned_task_wakes_an_agent_with_no_trigger() {
             task_id: "task-1".to_string()
         },
     );
-    assert!(
-        matches[0].message.contains("task_claim"),
-        "the wake must tell the agent how to pick the task up, got: {}",
+    // BossFang: the dispatcher claims the exact durable row before prompting
+    // and replaces this text with it, so the wake is a scheduling description
+    // only and must not invite a second, unrestricted `task_claim`.
+    assert_eq!(
         matches[0].message,
+        "[TASK BOARD] Task task-1 assigned: Summarize the release notes",
     );
     assert!(
         test.state.kernel.list_triggers(Some(worker)).is_empty(),

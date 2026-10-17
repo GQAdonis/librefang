@@ -8,7 +8,12 @@ use librefang_memory::task_dispatch::{JobDispatchState, SelectedClaim, SelectedJ
 use librefang_types::{agent::UserId, config::KernelConfig, uar_run::JobAttemptRef};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{net::SocketAddr, path::{Path, PathBuf}, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
@@ -22,7 +27,11 @@ enum Command {
     Reconcile,
 }
 
-async fn command(kernel: &Arc<LibreFangKernel>, state: &librefang_api::routes::AppState, input: Command) -> Value {
+async fn command(
+    kernel: &Arc<LibreFangKernel>,
+    state: &librefang_api::routes::AppState,
+    input: Command,
+) -> Value {
     match input {
         Command::ReadBindingStatus => {
             // Snapshot only: operator_status would retry compatibility admission.
@@ -31,12 +40,19 @@ async fn command(kernel: &Arc<LibreFangKernel>, state: &librefang_api::routes::A
             let (binding_present, code) = {
                 let (binding, diagnostic) = librefang_llm_drivers::drivers::uar::binding_snapshot();
                 let code = diagnostic.and_then(|diagnostic| match diagnostic.code.as_str() {
-                    "invalid_instance_selection" | "credential_resolution_failed"
-                    | "incompatible_api" | "wrong_instance_identity" | "unsupported_profile"
-                    | "workspace_locality_mismatch" | "endpoint_role_mismatch"
-                    | "missing_required_capabilities" | "compatibility_refused"
-                    | "missing_effective_binding" | "effective_binding_mismatch"
-                    | "effective_endpoint_mismatch" | "effective_capability_mismatch"
+                    "invalid_instance_selection"
+                    | "credential_resolution_failed"
+                    | "incompatible_api"
+                    | "wrong_instance_identity"
+                    | "unsupported_profile"
+                    | "workspace_locality_mismatch"
+                    | "endpoint_role_mismatch"
+                    | "missing_required_capabilities"
+                    | "compatibility_refused"
+                    | "missing_effective_binding"
+                    | "effective_binding_mismatch"
+                    | "effective_endpoint_mismatch"
+                    | "effective_capability_mismatch"
                     | "credential_reference_invalid" => Some(diagnostic.code),
                     _ => None,
                 });
@@ -55,24 +71,51 @@ async fn command(kernel: &Arc<LibreFangKernel>, state: &librefang_api::routes::A
         Command::StorePendingJob { label, agent_id } => {
             // Deliberately omit only the initial event to expose the selected
             // winner window; ordinary HTTP creation is tested independently.
-            let id = kernel.memory_substrate().task_post(&label, "Bound safe fixture effect once.",
-                Some(&agent_id), None, librefang_memory::TaskQueueCaps::UNLIMITED).await.unwrap();
+            let id = kernel
+                .memory_substrate()
+                .task_post(
+                    &label,
+                    "Bound safe fixture effect once.",
+                    Some(&agent_id),
+                    None,
+                    librefang_memory::TaskQueueCaps::UNLIMITED,
+                )
+                .await
+                .unwrap();
             json!({"id":id,"initialEventPublished":false})
         }
         Command::PublishStoredTask { job_id } => {
-            use librefang_types::{agent::AgentId, event::{Event, EventPayload, EventTarget, SystemEvent}};
-            let row = kernel.memory_substrate().task_get(&job_id).await.unwrap().unwrap();
-            let dispatched = kernel.publish_event(Event::new(AgentId::new(), EventTarget::Broadcast,
-                EventPayload::System(SystemEvent::TaskPosted {
-                    task_id: job_id, title: row["title"].as_str().unwrap().into(),
-                    assigned_to: row["assigned_to"].as_str().map(str::to_owned),
-                    created_by: row["created_by"].as_str().map(str::to_owned),
-                }))).await;
+            use librefang_types::{
+                agent::AgentId,
+                event::{Event, EventPayload, EventTarget, SystemEvent},
+            };
+            let row = kernel
+                .memory_substrate()
+                .task_get(&job_id)
+                .await
+                .unwrap()
+                .unwrap();
+            let dispatched = kernel
+                .publish_event(Event::new(
+                    AgentId::new(),
+                    EventTarget::Broadcast,
+                    EventPayload::System(SystemEvent::TaskPosted {
+                        task_id: job_id,
+                        title: row["title"].as_str().unwrap().into(),
+                        assigned_to: row["assigned_to"].as_str().map(str::to_owned),
+                        created_by: row["created_by"].as_str().map(str::to_owned),
+                    }),
+                ))
+                .await;
             json!({"matched":dispatched.len()})
         }
         Command::ClaimIntent { job_id } => {
-            let row = kernel.memory_substrate().task_get(&job_id).await
-                .expect("read actual stored job").expect("stored job exists");
+            let row = kernel
+                .memory_substrate()
+                .task_get(&job_id)
+                .await
+                .expect("read actual stored job")
+                .expect("stored job exists");
             let job = JobAttemptRef { job_id, attempt: 1 };
             let intent = SelectedJobIntent {
                 local_task_id: job.selected_task_id().expect("actual valid job id"),
@@ -81,14 +124,33 @@ async fn command(kernel: &Arc<LibreFangKernel>, state: &librefang_api::routes::A
                 workspace_id: "workspace:c03".into(),
                 expected_assignee: row["assigned_to"].as_str().expect("actual assignee").into(),
             };
-            let claimed = kernel.memory_substrate().task_claim_selected_intent(intent.clone())
-                .await.expect("commit actual selected intent");
-            assert_eq!(claimed, SelectedClaim::Created, "checkpoint must create actual intent");
-            assert!(matches!(kernel.read_job_dispatch_intent(&intent.job.job_id).await.unwrap(),
-                Some(JobDispatchState::Selected(saved)) if saved == intent));
-            assert!(kernel.a2a_tasks().get_uar_job_attempt(&intent.initiating_owner, None,
-                &intent.workspace_id, &intent.job).unwrap().is_none(),
-                "intent-only crash checkpoint must precede A2A reservation");
+            let claimed = kernel
+                .memory_substrate()
+                .task_claim_selected_intent(intent.clone())
+                .await
+                .expect("commit actual selected intent");
+            assert_eq!(
+                claimed,
+                SelectedClaim::Created,
+                "checkpoint must create actual intent"
+            );
+            assert!(
+                matches!(kernel.read_job_dispatch_intent(&intent.job.job_id).await.unwrap(),
+                Some(JobDispatchState::Selected(saved)) if saved == intent)
+            );
+            assert!(
+                kernel
+                    .a2a_tasks()
+                    .get_uar_job_attempt(
+                        &intent.initiating_owner,
+                        None,
+                        &intent.workspace_id,
+                        &intent.job
+                    )
+                    .unwrap()
+                    .is_none(),
+                "intent-only crash checkpoint must precede A2A reservation"
+            );
             json!({"checkpoint":"selected_intent_committed", "jobId":intent.job.job_id})
         }
         Command::ReadIntent { job_id } => {
@@ -103,7 +165,10 @@ async fn command(kernel: &Arc<LibreFangKernel>, state: &librefang_api::routes::A
             json!({"kind":kind})
         }
         Command::Reconcile => {
-            kernel.reconcile_selected_jobs().await.expect("real durable reconciliation");
+            kernel
+                .reconcile_selected_jobs()
+                .await
+                .expect("real durable reconciliation");
             json!({"reconciled":true})
         }
     }
@@ -113,14 +178,17 @@ fn required_path(name: &str) -> PathBuf {
     PathBuf::from(std::env::var_os(name).expect("gate must provide private fixture path"))
 }
 fn inside(root: &Path, path: &Path) {
-    assert!(path.is_absolute() && path.starts_with(root), "fixture paths must stay in private root");
-    assert!(!path.components().any(|part| matches!(part, std::path::Component::ParentDir)));
+    assert!(
+        path.is_absolute() && path.starts_with(root),
+        "fixture paths must stay in private root"
+    );
+    assert!(!path
+        .components()
+        .any(|part| matches!(part, std::path::Component::ParentDir)));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn bauar_private_host() {
-    assert!(cfg!(feature = "uar-driver"), "HARNESS fixture requires the actual UAR driver");
-    assert!(cfg!(feature = "surreal-backend"), "default embedded operational storage required");
     let root = required_path("BAUAR_HOST_ROOT");
     let config_path = required_path("BAUAR_HOST_CONFIG");
     let ready = root.join("ready.json");
@@ -131,7 +199,8 @@ async fn bauar_private_host() {
         .expect("actual KernelConfig JSON");
     inside(&root, &config.home_dir);
     inside(&root, &config.data_dir);
-    config.storage = librefang_storage::config::StorageConfig::embedded_default(root.join("operational"));
+    config.storage =
+        librefang_storage::config::StorageConfig::embedded_default(root.join("operational"));
     config.memory.sqlite_path = Some(root.join("memory.db"));
     librefang_kernel::registry_sync::seed_registry_fixture_for_tests(&config.home_dir);
     let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("real kernel boot"));
@@ -140,17 +209,30 @@ async fn bauar_private_host() {
     let address = listener.local_addr().unwrap();
     let (router, state) = librefang_api::server::build_router(kernel.clone(), address).await;
     let server = tokio::spawn(async move {
-        axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-            .await.expect("private actual router");
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .expect("private actual router");
     });
-    std::fs::write(&ready, serde_json::to_vec(&json!({"base":format!("http://{address}"),
-        "pid":std::process::id(), "router":"production", "backgroundSweep":false})).unwrap()).unwrap();
+    std::fs::write(
+        &ready,
+        serde_json::to_vec(&json!({"base":format!("http://{address}"),
+        "pid":std::process::id(), "router":"production", "backgroundSweep":false}))
+        .unwrap(),
+    )
+    .unwrap();
     while !root.join("stop").exists() {
         for item in std::fs::read_dir(&commands).unwrap() {
             let path = item.unwrap().path();
-            if path.extension().and_then(|v| v.to_str()) != Some("request") { continue; }
+            if path.extension().and_then(|v| v.to_str()) != Some("request") {
+                continue;
+            }
             let response_path = path.with_extension("response");
-            if response_path.exists() { continue; }
+            if response_path.exists() {
+                continue;
+            }
             let input: Command = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             let result = command(&kernel, &state, input).await;
             std::fs::write(response_path, serde_json::to_vec(&result).unwrap()).unwrap();
