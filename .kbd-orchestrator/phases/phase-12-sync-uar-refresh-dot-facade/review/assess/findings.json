@@ -1,0 +1,63 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "claude-opus-5-5 (harness-native subagent)",
+  "isolation_mode": "harness-native",
+  "producer_model": "claude-opus-5-5",
+  "cross_model_check": "same-model-collision",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "The G3 work-package statuses and line-level evidence were taken on the pre-sync base fd7eae85f, but the 103 upstream commits G1 brings in rewrite several of the exact files cited, and the assessment never says G3 must be re-checked after the sync.",
+      "evidence": "`git diff HEAD...upstream/main --stat` shows changes to kernel/handles/channel_sender.rs (+158), kernel/src/workflow.rs (~+1456), api/src/middleware.rs (66), routes/task_queue.rs (135), channels/src/types.rs (+22) and kernel/task_registry.rs (18). Upstream 837f6e40f (#8526, 'scope channel_send to the conversation's own instance') directly changes the WP1/WP2 send-destination path cited at channel_sender.rs:177-215. Upstream 8afd864e5 (#8583, 'record tool dispatch identity for owner assertions') touches tool_runner/dispatch.rs, which is WP2's 'native tool dispatch' surface. The assessment's G3 section never mentions either commit. Goal G1 says 'Nothing else in this phase starts on a pre-sync base.'",
+      "suggested_fix": "Add a G3 item: after G1 merges, re-baseline the WP1-WP6 evidence against the post-sync head. Before the plan finalises G3 changes, record what #8526 and #8583 change for WP1 and WP2."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "G3 did not assess backlog.md, which the goal names as an input, and it misstates #168's child set.",
+      "evidence": "Goal G3 says: 'Assess ... against docs/bossfang/knowme-dot/ (coverage-audit.md, backlog.md, agent-definitions.md from PR #169)'. The assessment cites coverage-audit.md and agent-definitions.md but never backlog.md, and it ignores meeting-modes.md. It says '#168 ... is OPEN, with children #157–#161'. backlog.md line 3 and the live issues show children #157 through #167. For example, #162 '[voice M1]', #165 '[meeting M3]' and #167 '[dot calls M5]' are all OPEN.",
+      "suggested_fix": "Assess backlog.md. List #162-#167 and say whether each is inside or outside the #156 bounded v1 profile, so that Q2 (which tracker G3 closes) has the correct child set behind it."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "G2's stale-reference inventory is incomplete: it lists four items but misses other docs that still name the old GQAdonis UAR fork, its revision pins, or the in-process dependency.",
+      "evidence": "Goal G2 says 'update every reference to an older runtime revision or image (... docs ...)'. The assessment exempts only '.kbd-orchestrator/phases/phase-10*, phase-11*, .refiner/ and docs/research/'. These are neither listed nor exempted: docs/architecture/uar-sidecar-assessment.md:5 ('`universal-agent-runtime` (GQAdonis fork), pinned at rev `0f9385d4`'), docs/architecture/uar-runtime-integration-research.md:18 and :154 (describe `uar-driver` linking the UAR library), and docs/architecture/bossfang-rebrand-completion.md:38.",
+      "suggested_fix": "Run a full grep (`universal-agent-runtime|gqadonis/universal|0f9385d4|f45941bb`) outside the exempt paths. Classify each hit as either 'fix' or 'historical record, keep', so the plan has a closed list."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "The proposed route for live-probing the contract cannot exercise the GHCR image named as the G2 target.",
+      "evidence": "The assessment says: 'live-probe the contract (human-only or the `bauar-harness-gate.mjs` gate)'. scripts/integration/bauar-harness-gate.mjs:16 takes `[hostBinary, kernelBinary, uarBinary, uarSource]` from argv, which are local binaries and a source checkout, not an OCI image. Goal G2 requires verifying the contract 'against that image' (`1.1.0@sha256:064f5004…`).",
+      "suggested_fix": "Say how the gate gets its UAR input from the image: extract the binary from the digest-pinned image, or run the image and point a probe at it. Otherwise record that the gate checks a source build of d815ef72, not the image."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "BUILD HEALTH points to an addendum that the artifact does not contain, so the pre-sync baseline build status is unknown.",
+      "evidence": "The artifact says: 'build check: UNKNOWN at time of writing. `cargo check --workspace --lib` ... were still running (cold `CARGO_TARGET_DIR`); see the addendum below.' The artifact ends at 'ASSESSMENT COMPLETE' and has no addendum. Without a green pre-sync baseline, G1 cannot tell pre-existing breaks from merge-introduced ones.",
+      "suggested_fix": "Append the addendum with the exit status of both cargo checks, read from cargo's own status file. If they did not finish, state that a baseline check is a G1 precondition."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "assessment.md",
+      "claim": "G3 is assessed only at work-package level, even though the issue's close rule is per acceptance row.",
+      "evidence": "Issue #156: 'Close only when all six work packages and acceptance rows pass ... Every row must have an automated fixture and asserted effect count/state.' The assessment names A01–A20 once but maps no row to a WP status, fixture or existing suite. The issue names the suites to extend: owner_scoped_routes_integration, bauar_harness_host, bauar_mcp_identity, async_task_tracker_runtime_test, among others.",
+      "suggested_fix": "Add a row-level table (A01-A20 mapped to WP, current evidence and the suite to extend), so the plan's acceptance criteria can be traced back to the issue."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "assessment.md",
+      "claim": "The UarDriver compile-break evidence cites the struct literal but not its enclosing function. A second `CompletionResponse` match in uar.rs is a return type, not a constructor, and the assessment does not say so.",
+      "evidence": "uar.rs contains `CompletionResponse {` at :1162 (`) -> CompletionResponse {`, a function signature) and :1176 (the literal). Only uar.rs is origin-only among files that construct `CompletionResponse`. The single-break claim holds for literals, but the check that supports it is not recorded.",
+      "suggested_fix": "Record the check: 'only origin-only CompletionResponse constructor is uar.rs:1176'. This lets the merge reviewer confirm that no other BossFang-only site is missing `text_synthesized_from_thinking`."
+    }
+  ],
+  "checked_classes": [
+    "Goal coverage: G1, G2 and G3 each have a gap analysis; partial misses are reported above.",
+    "Codebase claims spot-checked and confirmed: 103 missing commits; 633 files +85,562/-12,589; 28 merge-tree conflicts matching the listed files; SCHEMA_VERSION 62 vs 63 and the v62/v63 contents; latest .surql is 049; text_synthesized_from_thinking exists upstream and is missing at uar.rs:1176; manifest_version_store.rs is upstream-only with 035_manifest_versions.surql present; dependency bumps limited to acp, ed25519, x25519 and zip; no load-bearing UAR image pins; #156 CLOSED/COMPLETED at 15:33:30Z; middleware/types/task_queue/workflow/task_registry/assistant_routing evidence matches within ±2 lines; 21 tests in uar.rs."
+  ]
+}

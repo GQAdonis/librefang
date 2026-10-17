@@ -1,0 +1,11 @@
+{
+  "stage": "assess",
+  "completedAt": "2026-10-17T16:00:32Z",
+  "outputs": [
+    "assessment.md"
+  ],
+  "nextStage": "analyze",
+  "summaryForNext": "main fails cargo check --workspace --lib (dead row/rows in uar_model_catalog.rs without uar-driver), so C-000 must restore a green baseline before G1. G1: 103 upstream commits, 28 conflicts, confirmed UarDriver CompletionResponse break, Surreal migrations 050/051 plus a manifest_version_store backend, SQLite v62/v63 collision. G2: no UAR pins exist; target is ghcr.io/prometheus-ags/universal-agent-runtime:1.1.0@sha256:064f5004… (static contract fit only; live probe needed; fix stale prose). G3: #156 closed in error, nothing from WP1-WP6 landed, ~15 changes, 9 operator questions; re-baseline after G1 (#8526/#8583). Review WARNINGs (harness-native judge): G3 evidence pre-sync, #168 children are #157-#167, more stale UAR docs, bauar gate takes binaries not images. Runtime journal unusable; projection-only.",
+  "skipped": false,
+  "skipReason": null
+}
