@@ -1242,9 +1242,14 @@ impl MemorySubstrate {
     ) -> LibreFangResult<Option<serde_json::Value>> {
         // Claiming also persists native classification. A selected or unknown
         // payload is never returned, even after another caller resets status.
-        self.claim_native_jobs(None, agent_id, agent_name).await?
-            .into_iter().next().map(|job| serde_json::to_value(job)
-                .map_err(|_| LibreFangError::Internal("claimed task encoding failed".into())))
+        self.claim_native_jobs(None, agent_id, agent_name)
+            .await?
+            .into_iter()
+            .next()
+            .map(|job| {
+                serde_json::to_value(job)
+                    .map_err(|_| LibreFangError::Internal("claimed task encoding failed".into()))
+            })
             .transpose()
     }
 
@@ -1282,7 +1287,9 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
-            let Some(payload) = task_dispatch::native_payload(&db, &task_id)? else { return Ok(false); };
+            let Some(payload) = task_dispatch::native_payload(&db, &task_id)? else {
+                return Ok(false);
+            };
             let rows = db
                 .execute(
                     "DELETE FROM task_queue WHERE id = ?1 AND payload = ?2",
@@ -1304,7 +1311,10 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
-            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)? else { return Ok(false); };
+            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)?
+            else {
+                return Ok(false);
+            };
             let rows = db
                 .execute(
                     "UPDATE task_queue \
@@ -1579,7 +1589,10 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
-            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)? else { return Ok(false); };
+            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)?
+            else {
+                return Ok(false);
+            };
             let now_unix = chrono::Utc::now().timestamp();
             let rows = match new_status.as_str() {
                 // Reset to pending: clear `finished_at` so a previous
@@ -1634,13 +1647,20 @@ impl MemorySubstrate {
             let cutoff = (now - chrono::Duration::seconds(ttl_secs as i64)).to_rfc3339();
             let reason =
                 format!("expired: unclaimed for more than [queue] task_ttl_secs ({ttl_secs}s)");
-            let eligible = task_dispatch::native_rows(&db,
-                "status = 'pending' AND created_at < ?1", &[&cutoff])?;
+            let eligible = task_dispatch::native_rows(
+                &db,
+                "status = 'pending' AND created_at < ?1",
+                &[&cutoff],
+            )?;
             let mut rows = 0;
             for (id, payload) in eligible {
-                rows += db.execute("UPDATE task_queue SET status = 'cancelled', finished_at = ?1, result = ?2
+                rows += db
+                    .execute(
+                        "UPDATE task_queue SET status = 'cancelled', finished_at = ?1, result = ?2
                     WHERE id = ?3 AND status = 'pending' AND created_at < ?4 AND payload = ?5",
-                    rusqlite::params![now.timestamp(), reason, id, cutoff, payload]).map_err(LibreFangError::memory)?;
+                        rusqlite::params![now.timestamp(), reason, id, cutoff, payload],
+                    )
+                    .map_err(LibreFangError::memory)?;
             }
             Ok(rows)
         })

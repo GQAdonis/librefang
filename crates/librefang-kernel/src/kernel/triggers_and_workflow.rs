@@ -345,7 +345,7 @@ impl LibreFangKernel {
 
         let targeted_job = match &event.payload {
             librefang_types::event::EventPayload::System(
-                librefang_types::event::SystemEvent::TaskPosted { task_id, .. }
+                librefang_types::event::SystemEvent::TaskPosted { task_id, .. },
             ) => Some(task_id.clone()),
             _ => None,
         };
@@ -406,8 +406,10 @@ impl LibreFangKernel {
     }
 
     fn dispatch_job_trigger_matches(
-        &self, matches: &[crate::triggers::TriggerMatch],
-        fire_time: chrono::DateTime<chrono::Utc>, targeted_job: Option<String>,
+        &self,
+        matches: &[crate::triggers::TriggerMatch],
+        fire_time: chrono::DateTime<chrono::Utc>,
+        targeted_job: Option<String>,
     ) {
         if let Some(weak) = self.self_handle.get() {
             // Pre-resolve per-trigger data before spawning so the spawned
@@ -442,7 +444,9 @@ impl LibreFangKernel {
                 let workflow_id = trigger_match.workflow_id.clone();
                 let source = trigger_match.source.clone();
                 let job = targeted_job.clone().or_else(|| match &source {
-                    crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake { task_id } => Some(task_id.clone()),
+                    crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake { task_id } => {
+                        Some(task_id.clone())
+                    }
                     _ => None,
                 });
 
@@ -582,9 +586,16 @@ impl LibreFangKernel {
                                 match claimed {
                                     Ok(Some(claimed)) => claimed,
                                     Ok(None) => continue,
-                                    Err(_) => { warn!("Task dispatch authority unavailable; no model started"); continue; }
+                                    Err(_) => {
+                                        warn!(
+                                            "Task dispatch authority unavailable; no model started"
+                                        );
+                                        continue;
+                                    }
                                 }
-                            } else { msg };
+                            } else {
+                                msg
+                            };
 
                             if let Some(ref wid_str) = workflow_id {
                                 // Workflow dispatch path: resolve workflow by UUID, then by
@@ -961,7 +972,9 @@ impl LibreFangKernel {
             // returns the full already-claimed row before any model prompt.
             for (_, task_id) in overdue {
                 matches.push(TriggerMatch {
-                    agent_id, message: String::new(), session_mode_override: None,
+                    agent_id,
+                    message: String::new(),
+                    session_mode_override: None,
                     workflow_id: None,
                     source: TriggerMatchSource::TaskBoardAssigneeWake { task_id },
                 });

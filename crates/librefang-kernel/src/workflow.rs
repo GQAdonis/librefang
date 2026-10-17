@@ -428,9 +428,15 @@ fn step_agent_from_object(
         let target: librefang_types::uar_run::UarWorkflowStepTarget =
             serde_json::from_value(map[key].clone()).map_err(|error| error.to_string())?;
         target.validate()?;
-        let step_key = map.get("step_key").and_then(serde_json::Value::as_str)
-            .filter(|value| !value.is_empty()).ok_or("UAR workflow target requires a step_key")?;
-        return Ok(StepAgent::UarBound { uar_bound: target, step_key: step_key.to_string() });
+        let step_key = map
+            .get("step_key")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or("UAR workflow target requires a step_key")?;
+        return Ok(StepAgent::UarBound {
+            uar_bound: target,
+            step_key: step_key.to_string(),
+        });
     }
     let value = map[key]
         .as_str()
@@ -6966,10 +6972,26 @@ impl Workflow {
     pub fn validate(&self) -> Vec<(String, String)> {
         let mut errs = Vec::new();
         for step in &self.steps {
-            if let StepAgent::UarBound { uar_bound, step_key } = &step.agent {
-                if let Err(error) = uar_bound.validate() { errs.push((step.name.clone(), error)); }
-                if step_key != &step.name || self.steps.iter().filter(|other| other.name == step.name).count() != 1 {
-                    errs.push((step.name.clone(), "UAR targets require a unique matching workflow step key".into()));
+            if let StepAgent::UarBound {
+                uar_bound,
+                step_key,
+            } = &step.agent
+            {
+                if let Err(error) = uar_bound.validate() {
+                    errs.push((step.name.clone(), error));
+                }
+                if step_key != &step.name
+                    || self
+                        .steps
+                        .iter()
+                        .filter(|other| other.name == step.name)
+                        .count()
+                        != 1
+                {
+                    errs.push((
+                        step.name.clone(),
+                        "UAR targets require a unique matching workflow step key".into(),
+                    ));
                 }
                 if step.session_mode.is_some() || !step.required_skills.is_empty() {
                     errs.push((step.name.clone(), "UAR session and skills are owned by the admitted definition; native overrides are unsupported".into()));
