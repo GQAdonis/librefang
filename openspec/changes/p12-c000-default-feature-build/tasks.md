@@ -10,4 +10,4 @@ Task model assignments: see `.kbd-orchestrator/phases/phase-12-sync-uar-refresh-
 
 ## 3. Verify and land
 - [x] 3.1 Re-run every check from 1.1 plus `cargo check -p librefang-api --features uar-driver --lib`; all exit 0.
-- [ ] 3.2 Fresh-context review (rust-reviewer, plus typescript-reviewer if 2.3 changed files), then a PR with `--repo GQAdonis/librefang`; after the operator merges, confirm the final head SHA is an ancestor of `origin/main`.
+- [x] 3.2 Fresh-context review (rust-reviewer, plus typescript-reviewer if 2.3 changed files), then a PR with `--repo GQAdonis/librefang`; after the operator merges, confirm the final head SHA is an ancestor of `origin/main`.
