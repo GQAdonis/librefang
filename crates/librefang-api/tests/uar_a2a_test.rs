@@ -346,3 +346,31 @@ async fn a2a_requires_auth_when_api_key_is_configured() {
     assert_eq!(authorized.status(), StatusCode::OK);
     assert_eq!(body_json(authorized).await["error"]["code"], -32001);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a2a_open_mode_refuses_a_non_loopback_caller() {
+    // Open mode (no api_key) admits only localhost; a request without a
+    // loopback peer must fail closed rather than reach an LLM-backed method.
+    let harness = start_uar_harness("").await;
+    let payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 14,
+        "method": "tasks/get",
+        "params": { "id": "ghost-task-id" }
+    });
+
+    let response = harness
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/a2a")
+                .header("content-type", "application/json")
+                .body(Body::from(payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}

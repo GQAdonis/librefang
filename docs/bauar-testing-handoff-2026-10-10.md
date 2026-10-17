@@ -102,3 +102,4 @@ node scripts/integration/bauar-harness-gate.mjs <api-host-test-bin> <kernel-test
 
 Use Node 24, finite private fixture roots, the documented exact binary identities, and the coordinator's existing process ownership/cleanup policy.
 The gate does not build, install dependencies, or certify a skip as success.
+The two fixture test targets declare `required-features = ["uar-driver", "surreal-backend"]`, so build them with the feature, for example `cargo test -p librefang-api --features uar-driver --test bauar_harness_host --no-run` and `cargo test -p librefang-kernel --features uar-driver --test bauar_harness_delegation --no-run`; without it cargo skips the targets and no executable exists.

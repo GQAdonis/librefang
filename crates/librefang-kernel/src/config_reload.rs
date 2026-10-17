@@ -534,9 +534,11 @@ pub fn build_reload_plan_with_caps(
 
     // BossFang: `a2a_public_url` is read live from `config_ref()` by the A2A
     // routes on every request, so a change needs no reload action — noop.
+    // `LIBREFANG_A2A_BASE_URL` takes precedence when set, so the field then
+    // has no visible effect.
     if old.a2a_public_url != new.a2a_public_url {
         plan.noop_changes.push(format!(
-            "a2a_public_url: {:?} -> {:?} (effective on next A2A request)",
+            "a2a_public_url: {:?} -> {:?} (effective on next A2A request unless LIBREFANG_A2A_BASE_URL is set)",
             old.a2a_public_url, new.a2a_public_url
         ));
     }

@@ -1104,7 +1104,9 @@ mod tests {
         }])))
         .expect_err("workflow_create must refuse a UAR-bound step");
         assert!(
-            refused.contains("UAR-bound"),
+            refused.contains("step 'review'")
+                && refused.contains("UAR-bound")
+                && refused.contains("authenticated workflow API"),
             "unexpected refusal: {refused}"
         );
     }
