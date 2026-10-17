@@ -1,0 +1,114 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "claude-opus-5-5 (harness-native subagent)",
+  "isolation_mode": "harness-native",
+  "producer_model": "claude-opus-5-5",
+  "cross_model_check": "same-model-collision",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "line": 27,
+      "claim": "The plan schedules a from-scratch upstream sync and parity change while ignoring an existing, largely complete 2026-10-16 sync and SurrealDB parity in local branches and worktrees, so C-001/C-002 will redo or contradict work already done.",
+      "evidence": "Branches chore/upstream-merge-2026-10-16 (3bcb9a32e 'chore(merge): upstream 2026-10-16 (87 commits) + BossFang preservation', be7518a85 merge report docs/upstream-merges/2026-10-16.md resolving the same 28 conflicts, including migration.rs fork v62 -> v64) and chore/upstream-merge-2026-10-16-schema (e2f5382a2 migrations 050-054, 107f38cd3 Surreal manifest-version and ephemeral-run stores) exist, with worktrees under /private/tmp/librefang-upstream-2026-10-16*; none is on origin/main (3bcb9a32e not an ancestor). No phase-12 artifact mentions them (grep '2026-10-16' over the phase dir is empty). C-001 task 1.1 says to merge 'all 103+ commits' fresh in /tmp/librefang-sync-2026-10.",
+      "suggested_fix": "Add a decision and task to C-001: rebase or re-merge from the 2026-10-16 branches (fetch the 16 newer upstream commits on top), or record an explicit rationale for discarding them. Fold the schema branch into C-002 instead of rebuilding it."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "line": 30,
+      "claim": "C-002 undercounts the SurrealDB parity the sync needs, and its 'no unrelated schema changes' boundary forbids the extra work, so the merged default backend would be left out of parity.",
+      "evidence": "C-002 scopes only '050_task_queue_timeout_secs' and '051_ephemeral_runs_truncated' plus the manifest store. The prior parity work for an 87-commit subset of the same upstream range (e2f5382a2) found five migrations were needed: 051 task_queue claim columns (title, description, created_by, result, claimed_at, retry_count plus an index the claim-TTL sweep needs), 053 workflow_runs.state 'cancelled' (fork SQLite v64), and 054 workflow_runs.owner_agent_id / usage_events.billed_agent_id (upstream v49 #7714). It also found that a Surreal ephemeral-run store and a SurrealTaskBackend::task_reset_stuck rewrite (#7974) were needed (107f38cd3). C-002 proposal Boundary: 'No unrelated schema changes'.",
+      "suggested_fix": "Re-derive the parity list from the full post-merge SQLite diff (every CREATE/ALTER plus behavioral store changes), include the ephemeral-run store, the claim-TTL sweep and the importer (sqlite_to_surreal), and drop the hard-coded 050/051 numbering."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 41,
+      "claim": "C-000, C-003 and C-004 have no PR, fresh-context review or merge-ancestry tasks, yet C-001 requires C-000 to be on main, and CLAUDE.md requires an independent review before anything merges.",
+      "evidence": "C-001 task 1.1: 'From a linked worktree on the post-C-000 `main`'. C-000 tasks end at 2.2 (clippy). C-003 ends at 4.1 and C-004 at 3.1. Only C-001 has review (3.1) and PR/ancestry (3.2) tasks. plan.md line 11 claims 'every PR in this phase confirms the final head SHA is an ancestor of origin/main'. CLAUDE.md: 'Nothing merges to main without a review in a fresh context'.",
+      "suggested_fix": "Add review, PR (--repo GQAdonis/librefang), operator-merge and ancestry-check tasks, each with a model-assignment row, to C-000, C-003 and C-004. Make C-001 1.1 explicitly wait on C-000's merge."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 12,
+      "claim": "The real-service test lesson is claimed but not enforced: C-002 allows remote variants to SKIP, which contradicts its own spec scenario.",
+      "evidence": "plan.md line 12: 'C-002 runs remote SurrealDB variants against a real local 3.3.0 server'. C-002 task 3.1: 'env-gated remote variants ... explicit SKIP line when unset'. The spec scenario requires the value to round-trip 'in embedded and remote mode'.",
+      "suggested_fix": "Make completion of 3.1 require a recorded non-SKIP remote run (ws and http) against SurrealDB 3.3.0, with the log as evidence."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 29,
+      "claim": "The SQLite migration renumbering, the correctness-critical part of C-001, has no task to write tests, and its spec scenario covers only one of the lineages the requirement names.",
+      "evidence": "C-001 spec requirement: 'exactly once on both fresh databases and databases already stamped by either lineage'. Only one scenario exists ('database stamped by BossFang v62'), with none for fresh databases or upstream-stamped v62/v63. Task 2.2 just runs the existing `cargo test -p librefang-memory`, and task 1.2 says nothing about adding tests.",
+      "suggested_fix": "Add scenarios and a task for migration tests covering fresh, fork-stamped 62 and upstream-stamped 62/63 databases, plus idempotent reopen."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 32,
+      "claim": "C-002 adds dual-path backend selection, but its verification omits the workspace check, workspace clippy and branding audit, which run in C-001 2.2 before C-002's code exists.",
+      "evidence": "C-002 task 3.1 runs only `cargo test -p librefang-storage` and `-p librefang-memory`. The constraints.md 'Verification gates (blocking)' require `cargo check --workspace --lib`, `cargo clippy --workspace --all-targets -- -D warnings` and `enforce-branding.py --check` for every behavioral change. 'Select it whenever the Surreal backend is active' (task 2.1) likely touches the kernel or API wiring.",
+      "suggested_fix": "Add a final combined-branch verification task after C-002 (workspace check, clippy, scoped tests for every touched crate, branding) before C-001 3.1 review."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 65,
+      "claim": "C-001 verification omits `cargo test -p librefang-api` and `-p librefang-kernel`, although the merge resolves conflicts in API routes and kernel messaging.",
+      "evidence": "Conflicts include routes/task_queue.rs, routes/config/manage.rs, channel_bridge.rs and kernel/messaging.rs (assessment lines 43-44). C-001 task 2.2 tests only librefang-memory, librefang-llm-drivers and librefang-acp. CLAUDE.md requires TestServer integration tests in `crates/librefang-api/tests/` for route and wiring changes.",
+      "suggested_fix": "Add scoped `cargo test -p librefang-api`, `-p librefang-kernel` and `-p librefang-channels` to 2.2. Also check the uar-driver chain, for example `cargo check -p librefang-cli --features uar-driver`."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 64,
+      "claim": "Several model-assignment rows name one model but route to an agent instance launched on a different model, so routing is ambiguous.",
+      "evidence": "Row C-001 2.1: 'Anthropic claude-sonnet' / 'upstream-merge-manager agent (model=sonnet acceptable; same agent inherits opus)'. Row C-001 2.3 says sonnet but uses the 'upstream-merge-manager agent' launched as model=opus in 1.1. Row C-004 3.1 says sonnet with 'same agent' (product-manager launched model=opus in 1.1).",
+      "suggested_fix": "Either set these rows to opus (same instance) or specify a separate model=sonnet launch with an explicit handoff."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/p12-c003-uar-1-1-0-reference/tasks.md",
+      "line": 7,
+      "claim": "C-003 edits `crates/librefang-cli/Cargo.toml`, which a blocking constraint forbids without explicit user instruction, and the plan records no such instruction.",
+      "evidence": "constraints.md, Implementation rules (blocking): 'Do not modify `librefang-cli` without explicit user instruction.' C-003 task 2.1: 'Correct the `uar-driver` comments in `crates/librefang-cli/Cargo.toml`'. Decisions D-001 to D-003 contain no authorization.",
+      "suggested_fix": "Obtain and record operator approval at dispatch, or update constraints.md if upstream #8605 lifting the freeze is adopted."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/p12-c004-dot-facade-child-phase/specs/dot-facade-planning/spec.md",
+      "line": 6,
+      "claim": "C-004's acceptance scenario is conditioned on the child-phase plan, which is written after C-004 completes, so C-004 cannot be verified on its own terms.",
+      "evidence": "Scenario: 'WHEN the child phase plan is written THEN each of A01–A20 maps to at least one change and one named test suite'. plan.md line 44: 'Then: `/kbd-new-child` (via C-004) → child-phase assess and plan for G3'. C-004 task 2.3 maps rows only to 'proposed changes'.",
+      "suggested_fix": "Restate the scenario against C-004's own output, for example the baseline document's A01–A20 mapping table."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "openspec/changes/p12-c004-dot-facade-child-phase/tasks.md",
+      "line": 4,
+      "claim": "The child-phase goals omit two inputs the assessment required: the explicit exclusion of #162–#167 (M1–M5) and the reading of backlog.md.",
+      "evidence": "assessment.md round-1 corrections: 'The M1–M5 milestones are outside the #156 v1 profile, and planning should exclude them explicitly' and '`docs/bossfang/knowme-dot/backlog.md` ... is a required input for plan'. C-004 task 1.1 and its proposal mention neither.",
+      "suggested_fix": "Add both to C-004 task 1.1's goal amendment."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "plan.md",
+      "line": 28,
+      "claim": "The memory-crate Surreal dual-path conflicts are assigned to upstream-merge-manager with no handoff to surrealdb-schema-engineer, which CLAUDE.md names as owner of the Surreal backends in librefang-memory.",
+      "evidence": "plan.md risks: 'the memory-crate dual-path conflicts are the hard parts'. C-001 tasks 1.1 and 1.2 sit with upstream-merge-manager. The CLAUDE.md routing table gives 'the Surreal backends in librefang-memory' to surrealdb-schema-engineer.",
+      "suggested_fix": "Add a handoff (or review) by surrealdb-schema-engineer for the proactive.rs, semantic.rs and substrate.rs resolutions."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "plan.md",
+      "line": 74,
+      "claim": "The prerequisites column contradicts the stated dependency: C-003 2.1 lists 'none', but the ordering rationale says C-003 waits for the sync because it edits Cargo.toml comments the merge touches.",
+      "evidence": "plan.md line 20: 'C-003 edits `Cargo.toml` comments the merge touches'. Row C-003 2.1 Prerequisites: 'none'.",
+      "suggested_fix": "Set the prerequisite to 'C-001 merged'."
+    }
+  ]
+}

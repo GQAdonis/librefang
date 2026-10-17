@@ -1,0 +1,11 @@
+{
+  "stage": "plan",
+  "completedAt": "2026-10-17T16:52:07Z",
+  "outputs": [
+    "plan.md"
+  ],
+  "nextStage": "execute",
+  "summaryForNext": "5 OpenSpec changes, 32 tasks. Order: p12-c000 green baseline (dead-code break + failures pre-existing on main from the 2026-10-16 report) → p12-c001 finish the existing 2026-10-16 sync from chore/upstream-merge-2026-10-16-schema plus 16 newer upstream commits, with p12-c002 Surreal parity verify/complete on the same branch, one merge-reviewer pass → p12-c003 UAR 1.1.0 reference + live probe (human-only) and p12-c004 G3 child phase baseline, in parallel. Task model assignments in plan.md (native Claude Code Agent routes, opus/sonnet; effort inherited). Review: round 2 PASS (harness-native); librefang-cli Cargo.toml comment pending operator instruction. First: /kbd-execute starts p12-c000.",
+  "skipped": false,
+  "skipReason": null
+}

@@ -1,7 +1,7 @@
 # Current Waypoint
 
 **Phase**: `phase-12-sync-uar-refresh-dot-facade`
-**Stage**: `analyze_complete` (projection-only, D-001)
+**Stage**: `plan_complete` (projection-only, D-001); 0/5 changes
 **Created**: 2026-10-17
 **Previous phase**: `phase-11-surreal-recovery-and-uar-convergence` (closed as superseded, D-004)
 
@@ -14,7 +14,7 @@ Goals are in `.kbd-orchestrator/phases/phase-12-sync-uar-refresh-dot-facade/goal
 ## Next action
 
 ```
-/kbd-plan phase-12-sync-uar-refresh-dot-facade
+/kbd-execute phase-12-sync-uar-refresh-dot-facade
 ```
 
 ## References

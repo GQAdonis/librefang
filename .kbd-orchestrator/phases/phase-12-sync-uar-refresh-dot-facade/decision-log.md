@@ -41,3 +41,14 @@ Rebuilding these in BossFang was G3's largest single item.
 **Alternatives:** BossFang owns scheduling (the original Q4 answer; rejected after the evidence, since it needs a full scheduler build plus a UAR disable lever) · wait for UAR 1.1.1 (rejected: unpublished, breaking migration) · a UAR issue for per-run limits first (rejected as a v1 blocker).
 
 **Learn more:** `analysis.md` "Unresolved review findings (round 2)" and "Operator resolution".
+
+## D-004 · Plan continues the existing 2026-10-16 sync and adopts OpenSpec          [plan · 2026-10-17]
+
+**TL;DR:** The plan finishes the unmerged 2026-10-16 upstream sync (`chore/upstream-merge-2026-10-16-schema`) instead of re-merging, widens C-000 to a full green baseline, and switches `project.json` `specBackend` to `openspec` as the phase-10 note scheduled.
+
+**Why:** Plan review round 1 found the 2026-10-16 branches, which already merge 87 upstream commits, resolve the same 28 conflicts, and add SurrealDB parity migrations 050–054 and stores; none of this was on `main` or in any phase-12 artifact.
+Their merge report also lists failures already present on `main`, which C-000 now owns so the sync starts green.
+
+**Alternatives:** Re-merge from scratch (rejected: discards completed, documented conflict resolution) · keep native-kbd changes (rejected: `project.json` already scheduled OpenSpec adoption from phase-11).
+
+**Learn more:** `plan.md` "Adversarial review"; `docs/upstream-merges/2026-10-16.md` on `chore/upstream-merge-2026-10-16`.
