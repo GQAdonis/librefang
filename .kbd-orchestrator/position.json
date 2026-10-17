@@ -1,18 +1,18 @@
 {
   "schemaVersion": "1",
   "generatedBy": "legacy-position-projection",
-  "sourceRevision": 78,
-  "updatedAt": "2026-10-17T16:36:20Z",
+  "sourceRevision": 79,
+  "updatedAt": "2026-10-17T16:52:07Z",
   "cursor": [
     "phase-12-sync-uar-refresh-dot-facade"
   ],
   "root": {
     "type": "phase",
     "id": "phase-12-sync-uar-refresh-dot-facade",
-    "status": "analysis_complete",
+    "status": "plan_complete",
     "progress": {
       "done": 0,
-      "total": 0
+      "total": 5
     },
     "children": [],
     "annotations": []

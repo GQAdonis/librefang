@@ -1,0 +1,55 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "claude-opus-5-5 (harness-native subagent)",
+  "isolation_mode": "harness-native",
+  "producer_model": "claude-opus-5-5",
+  "cross_model_check": "same-model-collision",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/p12-c002-surreal-parity-sync-2026-10/proposal.md",
+      "claim": "Several C-001/C-002 tasks are framed as fixes for defects that the branch they continue from has already fixed, so workers may redo or churn work that is already there instead of verifying it.",
+      "evidence": "C-002 proposal: '`SurrealTaskBackend::task_reset_stuck` filters on an undefined `updated_at`' and task 2.3: 'Fix `SurrealTaskBackend::task_reset_stuck`'. But on chore/upstream-merge-2026-10-16-schema (107f38cd3), surreal_task.rs:61-110 already rewrites the sweep to use claimed_at/timeout_secs/retry_count, with no updated_at. C-001 task 1.4 says 'set `text_synthesized_from_thinking` ... (starting with `uar.rs:1176`)', but the branch already has it at uar.rs:1192. Task 1.2 asks to 'make the SQLite migration sequence ... apply exactly once', yet the branch's migration.rs already has SCHEMA_VERSION = 64, and merge report line 50 says fork v62 was renumbered to v64 with two tests. The C-001 proposal lists all three as 'Open items'.",
+      "suggested_fix": "Reword C-002 2.3, C-001 1.2 and C-001 1.4 as 'verify on the merged head, then fix only if regressed', and correct the proposals' premises to cite the existing commits. Keep the new tests: the three-lineage migration tests and the remote task_reset_stuck test."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 51,
+      "claim": "The sync brings upstream changes into `librefang-cli`, but the plan neither records that a merge is exempt from the 'do not modify librefang-cli' constraint nor verifies the CLI crate or the uar-driver feature chain after the merge.",
+      "evidence": "`git diff --stat chore/upstream-merge-2026-10-16-schema...upstream/main -- crates/librefang-cli` shows 6 files and 239 insertions (tui/screens/agents.rs, tests/i18n_checks.rs, four locale files). The plan treats the CLI constraint as blocking for C-003 ('pending your instruction', line 51) but says nothing about it for C-001. C-001 task 3.1 tests memory, storage, api, kernel, llm-drivers and acp, but not `librefang-cli`, and it has no `cargo check -p librefang-cli --features uar-driver` (or api with uar-driver), even though round-1 finding 7 asked for that check. The workspace check runs without uar-driver, so a break in the uar-driver-gated API code after the merge would go unnoticed. C-000 3.1 checks api with uar-driver, but only before the merge.",
+      "suggested_fix": "State in C-001 that merging upstream CLI changes is covered by G1 and is not an authored CLI modification, or get operator sign-off at dispatch. Add `cargo test -p librefang-cli` and `cargo check -p librefang-cli --features uar-driver` to C-001 3.1."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "plan.md",
+      "line": 11,
+      "claim": "The 'Lessons applied' section cites C-001 task numbers that were renumbered after round 1.",
+      "evidence": "Line 11: 'C-001 task 3.2' for the ancestry check, but in tasks.md the ancestry check is 3.3 and 3.2 is the merge-reviewer review. Line 14: 'review (C-001 task 3.1)', but 3.1 is the final gate and the review is 3.2.",
+      "suggested_fix": "Change line 11 to 3.3 and line 14 to 3.2."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "openspec/changes/p12-c001-upstream-sync-2026-10/proposal.md",
+      "claim": "The proposal lists the dalek 2→3 and zip 8→9 bumps as open sync items, but no task addresses or verifies them explicitly.",
+      "evidence": "Proposal 'Open items ... ACP 3.3.0, dalek 3 and zip 9 bumps'. Task 1.4 covers only ACP. assessment.md lines 60-61 list both bumps. Only the generic workspace gates in 3.1 would catch a break.",
+      "suggested_fix": "Either name dalek and zip in 1.4 (with the crates they hit) or drop them from the open-items list if 3.1's gates are the intended coverage."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "plan.md",
+      "line": 67,
+      "claim": "C-001 tasks 1.3 and 1.4 hand off to two different role agents 'on the sync branch' with no worktree isolation, contrary to CLAUDE.md's rule that parallel roles each get their own worktree and CARGO_TARGET_DIR.",
+      "evidence": "Rows C-001 1.3 and 1.4: 'Agent(subagent_type=surrealdb-schema-engineer, model=opus) on the sync branch; handoff from 1.1' and 'Agent(subagent_type=bossfang-feature-steward, model=opus) on the sync branch; handoff from 1.1'. Both have prerequisite '1.1' only, so they can run concurrently. CLAUDE.md: 'Each role gets its own linked worktree ... and its own CARGO_TARGET_DIR'.",
+      "suggested_fix": "Either run 1.3 and 1.4 one after the other, or give each its own worktree branched from the 1.1 head and have the orchestrator combine them."
+    },
+    {
+      "severity": "SUGGESTION",
+      "file": "openspec/changes/p12-c001-upstream-sync-2026-10/specs/upstream-sync/spec.md",
+      "claim": "Task 1.2 requires tests for databases stamped by upstream v62 and v63, but the spec has a scenario for upstream v63 only.",
+      "evidence": "Task 1.2: 'one stamped by upstream v62/v63 (covering the stamp-61 repair logic)'. The spec scenarios are fresh, BossFang v62 and upstream v63. There is no upstream-v62 scenario, and the BossFang-v62 versus upstream-v62 ambiguity is the actual collision.",
+      "suggested_fix": "Add an upstream-v62 scenario that asserts timeout_secs is present, truncated is added once, and the workflow_runs rebuild applies once."
+    }
+  ]
+}

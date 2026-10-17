@@ -5,18 +5,18 @@
   "childPhases": [],
   "childPointer": null,
   "assessment_complete": true,
-  "plan_complete": false,
+  "plan_complete": true,
   "execute_complete": false,
   "reflect_complete": false,
-  "implementation_total": 0,
+  "implementation_total": 5,
   "implementation_completed": 0,
-  "changes_total": 0,
+  "changes_total": 5,
   "changes_completed": 0,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
       "completed": 0,
-      "total": 0,
+      "total": 5,
       "status": "PENDING"
     },
     "evidence": {
@@ -38,9 +38,57 @@
   "completed_changes": [],
   "active_change": null,
   "blocked_changes": [],
-  "changes": [],
-  "last_updated": "2026-10-17T16:36:20Z",
-  "last_updated_by": "kbd-analyze (projection-only, D-001)",
+  "changes": [
+    {
+      "id": "p12-c000-default-feature-build",
+      "status": "PENDING",
+      "tasks_total": 6,
+      "tasks_done": 0,
+      "owner": "bossfang-feature-steward"
+    },
+    {
+      "id": "p12-c001-upstream-sync-2026-10",
+      "status": "PENDING",
+      "tasks_total": 9,
+      "tasks_done": 0,
+      "owner": "upstream-merge-manager",
+      "depends_on": [
+        "p12-c000-default-feature-build"
+      ]
+    },
+    {
+      "id": "p12-c002-surreal-parity-sync-2026-10",
+      "status": "PENDING",
+      "tasks_total": 5,
+      "tasks_done": 0,
+      "owner": "surrealdb-schema-engineer",
+      "depends_on": [
+        "p12-c001-upstream-sync-2026-10"
+      ]
+    },
+    {
+      "id": "p12-c003-uar-1-1-0-reference",
+      "status": "PENDING",
+      "tasks_total": 6,
+      "tasks_done": 0,
+      "owner": "bossfang-feature-steward",
+      "depends_on": [
+        "p12-c001-upstream-sync-2026-10"
+      ]
+    },
+    {
+      "id": "p12-c004-dot-facade-child-phase",
+      "status": "PENDING",
+      "tasks_total": 6,
+      "tasks_done": 0,
+      "owner": "product-manager",
+      "depends_on": [
+        "p12-c001-upstream-sync-2026-10"
+      ]
+    }
+  ],
+  "last_updated": "2026-10-17T16:52:07Z",
+  "last_updated_by": "kbd-plan (projection-only, D-001)",
   "sourceTool": "product-manager (phase-11 superseded closure, D-004)",
   "createdBy": "kbd-new-phase",
   "updatedAt": "2026-10-17T15:30:45Z"
