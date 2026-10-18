@@ -9,15 +9,15 @@
   "execute_complete": false,
   "reflect_complete": false,
   "implementation_total": 5,
-  "implementation_completed": 0,
+  "implementation_completed": 1,
   "changes_total": 5,
-  "changes_completed": 0,
+  "changes_completed": 1,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 0,
+      "completed": 1,
       "total": 5,
-      "status": "PENDING"
+      "status": "IN_PROGRESS"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -35,16 +35,19 @@
       "blockers": []
     }
   },
-  "completed_changes": [],
-  "active_change": null,
+  "completed_changes": [
+    "p12-c000-default-feature-build"
+  ],
+  "active_change": "p12-c001-upstream-sync-2026-10",
   "blocked_changes": [],
   "changes": [
     {
       "id": "p12-c000-default-feature-build",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "tasks_total": 6,
-      "tasks_done": 5,
-      "owner": "bossfang-feature-steward"
+      "tasks_done": 6,
+      "owner": "bossfang-feature-steward",
+      "implementation_status": "COMPLETE"
     },
     {
       "id": "p12-c001-upstream-sync-2026-10",
@@ -54,7 +57,8 @@
       "owner": "upstream-merge-manager",
       "depends_on": [
         "p12-c000-default-feature-build"
-      ]
+      ],
+      "implementation_status": "PENDING"
     },
     {
       "id": "p12-c002-surreal-parity-sync-2026-10",
@@ -64,7 +68,8 @@
       "owner": "surrealdb-schema-engineer",
       "depends_on": [
         "p12-c001-upstream-sync-2026-10"
-      ]
+      ],
+      "implementation_status": "PENDING"
     },
     {
       "id": "p12-c003-uar-1-1-0-reference",
@@ -74,7 +79,8 @@
       "owner": "bossfang-feature-steward",
       "depends_on": [
         "p12-c001-upstream-sync-2026-10"
-      ]
+      ],
+      "implementation_status": "PENDING"
     },
     {
       "id": "p12-c004-dot-facade-child-phase",
@@ -84,13 +90,14 @@
       "owner": "product-manager",
       "depends_on": [
         "p12-c001-upstream-sync-2026-10"
-      ]
+      ],
+      "implementation_status": "PENDING"
     }
   ],
-  "last_updated": "2026-10-17T17:12:49Z",
-  "last_updated_by": "kbd-execute (projection-only, D-001)",
+  "last_updated": "2026-10-17T20:50:00Z",
+  "last_updated_by": "claude-code",
   "sourceTool": "product-manager (phase-11 superseded closure, D-004)",
   "createdBy": "kbd-new-phase",
-  "updatedAt": "2026-10-17T15:30:45Z",
+  "updatedAt": "2026-10-17T20:50:00Z",
   "execution_dispatched": true
 }
