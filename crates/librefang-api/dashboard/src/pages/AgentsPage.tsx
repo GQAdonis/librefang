@@ -3489,7 +3489,7 @@ export function AgentsPage() {
         ) : (
           <div
             className="rounded-md border border-border-subtle p-3 font-mono text-[11.5px] leading-[1.6] max-h-60 overflow-auto -mx-3 sm:mx-0"
-            style={{ background: "rgba(2,6,23,0.6)" }}
+            style={{ background: "rgba(11,15,20,0.6)" }}
           >
             {events.map((e, i) => (
               <div key={`${e.timestamp}-${i}`} className="flex gap-2.5 min-w-max sm:min-w-0">
