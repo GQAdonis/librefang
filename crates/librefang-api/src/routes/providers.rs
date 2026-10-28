@@ -87,6 +87,11 @@ use std::time::Instant;
 
 use crate::types::ApiErrorResponse;
 
+/// Serializes the read-modify-write cycle on `data/provider_discovery.json` between concurrent PUTs (#8411).
+///
+/// The handler mutates the in-memory preference, loads a fresh catalog snapshot, and saves it; without this lock, two PUTs can interleave so the older snapshot lands last and drops the newer preference, even though both callers were answered 200.
+static DISCOVERY_PREFS_WRITE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 fn scrubbed_provider_error(
     operation: &'static str,
     error: impl std::fmt::Display,
@@ -625,7 +630,7 @@ pub async fn create_alias(
 pub async fn delete_alias(
     State(state): State<Arc<AppState>>,
     Path(alias): Path<String>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     // Snapshot the mapped model ID before removing so we can restore it if
     // the subsequent persist fails — keeps the in-memory catalog consistent
     // with disk across failure paths.
@@ -637,7 +642,8 @@ pub async fn delete_alias(
     });
     if !removed {
         return ApiErrorResponse::not_found(format!("Alias '{}' not found", alias))
-            .into_json_tuple();
+            .into_json_tuple()
+            .into_response();
     }
 
     let aliases_path = state.kernel.home_dir().join("aliases.toml");
@@ -653,10 +659,12 @@ pub async fn delete_alias(
                 catalog.add_alias(&alias_for_rollback, &model_id);
             });
         }
-        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+        return ApiErrorResponse::internal_scrub(e)
+            .into_json_tuple()
+            .into_response();
     }
 
-    (StatusCode::NO_CONTENT, Json(serde_json::json!(null)))
+    StatusCode::NO_CONTENT.into_response()
 }
 
 #[utoipa::path(get, path = "/api/models/{id}", tag = "models", params(("id" = String, Path, description = "Model ID")), responses((status = 200, description = "Model details", body = crate::types::JsonObject)))]
@@ -865,14 +873,16 @@ pub async fn set_model_overrides(
 pub async fn delete_model_overrides(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     let overrides_path = state
         .kernel
         .home_dir()
         .join("data")
         .join("model_overrides.json");
     let id_for_closure = id.clone();
+    let mut previous = None;
     state.kernel.model_catalog_update(&mut |catalog| {
+        previous = catalog.get_overrides(&id_for_closure).cloned();
         let _ = catalog.remove_overrides(&id_for_closure);
     });
     if let Err(e) = state
@@ -880,9 +890,19 @@ pub async fn delete_model_overrides(
         .model_catalog_load()
         .save_overrides(&overrides_path)
     {
+        // Same contract as `set_model_overrides`: a removal that did not reach disk would silently come back on the next restart, so restore the in-memory entry and report the failure instead of a 204.
         tracing::warn!("Failed to persist model overrides: {e}");
+        if let Some(prev) = previous {
+            let id_for_rollback = id.clone();
+            state.kernel.model_catalog_update(&mut move |catalog| {
+                catalog.set_overrides(id_for_rollback.clone(), prev.clone());
+            });
+        }
+        return ApiErrorResponse::internal_scrub(e)
+            .into_json_tuple()
+            .into_response();
     }
-    (StatusCode::NO_CONTENT, Json(serde_json::json!(null)))
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// Attach local-provider probe results to a JSON entry and optionally merge
@@ -1613,9 +1633,16 @@ pub async fn add_custom_model(
         .save_custom_models(&custom_path)
     {
         tracing::warn!("Failed to persist custom models: {e}");
+        // Scope the rollback to this request's (id, provider) so a same-id custom model under another provider survives.
+        // `remove_custom_model` prunes aliases left without a target; put back any that existed before this request so the rollback undoes only the add.
         let id_for_rollback = id.clone();
+        let provider_for_rollback = provider.clone();
         state.kernel.model_catalog_update(&mut move |catalog| {
-            catalog.remove_custom_model(&id_for_rollback);
+            let aliases = aliases_targeting(catalog, &id_for_rollback);
+            catalog.remove_custom_model(&id_for_rollback, Some(&provider_for_rollback));
+            for (alias, target) in &aliases {
+                catalog.add_alias(alias, target);
+            }
         });
         return ApiErrorResponse::internal_scrub(e).into_json_tuple();
     }
@@ -1630,25 +1657,38 @@ pub async fn add_custom_model(
     )
 }
 
+/// Alias mappings whose target is `model_id` (case-insensitive), so a failed-persist rollback can restore what `remove_custom_model` pruned.
+fn aliases_targeting(
+    catalog: &librefang_kernel::model_catalog::ModelCatalog,
+    model_id: &str,
+) -> Vec<(String, String)> {
+    catalog
+        .list_aliases()
+        .iter()
+        .filter(|(_, target)| target.eq_ignore_ascii_case(model_id))
+        .map(|(alias, target)| (alias.clone(), target.clone()))
+        .collect()
+}
+
 /// DELETE /api/models/custom/{id} — Remove a custom model.
 #[utoipa::path(delete, path = "/api/models/custom/{id}", tag = "models", params(("id" = String, Path, description = "Model ID")), responses((status = 200, description = "Custom model removed")))]
 pub async fn remove_custom_model(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(model_id): axum::extract::Path<String>,
-) -> impl IntoResponse {
-    // Snapshot the entry before removing so we can restore it if the
-    // subsequent persist fails — keeps the in-memory catalog consistent
-    // with disk across failure paths.
+) -> axum::response::Response {
+    // Keep every removed entry so all of them can be restored if the subsequent persist fails, which keeps the in-memory catalog consistent with disk across failure paths.
+    // The aliases pointing at this ID are kept too, because `remove_custom_model` prunes the ones it leaves without a target.
     let model_id_for_closure = model_id.clone();
-    let mut snapshot = None;
-    let mut removed = false;
+    let mut removed = Vec::new();
+    let mut pruned_aliases = Vec::new();
     state.kernel.model_catalog_update(&mut |catalog| {
-        snapshot = catalog.find_model(&model_id_for_closure).cloned();
-        removed = catalog.remove_custom_model(&model_id_for_closure);
+        pruned_aliases = aliases_targeting(catalog, &model_id_for_closure);
+        removed = catalog.remove_custom_model(&model_id_for_closure, None);
     });
-    if !removed {
+    if removed.is_empty() {
         return ApiErrorResponse::not_found(format!("Custom model '{}' not found", model_id))
-            .into_json_tuple();
+            .into_json_tuple()
+            .into_response();
     }
 
     let custom_path = state
@@ -1662,15 +1702,20 @@ pub async fn remove_custom_model(
         .save_custom_models(&custom_path)
     {
         tracing::warn!("Failed to persist custom models: {e}");
-        if let Some(entry) = snapshot {
-            state.kernel.model_catalog_update(&mut move |catalog| {
+        state.kernel.model_catalog_update(&mut move |catalog| {
+            for entry in &removed {
                 catalog.add_custom_model(entry.clone());
-            });
-        }
-        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+            }
+            for (alias, target) in &pruned_aliases {
+                catalog.add_alias(alias, target);
+            }
+        });
+        return ApiErrorResponse::internal_scrub(e)
+            .into_json_tuple()
+            .into_response();
     }
 
-    (StatusCode::NO_CONTENT, Json(serde_json::json!(null)))
+    StatusCode::NO_CONTENT.into_response()
 }
 
 // ── A2A (Agent-to-Agent) Protocol Endpoints ─────────────────────────
@@ -2056,13 +2101,15 @@ pub async fn set_provider_key(
 pub async fn delete_provider_key(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     // Shape-check the path-supplied provider name BEFORE we derive an env
     // var from it. Mirrors `set_provider_key`; without this gate an admin
     // could ask the daemon to `remove_var("STRIPE_API_KEY")` (etc.) on the
     // live process. See `docs/issues/set-provider-key-arbitrary-names.md`.
     if let Err(msg) = crate::validation::check_provider_name_shape(&name) {
-        return ApiErrorResponse::bad_request(msg).into_json_tuple();
+        return ApiErrorResponse::bad_request(msg)
+            .into_json_tuple()
+            .into_response();
     }
 
     let env_var = {
@@ -2077,7 +2124,9 @@ pub async fn delete_provider_key(
                 // Custom/unknown provider — derive env var from convention.
                 let derived = format!("{}_API_KEY", name.to_uppercase().replace('-', "_"));
                 if let Err(msg) = crate::validation::check_derived_env_var(&derived) {
-                    return ApiErrorResponse::bad_request(msg).into_json_tuple();
+                    return ApiErrorResponse::bad_request(msg)
+                        .into_json_tuple()
+                        .into_response();
                 }
                 derived
             }
@@ -2086,13 +2135,16 @@ pub async fn delete_provider_key(
 
     if env_var.is_empty() {
         return ApiErrorResponse::bad_request("Provider does not require an API key")
-            .into_json_tuple();
+            .into_json_tuple()
+            .into_response();
     }
 
     // Remove from secrets.env
     let secrets_path = state.kernel.home_dir().join("secrets.env");
     if let Err(e) = remove_secret_env(&secrets_path, &env_var) {
-        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+        return ApiErrorResponse::internal_scrub(e)
+            .into_json_tuple()
+            .into_response();
     }
 
     // Remove from process environment. `std::env::remove_var` carries the
@@ -2117,7 +2169,7 @@ pub async fn delete_provider_key(
         });
     }
 
-    (StatusCode::NO_CONTENT, Json(serde_json::json!(null)))
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// POST /api/providers/{name}/enable — Re-enable a previously suppressed
@@ -2191,13 +2243,9 @@ pub async fn enable_provider(
 /// a built-in local one: the periodic probe loop, `POST .../test`, and the
 /// live-model filter applied to `/api/models`.
 ///
-/// The flag is persisted into the provider's own `providers/{name}.toml`
-/// `[provider]` table, which is where the catalog reads it back from on the
-/// next boot. Registry-managed files are rewritten by the boot-time registry
-/// sync when their content drifts from the upstream copy, so the flag is
-/// durable for the custom providers this endpoint exists to serve and
-/// intentionally best-effort for built-in ids — whose discovery behaviour is
-/// decided by the id branch of the predicate anyway.
+/// The preference is operator state, so it is stored where the operator's other provider preferences already live — `data/provider_discovery.json` — and applied over the catalog at boot.
+/// It deliberately does not go into the provider's own `providers/{name}.toml`: the boot-time registry sync rewrites those files from the registry, and no registry-shipped file carries `discover_models` at all, so a toggle written there was cleared by the next restart (#8407).
+/// The setting therefore survives restarts for every provider, built-in ids included.
 #[utoipa::path(
     put,
     path = "/api/providers/{name}/discovery",
@@ -2215,8 +2263,8 @@ pub async fn set_provider_discovery(
     Path(name): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    // The name is joined into `providers/{name}.toml`, so gate its shape
-    // before it reaches `Path::join` — same boundary as `set_provider_key`.
+    // The name becomes a key in the preference file and is matched against
+    // provider ids, so gate its shape — same boundary as `set_provider_key`.
     if let Err(msg) = crate::validation::check_provider_name_shape(&name) {
         return ApiErrorResponse::bad_request(msg).into_json_tuple();
     }
@@ -2229,26 +2277,55 @@ pub async fn set_provider_discovery(
         }
     };
 
-    // Capture the updated record, not just a success flag: the file written
-    // below has to carry the provider's identity fields or the catalog loader
-    // cannot read it back (#7776).
-    let mut applied: Option<librefang_types::model_catalog::ProviderInfo> = None;
-    let sink = &mut applied;
-    let name_for_closure = name.clone();
-    state.kernel.model_catalog_update(&mut move |catalog| {
-        if catalog.set_provider_discover_models(&name_for_closure, discover) {
-            *sink = catalog.get_provider(&name_for_closure).cloned();
-        }
+    // `data/` is where the operator's other provider state lives
+    // (`model_overrides.json`, `suppressed_providers.json`) and a directory the
+    // registry sync never writes to, which is what makes the setting durable
+    // (#8407).
+    let prefs_path = state
+        .kernel
+        .home_dir()
+        .join("data")
+        .join("provider_discovery.json");
+    // Serialize the whole mutate-snapshot-save cycle: the write happens outside the RCU closure so the closure's retries cannot leave a sticky error, but that leaves the snapshot free to race — with two concurrent PUTs, the older snapshot can land last and drop the newer preference even though its caller was answered 200 (#8411).
+    let _write_guard = DISCOVERY_PREFS_WRITE_LOCK.lock().await;
+
+    // Mutate the catalog inside the RCU closure and do the disk write outside
+    // it. The closure may run more than once under contention, so the write has
+    // to happen exactly once, after the mutation commits; keeping it inside also
+    // left a failed attempt's error sticky, turning a later successful toggle
+    // into a 500.
+    let mut applied = false;
+    let mut previous_flag = false;
+    let mut previous_pref = None;
+    state.kernel.model_catalog_update(&mut |catalog| {
+        previous_flag = catalog
+            .get_provider(&name)
+            .map(|p| p.discover_models)
+            .unwrap_or(false);
+        previous_pref = catalog.provider_discover_preference(&name);
+        applied = catalog.set_provider_discover_preference(&name, discover);
     });
-    let Some(provider) = applied else {
+    if !applied {
         return ApiErrorResponse::not_found(format!("Provider '{}' not found", name))
             .into_json_tuple();
-    };
+    }
 
-    let providers_dir = state.kernel.home_dir().join("providers");
-    if let Err(e) = upsert_provider_discover_models(&providers_dir, &provider, discover) {
-        // The in-memory flip already happened; report the failure rather than
-        // letting the setting silently revert on the next daemon boot.
+    // Persist from the snapshot the mutation above committed. Surface a failed
+    // write instead of answering 200: the in-memory flip already happened, and a
+    // preference that never reached disk comes back as "off" on the next boot —
+    // the failure this endpoint exists to end (#7776, #8407).
+    let snapshot = state.kernel.model_catalog_load();
+    if let Err(e) = snapshot.save_discover_prefs(&prefs_path) {
+        // Roll the flip back on a failed save, exactly like `add_custom_model` / `remove_custom_model`: a caller told the write failed must not leave discovery running until the next restart, which would then silently revert it (#8411).
+        tracing::warn!("Failed to persist provider discovery preference: {e}");
+        let name_for_rollback = name.clone();
+        state.kernel.model_catalog_update(&mut move |catalog| {
+            catalog.restore_provider_discover_preference(
+                &name_for_rollback,
+                previous_flag,
+                previous_pref,
+            );
+        });
         return ApiErrorResponse::internal_scrub(e).into_json_tuple();
     }
 
@@ -2260,63 +2337,6 @@ pub async fn set_provider_discovery(
             "discover_models": discover,
         })),
     )
-}
-
-/// Persist `discover_models` into `providers/{name}.toml`'s `[provider]` table.
-///
-/// Uses `toml_edit` so the rest of the file — the `[[models]]` array a custom
-/// provider carries, comments, key order — survives byte-for-byte. Creates a
-/// file only when none exists, which happens for entries that live solely in
-/// memory (a `[provider_urls]`-only custom provider).
-///
-/// The record written has to be one the catalog loader can read back. Writing
-/// `id` and the flag alone produced a file that failed to deserialize, so the
-/// loader discarded it whole and the setting silently reverted on every boot
-/// (#7776). Identity fields therefore come from the live `ProviderInfo` the
-/// caller just confirmed exists, and any of them already present in the file
-/// is left untouched — the operator's own value wins over the in-memory one,
-/// and an unrelated toggle never rewrites a hand-maintained catalog file.
-fn upsert_provider_discover_models(
-    providers_dir: &std::path::Path,
-    provider: &librefang_types::model_catalog::ProviderInfo,
-    discover: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let name = provider.id.as_str();
-    let path = providers_dir.join(format!("{name}.toml"));
-    let mut doc: toml_edit::DocumentMut = match std::fs::read_to_string(&path) {
-        Ok(raw) => raw.parse()?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => toml_edit::DocumentMut::new(),
-        Err(e) => return Err(e.into()),
-    };
-
-    // A file that somehow lacks the `[provider]` table (models-only catalog
-    // fragment) gets one, so the flag lands where `ProviderCatalogToml` reads it.
-    if !doc.get("provider").is_some_and(|item| item.is_table()) {
-        doc["provider"] = toml_edit::Item::Table(toml_edit::Table::new());
-    }
-    let table = &mut doc["provider"];
-    if !table.get("id").is_some_and(|v| v.is_str()) {
-        table["id"] = toml_edit::value(name);
-    }
-    if !table.get("display_name").is_some_and(|v| v.is_str()) {
-        table["display_name"] = toml_edit::value(provider.display_name.as_str());
-    }
-    if !table.get("api_key_env").is_some_and(|v| v.is_str()) {
-        table["api_key_env"] = toml_edit::value(provider.api_key_env.as_str());
-    }
-    if !table.get("base_url").is_some_and(|v| v.is_str()) {
-        table["base_url"] = toml_edit::value(provider.base_url.as_str());
-    }
-    // `key_required` deserializes to `true` when absent, so only a provider
-    // that genuinely needs no key has to say so.
-    if !provider.key_required && !table.get("key_required").is_some_and(|v| v.is_bool()) {
-        table["key_required"] = toml_edit::value(false);
-    }
-    table["discover_models"] = toml_edit::value(discover);
-
-    std::fs::create_dir_all(providers_dir)?;
-    crate::atomic_write(&path, doc.to_string().as_bytes())?;
-    Ok(())
 }
 
 /// POST /api/providers/{name}/test — Test a provider's connectivity.
@@ -3621,7 +3641,7 @@ mod tests {
     use super::{
         parse_claude_code_settings_model, parse_codex_configured_model,
         parse_gemini_style_settings_model, scrubbed_provider_error, synthesized_cli_model_row,
-        upsert_provider_discover_models, upsert_provider_urls,
+        upsert_provider_urls,
     };
     use crate::routes::agent_templates::{get_profile, list_profiles};
     use axum::body::Body;
@@ -3629,129 +3649,6 @@ mod tests {
     use axum::routing::get;
     use axum::{Json, Router};
     use tower::ServiceExt;
-
-    /// Build the live catalog record the discovery handler passes to the writer.
-    fn live_provider(id: &str) -> librefang_types::model_catalog::ProviderInfo {
-        librefang_types::model_catalog::ProviderInfo {
-            id: id.to_string(),
-            display_name: "LiteLLM Gateway".to_string(),
-            api_key_env: "LITELLM_API_KEY".to_string(),
-            base_url: "https://gateway.internal/v1".to_string(),
-            key_required: true,
-            ..Default::default()
-        }
-    }
-
-    /// #7776: the file created for a provider that lived only in memory has to
-    /// be one the catalog loader can read back. It used to carry `id` and the
-    /// flag alone, which failed deserialization, so the loader dropped the file
-    /// and the operator's opt-in reverted on the next boot.
-    #[test]
-    fn a_freshly_created_provider_file_round_trips_through_the_catalog_loader() {
-        let dir = tempfile::tempdir().unwrap();
-        let providers = dir.path().join("providers");
-        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
-
-        let written = std::fs::read_to_string(providers.join("litellm.toml")).unwrap();
-        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
-        let provider = catalog
-            .get_provider("litellm")
-            .unwrap_or_else(|| panic!("written file must load back; content:\n{written}"));
-
-        assert!(provider.discover_models, "content:\n{written}");
-        assert_eq!(provider.display_name, "LiteLLM Gateway");
-        assert_eq!(provider.api_key_env, "LITELLM_API_KEY");
-        assert_eq!(provider.base_url, "https://gateway.internal/v1");
-        assert!(provider.key_required);
-    }
-
-    /// A provider that needs no key has to say so explicitly, because
-    /// `key_required` deserializes to `true` when the key is absent.
-    #[test]
-    fn a_keyless_provider_records_key_required_false() {
-        let dir = tempfile::tempdir().unwrap();
-        let providers = dir.path().join("providers");
-        let mut info = live_provider("local-gateway");
-        info.key_required = false;
-        upsert_provider_discover_models(&providers, &info, true).unwrap();
-
-        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
-        assert!(!catalog.get_provider("local-gateway").unwrap().key_required);
-    }
-
-    /// The writer's doc-comment promises the rest of the file survives
-    /// byte-for-byte. Adding the flag must not reflow the `[[models]]` array,
-    /// drop comments, or rewrite values the operator maintains by hand.
-    #[test]
-    fn upserting_the_flag_leaves_the_rest_of_the_file_byte_identical() {
-        let original = concat!(
-            "# Hand-maintained gateway catalog — do not regenerate.\n",
-            "[provider]\n",
-            "id = \"litellm\"\n",
-            "display_name = \"Operator's Own Name\"\n",
-            "api_key_env = \"OPS_TOKEN\"\n",
-            "base_url = \"https://ops.internal/v1\"\n",
-            "\n",
-            "# The five models this gateway actually fronts.\n",
-            "[[models]]\n",
-            "id = \"gpt-4o\"\n",
-            "display_name = \"GPT-4o\"\n",
-            "tier = \"smart\"\n",
-            "context_window = 128000\n",
-            "max_output_tokens = 16384\n",
-            "input_cost_per_m = 2.5\n",
-            "output_cost_per_m = 10.0\n",
-            "supports_tools = true\n",
-            "supports_vision = true\n",
-            "supports_streaming = true\n",
-        );
-        let dir = tempfile::tempdir().unwrap();
-        let providers = dir.path().join("providers");
-        std::fs::create_dir_all(&providers).unwrap();
-        let path = providers.join("litellm.toml");
-        std::fs::write(&path, original).unwrap();
-
-        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
-        let persisted = std::fs::read_to_string(&path).unwrap();
-
-        assert_eq!(
-            persisted.replace("discover_models = true\n", ""),
-            original,
-            "adding the flag is the only edit; got:\n{persisted}"
-        );
-
-        // And the operator's values win over the live in-memory record.
-        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
-        let provider = catalog.get_provider("litellm").unwrap();
-        assert_eq!(provider.display_name, "Operator's Own Name");
-        assert_eq!(provider.api_key_env, "OPS_TOKEN");
-        assert_eq!(provider.base_url, "https://ops.internal/v1");
-        assert!(provider.discover_models);
-        assert_eq!(provider.model_count, 1, "the models array is still parsed");
-    }
-
-    /// A file written by an older build carries the broken partial shape. The
-    /// next toggle has to heal it rather than rewrite the same unreadable file.
-    #[test]
-    fn upserting_over_a_legacy_partial_file_completes_the_record() {
-        let dir = tempfile::tempdir().unwrap();
-        let providers = dir.path().join("providers");
-        std::fs::create_dir_all(&providers).unwrap();
-        let path = providers.join("litellm.toml");
-        std::fs::write(
-            &path,
-            "[provider]\nid = \"litellm\"\ndiscover_models = true\n",
-        )
-        .unwrap();
-
-        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
-
-        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
-        let provider = catalog.get_provider("litellm").unwrap();
-        assert_eq!(provider.base_url, "https://gateway.internal/v1");
-        assert_eq!(provider.api_key_env, "LITELLM_API_KEY");
-        assert!(provider.discover_models);
-    }
 
     #[test]
     fn provider_internal_errors_do_not_expose_source_details() {

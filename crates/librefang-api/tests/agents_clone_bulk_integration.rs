@@ -191,6 +191,26 @@ async fn test_clone_agent_creates_independent_copy() {
     assert_eq!(got["name"], "clone-dest");
 }
 
+/// The kernel rejects a reserved `_operator:` name with `InvalidInput`; that is a caller mistake, so the route answers 400 with the reason instead of a scrubbed 500.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_with_reserved_name_is_400_with_reason() {
+    let h = boot(TEST_TOKEN).await;
+    let src = spawn_named(&h.state, "reserved-clone-source");
+
+    let (status, body) = send(
+        h.app.clone(),
+        post_json(
+            &format!("/api/agents/{}/clone", src),
+            serde_json::json!({"new_name": "_operator:x"}),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+    let error = body["error"].as_str().unwrap_or_default();
+    assert!(error.contains("_operator:"), "reason must be kept: {body}");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clone_identity_copy_failure_returns_partial_creation() {
     let h = boot(TEST_TOKEN).await;
@@ -591,6 +611,53 @@ async fn test_bulk_create_spawns_all_listed_agents() {
         assert_eq!(status, StatusCode::OK, "clone {id} not addressable");
         assert!(got["name"].as_str().unwrap().starts_with("bulk-"));
     }
+}
+
+/// #8112: a bulk-create failure carries a machine-readable `code` alongside
+/// the translated `error` prose — the same codes `POST /api/agents` returns
+/// — so a caller can branch on why an entry failed without substring-matching
+/// a message that has already been rendered into whichever locale the
+/// request's `Accept-Language` asked for.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_bulk_create_reports_machine_readable_failure_codes() {
+    let h = boot(TEST_TOKEN).await;
+
+    let (status, body) = send(
+        h.app.clone(),
+        post_json(
+            "/api/agents/bulk",
+            serde_json::json!({
+                "agents": [
+                    {"manifest_toml": "name = \"bulk-ok\""},
+                    {"template": "does-not-exist-xyz"},
+                    {"manifest_toml": ""},
+                ]
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    let results = body["results"].as_array().expect("results array");
+    assert_eq!(results.len(), 3, "body: {body}");
+
+    assert_eq!(results[0]["success"], true, "row 0: {body}");
+    assert!(
+        results[0].get("code").is_none(),
+        "a successful row must not carry a failure code: {body}"
+    );
+
+    assert_eq!(results[1]["success"], false, "row 1: {body}");
+    assert_eq!(
+        results[1]["code"], "template_not_found",
+        "an unknown template must report its specific code, not just prose: {body}"
+    );
+
+    assert_eq!(results[2]["success"], false, "row 2: {body}");
+    assert_eq!(
+        results[2]["code"], "template_required",
+        "neither manifest_toml nor template supplied: {body}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

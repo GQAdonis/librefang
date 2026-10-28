@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAuthenticatedWebSocket,
+  getAgentManifest,
   getAgentTools,
   getMetricsText,
   getUsageByModelPerformance,
   getUsageDaily,
   getUsageSummary,
+  listAgents,
   listTools,
   listUsageByAgent,
   listUsageByModel,
@@ -115,6 +117,37 @@ describe("dashboard auth helpers", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       "/api/memory/agents/agent%2Fone/search?q=needle&limit=50&level=user",
     );
+  });
+
+  it("marks the agent list truncated when the server's total exceeds the page", async () => {
+    // The chat tab prune dropped background tabs whenever the 500-row page
+    // cut agents off (#8596); `truncated` is what lets a caller tell "not in
+    // the page" from "not in the registry".
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [{ id: "agent-a", name: "A" }], total: 501 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await expect(listAgents()).resolves.toEqual({
+      items: [{ id: "agent-a", name: "A" }],
+      truncated: true,
+    });
+    expect(fetchMock.mock.calls[0][0]).toContain("/api/agents?limit=500");
+  });
+
+  it("reports a complete agent page as not truncated", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [{ id: "agent-a", name: "A" }], total: 1 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const result = await listAgents();
+    expect(result.items).toHaveLength(1);
+    expect(result.truncated).toBe(false);
   });
 
   it("stores the token in sessionStorage under the BossFang key, not localStorage", () => {
@@ -460,5 +493,22 @@ describe("dashboard auth helpers", () => {
       "/api/usage/daily?start_date=2026-03-01&end_date=2026-03-31",
       "/api/usage/daily?days=366",
     ]);
+  });
+
+  it("reads the manifest ETag as an unquoted expected_version token (#8424)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('name = "a"\n', {
+        status: 200,
+        headers: { "Content-Type": "application/toml", ETag: '"abc123"' },
+      }),
+    );
+
+    const snapshot = await getAgentManifest("agent-1");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/agents/agent-1/manifest");
+    expect(snapshot.manifest_toml).toBe('name = "a"\n');
+    // The server compares the bare hash, so the RFC 9110 quotes come off here
+    // rather than in every caller.
+    expect(snapshot.version).toBe("abc123");
   });
 });

@@ -53,7 +53,7 @@ pub enum SelectedReconcile { Applied, Unchanged, Conflict, Unknown, NotFound }
 pub struct ClaimedNativeJob {
     pub id: String, pub title: String, pub description: String, pub assigned_to: String,
     pub created_by: String, pub created_at: String, pub claimed_at: String,
-    pub status: &'static str,
+    pub priority: i64, pub status: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,12 +124,13 @@ pub(super) fn native_rows(
 
 fn claim_native(db: &Connection, job: &str, agent: &str, name: &str) -> LibreFangResult<Option<ClaimedNativeJob>> {
     let row = db.query_row(
-        "SELECT title, description, created_by, created_at, payload FROM task_queue
+        "SELECT title, description, created_by, created_at, payload, priority FROM task_queue
          WHERE id = ?1 AND status = 'pending' AND (assigned_to = ?2 OR assigned_to = ?3 OR assigned_to = '')",
         params![job, agent, name], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, Vec<u8>>(4)?)))
+            row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, Vec<u8>>(4)?,
+            row.get::<_, i64>(5).unwrap_or(0))))
         .optional().map_err(LibreFangError::memory)?;
-    let Some((title, description, created_by, created_at, payload)) = row else { return Ok(None); };
+    let Some((title, description, created_by, created_at, payload, priority)) = row else { return Ok(None); };
     if !native(&payload, job) { return Ok(None); }
     let intent = if payload.is_empty() {
         encode(Harness::Native { original: NativeJobIntent { job_id: job.into(), original_assignee: agent.into() } })?
@@ -139,7 +140,7 @@ fn claim_native(db: &Connection, job: &str, agent: &str, name: &str) -> LibreFan
         claimed_at = ?3, payload = ?4 WHERE id = ?1 AND status = 'pending' AND payload = ?5",
         params![job, agent, claimed_at, intent, payload]).map_err(LibreFangError::memory)?;
     Ok((changed == 1).then(|| ClaimedNativeJob { id: job.into(), title, description,
-        assigned_to: agent.into(), created_by, created_at, claimed_at, status: "in_progress" }))
+        assigned_to: agent.into(), created_by, created_at, claimed_at, priority, status: "in_progress" }))
 }
 
 impl MemorySubstrate {

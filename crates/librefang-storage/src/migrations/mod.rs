@@ -273,6 +273,11 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "json_value_columns_v1",
         sql: include_str!("sql/049_json_value_columns.surql"),
     },
+    Migration {
+        version: 50,
+        name: "upstream_sqlite_v62_v64_parity_v1",
+        sql: include_str!("sql/050_upstream_sqlite_v62_v64_parity.surql"),
+    },
 ];
 
 /// Helpers shared by the tests that run against a remote SurrealDB.

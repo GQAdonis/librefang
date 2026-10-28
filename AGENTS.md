@@ -328,3 +328,29 @@ For every code task, read `.agent-team/project-routing.json`, then its active te
 For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.
 Use native delegation when available. If unavailable, follow the selected role instructions sequentially and report that limitation. Review in the builder context is not independent review. Keep reviewers dormant until the complete implementation phase; allow one batched correction/confirmation cycle. Respect user-only skill invocation restrictions. Zed external ACP agents use their own native configuration; parallel UI threads are not an automatic delegation API.
 <!-- prometheus-team-routing:end -->
+
+### Issue / PR interaction
+- **One PR ↔ one issue** (or one tightly-related cluster). Don't bundle
+  unrelated cleanups; open a separate PR.
+- **At most 2 follow-up comments** on the same issue / PR thread without
+  human input — then stop and wait. Repeated pings are noise.
+- **PR body must list:** substantive changes, how they were verified
+  (integration test names, scoped `cargo` invocations), and any
+  out-of-scope follow-ups left for a future PR.
+
+### CI wait policy
+- **Don't poll status checks for more than ~5 minutes.** CI is slow;
+  busy-waiting wastes turns. Push, report the run URL, and stop.
+- **Don't pre-emptively retry a check before it has failed.**
+- When you are blocked and cannot make progress without investigation,
+  **stop and report** — don't auto-open a follow-up issue, don't silently
+  switch plan.
+- While waiting for review, **don't add reviewers, don't flip
+  `ready-for-review`, don't re-request review** unless a maintainer
+  has set up an explicit convention asking for it.
+
+### Conflict resolution
+- A human maintainer's most recent intent **always wins** over an earlier
+  AI-authored change. When rebasing or resolving merge conflicts, preserve
+  both sides' intent — never silently drop a maintainer's edit because it
+  made the diff smaller.

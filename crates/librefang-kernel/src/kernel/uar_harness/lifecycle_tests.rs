@@ -45,6 +45,8 @@ async fn post(kernel: &LibreFangKernel, agent: Option<AgentId>, title: &str) -> 
             "actual stored body",
             agent.as_deref(),
             Some("owner"),
+            0,
+            None,
             TaskQueueCaps::UNLIMITED,
         )
         .await

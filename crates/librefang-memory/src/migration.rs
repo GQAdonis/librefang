@@ -5,7 +5,7 @@
 use rusqlite::Connection;
 
 /// Current schema version.
-const SCHEMA_VERSION: u32 = 62;
+const SCHEMA_VERSION: u32 = 65;
 
 /// Run all migrations to bring the database up to date.
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -307,8 +307,37 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     // first keeps it and the rest renumber to 62, 63, … on rebase.
     run_step!(61, migrate_v61);
 
-    // v62: persist the workflow engine's terminal cancelled state.
+    // v62: per-task claim TTL override on the Task Board. `[task_board]
+    // claim_ttl_secs` is one global number, so an installation that mixes a
+    // 30-second health check with a two-hour import has to pick a TTL that is
+    // wrong for one of them. NULL keeps the global, which is what every
+    // existing row means.
+    //
+    // This wanted to be 61 but #7752 took that number first, which is exactly
+    // the case the note above describes: it merged, so this one renumbers
+    // rather than skipping past it. A gap is not an option — `run_step!` gates
+    // on `current_version < N` read once at boot, so a database that reaches N
+    // with a hole below it never runs the skipped step.
     run_step!(62, migrate_v62);
+
+    // v63 (#8556): mark an ephemeral run that hit its iteration cap.
+    // A capped worker still delivers a partial answer and is recorded as
+    // `completed`, which made truncation indistinguishable from a full run.
+    // `truncated` carries that signal without widening the `status` CHECK.
+    //
+    // This wanted to be 62 but #7974 took that number first, so it renumbers
+    // to 63 rather than skipping past it — same rule as the note above.
+    run_step!(63, migrate_v63);
+
+    // v64: indexes for the dashboard's polled listings (sessions by `created_at`, memories by `created_at`) and the `sessions_fts_map` rowid map that lets `save_session` replace its FTS row without scanning the whole index.
+    run_step!(64, migrate_v64);
+
+    // v65: persist the workflow engine's terminal cancelled state.
+    //
+    // BossFang first shipped this as v62; upstream then took 62-64, so it renumbers
+    // here rather than leaving a gap (see `migrate_v65` for the repair of databases
+    // already stamped 62).
+    run_step!(65, migrate_v65);
 
     // Audit-trail consistency (#3538): user_version must match the count
     // of distinct rows in `migrations`. Drift means an earlier migration
@@ -1534,13 +1563,151 @@ fn migrate_v61(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
-/// v62: admit the workflow engine's cancelled state without changing run data.
+/// v62: per-task claim TTL override (`task_queue.timeout_secs`).
+///
+/// The stuck-task sweeper reclaims an `in_progress` row once it has been held
+/// longer than `[task_board] claim_ttl_secs`, a single global number.
+/// A board that carries both a 30-second probe and a two-hour import cannot be
+/// served by one value: tuned for the import, a wedged probe sits claimed for
+/// hours; tuned for the probe, the import is torn away from a worker that is
+/// still making progress.
+///
+/// `NULL` means "use the global", which is exactly what every pre-v62 row
+/// means, so the column needs no backfill.
+fn migrate_v62(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // No `table_exists` guard: `task_queue` is created unconditionally by
+    // `migrate_v1`, so it is present on every database that reaches this step.
+    //
+    // `try_column_exists` has to stay (SQLite has no `ADD COLUMN IF NOT
+    // EXISTS`), and the branch it guards for the pre-renumber footprint does
+    // more than tolerate the rerun: a build that ran this step while it was
+    // numbered 61 left the database stamped at 61, so the ladder skipped the
+    // *real* v61 — #7752's `sessions.parent_session_id` — and will never run
+    // it (`run_step!` gates on `current_version < 61`). `migrate_v61` is
+    // idempotent, so applying it here is the only remaining route to that
+    // column; without it the database opens on a valid stamp and fails later,
+    // on the first query that reads a column which is not there.
+    //
+    // The audit row moves with the repair: under the old numbering 61 was
+    // recorded as the timeout migration, and after a renumber that row
+    // describes the wrong step. The timeout history is re-recorded under 62
+    // by the `INSERT` below.
+    if try_column_exists(conn, "task_queue", "timeout_secs")? {
+        migrate_v61(conn)?;
+        conn.execute(
+            "UPDATE migrations SET description = \
+             'Add sessions.parent_session_id for sub-agent run lineage (#7752)' \
+             WHERE version = 61 AND description LIKE '%timeout_secs%'",
+            [],
+        )?;
+    } else {
+        conn.execute(
+            "ALTER TABLE task_queue ADD COLUMN timeout_secs INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (62, datetime('now'), 'Per-task claim TTL override on task_queue (timeout_secs)')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v63 (#8556): add `ephemeral_runs.truncated`.
+///
+/// The #8556 iteration-cap fix makes a capped worker return `Ok` with a
+/// delivered partial answer rather than `Err`, so the run record says
+/// `completed`. That erased the operator's only signal that the worker was
+/// cut off. A dedicated boolean keeps the existing `status` CHECK untouched.
+fn migrate_v63(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if !try_column_exists(conn, "ephemeral_runs", "truncated")? {
+        conn.execute(
+            "ALTER TABLE ephemeral_runs ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (63, datetime('now'), 'Add ephemeral_runs.truncated so a cap-delivered worker run is distinguishable from a full one (#8556)')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v64: indexes and an FTS rowid map for hot read and write paths.
+///
+/// `sessions(created_at)` serves `list_sessions_paginated`'s `ORDER BY created_at DESC LIMIT`, which `GET /api/sessions` runs on every dashboard poll, and the 24h window of `agents_stats_24h_bulk`.
+/// Without it every page was a full scan of `sessions` (whose rows carry the message blob) followed by a temp b-tree sort.
+/// `sessions(agent_id, created_at)` turns `agent_stats_24h`'s per-agent window counts into range seeks.
+/// `memories(deleted, agent_id, created_at)` and `memories(deleted, created_at)` let `SemanticStore::list_page` read one page in order instead of visiting every live memory and sorting.
+///
+/// `sessions_fts_map` records which `sessions_fts` rowid holds each session's index row.
+/// `session_id` is `UNINDEXED` in the FTS5 table and an FTS5 table has no secondary index, so `DELETE FROM sessions_fts WHERE session_id = ?` is a full scan of the index; `save_session` ran it on every save, holding the write lock for time proportional to the total number of sessions.
+/// With the map, the row is addressed by rowid.
+/// Duplicate FTS rows for one session are collapsed first so the backfill maps every session to its only row, and the `AFTER DELETE` trigger drops a session's map entry with the session, whichever delete path removes it.
+/// Only rows of live sessions are mapped: an orphan FTS row's session can never be deleted, so its map entry would never be dropped by the trigger (`reconcile_fts_index` removes such orphans at boot).
+/// A stale or missing entry is harmless: `save_session` checks the mapped row still belongs to the session and falls back to the scan otherwise.
+fn migrate_v64(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "
+        CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at);
+        CREATE INDEX IF NOT EXISTS idx_sessions_agent_created ON sessions(agent_id, created_at);
+        CREATE TABLE IF NOT EXISTS sessions_fts_map (
+            session_id TEXT PRIMARY KEY,
+            fts_rowid  INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TRIGGER IF NOT EXISTS sessions_fts_map_ad AFTER DELETE ON sessions BEGIN
+            DELETE FROM sessions_fts_map WHERE session_id = old.id;
+        END;
+        ",
+    )?;
+    // Every real database has both of these from v1 / v12, but the guards keep the step honest against a database stamped above the step that created them (the ladder tests build such schemas by hand).
+    if try_column_exists(conn, "memories", "deleted")? {
+        conn.execute_batch(
+            "
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_created ON memories(deleted, agent_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(deleted, created_at);
+            ",
+        )?;
+    }
+    if try_table_exists(conn, "sessions_fts")? {
+        conn.execute_batch(
+            "
+            DELETE FROM sessions_fts
+                WHERE rowid NOT IN (SELECT MAX(rowid) FROM sessions_fts GROUP BY session_id);
+            INSERT OR REPLACE INTO sessions_fts_map (session_id, fts_rowid)
+                SELECT session_id, rowid FROM sessions_fts
+                WHERE session_id IN (SELECT id FROM sessions);
+            ",
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (64, datetime('now'), 'sessions/memories created_at indexes + sessions_fts_map rowid map')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v65: admit the workflow engine's cancelled state without changing run data.
 ///
 /// v37's CHECK omitted this terminal state, so cancel_run's upsert failed and
 /// left a cancelled run pending on disk. The caller's transaction preserves the
 /// original table if any part of this rebuild fails. Keep all v37/v49/v56 columns,
 /// their values and the existing indexes; cancellation is not a failed run.
-fn migrate_v62(conn: &Connection) -> Result<(), rusqlite::Error> {
+///
+/// BossFang numbered this step 62 before upstream took 62-64, so a database already
+/// stamped 62 by a BossFang build never ran upstream's v62 (`task_queue.timeout_secs`):
+/// `run_step!` gates on `current_version < N`. The column is re-added here, guarded,
+/// so those databases are repaired instead of failing later on the first read of it.
+fn migrate_v65(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if !try_column_exists(conn, "task_queue", "timeout_secs")? {
+        conn.execute(
+            "ALTER TABLE task_queue ADD COLUMN timeout_secs INTEGER DEFAULT NULL",
+            [],
+        )?;
+    }
     // Preserve v56's handling of historical DBs stamped past v37 without its table.
     if try_table_exists(conn, "workflow_runs")? {
         conn.execute_batch(
@@ -1585,7 +1752,7 @@ fn migrate_v62(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
     conn.execute(
         "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
-         VALUES (62, datetime('now'), 'Allow cancelled state in workflow_runs persistence')",
+         VALUES (65, datetime('now'), 'Allow cancelled state in workflow_runs persistence')",
         [],
     )?;
     Ok(())
@@ -4890,8 +5057,8 @@ mod tests {
         // If `parent_recorded` did not default to 0, every agent that predates v54 would start positively claiming to be a root agent — a more confident wrong answer than the `null` the bug already produced.
         //
         // Simulates a real pre-v54 database: build the v40-era `agents` table, insert a row, stamp `user_version = 50`, then let the ladder run.
-        // Steps 51-54 all fire from 50, so the fixture also needs the tables 51 and 52 alter — `memories` and `group_roster` — even though this test asserts nothing about them.
-        // Their absence is not a v54 bug; a real database at user_version 50 has both.
+        // Steps 51-62 all fire from 50, so the fixture also needs the tables 51, 52, 61 and 62 alter — `memories`, `group_roster`, `sessions` and `task_queue` — even though this test asserts nothing about them.
+        // Their absence is not a v54 bug; a real database at user_version 50 has all four.
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "
@@ -4924,6 +5091,17 @@ mod tests {
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE task_queue (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                task_type TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                priority INTEGER NOT NULL DEFAULT 0,
+                scheduled_at TEXT,
+                created_at TEXT NOT NULL,
+                completed_at TEXT
+            );
             CREATE TABLE migrations (
                 version INTEGER PRIMARY KEY,
                 applied_at TEXT NOT NULL,
@@ -4954,6 +5132,244 @@ mod tests {
             parent_recorded, 0,
             "a pre-v54 row must read as UNKNOWN lineage, not as a root agent"
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // v62: per-task claim TTL override (task_queue.timeout_secs)
+    // ---------------------------------------------------------------------
+
+    /// The column has to arrive on a board that already holds tasks — a
+    /// migration that only works on a fresh file has never run where it
+    /// matters. A pre-v62 row means "use the global TTL", which is `NULL`.
+    #[test]
+    fn migrate_v62_adds_timeout_column_to_an_existing_board() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO task_queue (id, agent_id, task_type, payload, status, created_at) \
+             VALUES ('existing', 'agent-1', 'work', x'00', 'in_progress', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        assert!(
+            column_exists(&conn, "task_queue", "timeout_secs"),
+            "v62 must add task_queue.timeout_secs"
+        );
+        let timeout: Option<i64> = conn
+            .query_row(
+                "SELECT timeout_secs FROM task_queue WHERE id = 'existing'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            timeout.is_none(),
+            "a pre-existing task must inherit the global TTL, not acquire one of its own"
+        );
+    }
+
+    #[test]
+    fn migrate_v62_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        // The runner can legitimately replay a step after an interrupted
+        // upgrade, so a duplicate-column rerun must not fail.
+        //
+        // The guard this exercises is `try_column_exists` at the top of
+        // `migrate_v62`, which is the only thing standing between a replay
+        // and `duplicate column name: timeout_secs`. A database that has
+        // climbed past 62 through a caller other than the ladder is stamped
+        // against a table that already has the column, and `run_migrations`
+        // will not call this again — so the rerun has to be issued directly.
+        migrate_v62(&conn).expect("v62 must survive a rerun");
+        assert!(column_exists(&conn, "task_queue", "timeout_secs"));
+    }
+
+    /// The renumber window: a database stamped at 61 by the build that ran
+    /// this step before #7752's v61 took the number.
+    ///
+    /// That database carries `timeout_secs` and reports `user_version = 61`,
+    /// which is also the stamp main's v61 leaves. The ladder gates on
+    /// `current_version < 61`, so `migrate_v61` is skipped for it and *only*
+    /// `migrate_v62` can reconcile `sessions.parent_session_id`; without that
+    /// repair the install boots on a valid-looking stamp and fails later, on
+    /// the first query that reads a column which is not there. The audit row
+    /// has to move with the column, or version 61 keeps describing the wrong
+    /// step for every operator who lists the ladder.
+    #[test]
+    fn migrate_v62_reconciles_a_database_stamped_at_61_by_the_pre_renumber_build() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Stand where that build left it: the timeout column is present, the
+        // real v61 never ran, and the audit ladder and pragma both say 61.
+        conn.execute("DROP INDEX IF EXISTS idx_sessions_parent", [])
+            .unwrap();
+        conn.execute("ALTER TABLE sessions DROP COLUMN parent_session_id", [])
+            .unwrap();
+        conn.execute("DELETE FROM migrations WHERE version > 60", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO migrations (version, applied_at, description) \
+             VALUES (61, datetime('now'), 'Per-task claim TTL override on task_queue (timeout_secs)')",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 61i64).unwrap();
+
+        assert!(
+            !try_column_exists(&conn, "sessions", "parent_session_id").unwrap(),
+            "the fixture must actually be missing the real v61 column"
+        );
+        assert!(try_column_exists(&conn, "task_queue", "timeout_secs").unwrap());
+
+        run_migrations(&conn).expect("a pre-renumber database must still open");
+
+        assert!(
+            try_column_exists(&conn, "sessions", "parent_session_id").unwrap(),
+            "v62 must reconcile the real v61 the renumber skipped"
+        );
+        assert!(try_column_exists(&conn, "task_queue", "timeout_secs").unwrap());
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+
+        let d61: String = conn
+            .query_row(
+                "SELECT description FROM migrations WHERE version = 61",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let d62: String = conn
+            .query_row(
+                "SELECT description FROM migrations WHERE version = 62",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            d61.contains("parent_session_id"),
+            "version 61 must describe the step that now owns the number, got: {d61}"
+        );
+        assert!(
+            d62.contains("timeout_secs"),
+            "version 62 must describe the timeout migration, got: {d62}"
+        );
+    }
+
+    /// BossFang shipped the workflow-cancelled step as v62 before upstream took 62-64 for the claim TTL, `ephemeral_runs.truncated` and the read-path indexes.
+    /// A BossFang database stamped 62 therefore never ran upstream's v62, because `run_step!` gates on `current_version < 62`, and would open on a valid stamp and then fail on the first read of `task_queue.timeout_secs`.
+    /// The renumbered v65 re-adds the column so that database is repaired rather than stranded.
+    #[test]
+    fn migrate_v65_repairs_a_database_stamped_at_62_by_the_bossfang_build() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Stand where that build left it: stamped 62 as the workflow-cancelled step, with none of upstream's 62-64 applied.
+        conn.execute("ALTER TABLE task_queue DROP COLUMN timeout_secs", [])
+            .unwrap();
+        conn.execute("ALTER TABLE ephemeral_runs DROP COLUMN truncated", [])
+            .unwrap();
+        conn.execute("DELETE FROM migrations WHERE version >= 62", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO migrations (version, applied_at, description) \
+             VALUES (62, datetime('now'), 'Allow cancelled state in workflow_runs persistence')",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 62i64).unwrap();
+        assert!(
+            !try_column_exists(&conn, "task_queue", "timeout_secs").unwrap(),
+            "the fixture must actually be missing upstream's v62 column"
+        );
+
+        run_migrations(&conn).expect("a BossFang-stamped-62 database must still open");
+
+        assert!(
+            try_column_exists(&conn, "task_queue", "timeout_secs").unwrap(),
+            "v65 must re-add the claim TTL column the renumber skipped"
+        );
+        assert!(
+            try_column_exists(&conn, "ephemeral_runs", "truncated").unwrap(),
+            "v63 still runs above a database stamped 62"
+        );
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        let applied: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM migrations WHERE version IN (63, 64, 65)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(applied, 3, "63, 64 and 65 must all be recorded");
+    }
+
+    // ---------------------------------------------------------------------
+    // v64: created_at indexes + sessions_fts_map
+    // ---------------------------------------------------------------------
+
+    /// An upgraded database must come out of v64 with exactly one FTS row per session and every one of them mapped, so `save_session` can address it by rowid.
+    /// Duplicate rows left by older drift are collapsed to the newest; otherwise the mapped delete would leave the other copy searchable.
+    #[test]
+    fn migrate_v64_dedupes_and_maps_existing_fts_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        // Simulate a pre-v64 database: no map, one session with two FTS rows, one with a single row, and an orphan FTS row whose session is gone.
+        conn.execute_batch(
+            "DROP TRIGGER sessions_fts_map_ad;
+             DROP TABLE sessions_fts_map;
+             INSERT INTO sessions (id, agent_id, messages, created_at, updated_at) VALUES ('s1', 'a', x'90', '2026-01-01', '2026-01-01');
+             INSERT INTO sessions (id, agent_id, messages, created_at, updated_at) VALUES ('s2', 'a', x'90', '2026-01-01', '2026-01-01');
+             INSERT INTO sessions_fts (session_id, agent_id, content) VALUES ('s1', 'a', 'old');
+             INSERT INTO sessions_fts (session_id, agent_id, content) VALUES ('s1', 'a', 'new');
+             INSERT INTO sessions_fts (session_id, agent_id, content) VALUES ('s2', 'a', 'only');
+             INSERT INTO sessions_fts (session_id, agent_id, content) VALUES ('gone', 'a', 'orphan');",
+        )
+        .unwrap();
+
+        migrate_v64(&conn).unwrap();
+        migrate_v64(&conn).expect("v64 must survive a rerun");
+
+        let s1: Vec<(i64, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT rowid, content FROM sessions_fts WHERE session_id = 's1'")
+                .unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+            rows.map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(s1.len(), 1, "duplicates must be collapsed: {s1:?}");
+        assert_eq!(s1[0].1, "new", "the newest row is the one kept");
+        let mapped: i64 = conn
+            .query_row(
+                "SELECT fts_rowid FROM sessions_fts_map WHERE session_id = 's1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(mapped, s1[0].0);
+        let mapped_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions_fts_map", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            mapped_count, 2,
+            "only live sessions are mapped; an orphan's entry would never be dropped by the delete trigger"
+        );
+        for index in [
+            "idx_sessions_created",
+            "idx_sessions_agent_created",
+            "idx_memories_agent_created",
+            "idx_memories_created",
+        ] {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?1",
+                    [index],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 1, "{index} must exist after v64");
+        }
     }
 }
 

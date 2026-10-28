@@ -1119,6 +1119,67 @@ async fn schedule_create_rejects_missing_cron() {
     );
 }
 
+/// A schedule change that never reached `cron_jobs.json` reverts on the next restart, so `/api/schedules` reports it as a 500 `cron_persist_failed`, the same contract as the `/api/cron/jobs` write handlers (#3515).
+#[tokio::test(flavor = "multi_thread")]
+async fn schedule_writes_report_cron_persist_failure() {
+    let h = boot().await;
+    let agent_id = spawn_test_agent(&h);
+    let (status, created) = json_request(
+        &h,
+        Method::POST,
+        "/api/schedules",
+        Some(serde_json::json!({
+            "name": "persist-probe",
+            "cron": "0 3 * * *",
+            "agent_id": agent_id.to_string(),
+            "message": "hello",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created:?}");
+    let id = created["id"].as_str().expect("schedule id").to_string();
+
+    // A non-empty directory where the persist file belongs makes the atomic rename fail.
+    let persist_path = h
+        ._state
+        .kernel
+        .home_dir()
+        .join("data")
+        .join("cron_jobs.json");
+    let _ = std::fs::remove_file(&persist_path);
+    std::fs::create_dir_all(persist_path.join("blocker")).unwrap();
+
+    let (status, body) = json_request(
+        &h,
+        Method::PUT,
+        &format!("/api/schedules/{id}"),
+        Some(serde_json::json!({"name": "persist-probe-renamed"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body:?}");
+    assert_eq!(body["code"], "cron_persist_failed", "{body:?}");
+
+    let (status, body) =
+        json_request(&h, Method::DELETE, &format!("/api/schedules/{id}"), None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body:?}");
+    assert_eq!(body["operation"], "delete", "{body:?}");
+
+    let (status, body) = json_request(
+        &h,
+        Method::POST,
+        "/api/schedules",
+        Some(serde_json::json!({
+            "name": "persist-probe-2",
+            "cron": "0 4 * * *",
+            "agent_id": agent_id.to_string(),
+            "message": "hello",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body:?}");
+    assert_eq!(body["operation"], "create", "{body:?}");
+}
+
 // ---------------------------------------------------------------------------
 // /api/cron/jobs
 // ---------------------------------------------------------------------------
@@ -2275,10 +2336,12 @@ async fn seed_workflow(h: &Harness) -> String {
 /// views of one store. The assertion reads the job back out of the scheduler
 /// rather than trusting the create response, so an echo of the request body
 /// cannot pass.
+///
+/// The schedule targets an agent rather than a workflow because `session_mode` is only accepted on agent-turn schedules (#8533).
 #[tokio::test(flavor = "multi_thread")]
 async fn schedule_create_persists_peer_id_session_mode_and_delivery() {
     let h = boot().await;
-    let workflow_id = seed_workflow(&h).await;
+    let agent_id = spawn_test_agent(&h);
 
     let (status, body) = json_request(
         &h,
@@ -2287,7 +2350,7 @@ async fn schedule_create_persists_peer_id_session_mode_and_delivery() {
         Some(serde_json::json!({
             "name": "routing-write",
             "cron": "0 9 * * 1-5",
-            "workflow_id": workflow_id,
+            "agent_id": agent_id.to_string(),
             "peer_id": "peer-42",
             "session_mode": "new",
             "delivery": {"kind": "channel", "channel": "telegram", "to": "12345"},
@@ -2327,6 +2390,78 @@ async fn schedule_create_persists_peer_id_session_mode_and_delivery() {
         }
         other => panic!("delivery must be the posted channel variant, got {other:?}"),
     }
+}
+
+/// `POST /api/schedules` refuses `session_mode` on a workflow schedule (#8533).
+///
+/// The cron dispatcher's workflow branch never reads `job.session_mode` — each step picks its session from `WorkflowStep.session_mode` or the target agent's manifest — so storing it would promise per-fire isolation that never happens.
+/// Both spellings are refused, the error names the field and points at the per-step setting, and nothing is left in the scheduler.
+#[tokio::test(flavor = "multi_thread")]
+async fn schedule_create_refuses_session_mode_on_a_workflow_schedule() {
+    let h = boot().await;
+    let workflow_id = seed_workflow(&h).await;
+
+    for mode in ["new", "persistent"] {
+        let (status, body) = json_request(
+            &h,
+            Method::POST,
+            "/api/schedules",
+            Some(serde_json::json!({
+                "name": "workflow-session-mode",
+                "cron": "0 9 * * 1-5",
+                "workflow_id": workflow_id,
+                "session_mode": mode,
+            })),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "session_mode={mode} on a workflow schedule must be a 400: {body:?}"
+        );
+        let message = body["error"]
+            .as_str()
+            .or_else(|| body["error"]["message"].as_str())
+            .unwrap_or_default();
+        assert!(message.contains("session_mode"), "{body:?}");
+        assert!(message.contains("WorkflowStep.session_mode"), "{body:?}");
+    }
+    assert!(
+        h._state.kernel.cron().list_all_jobs().is_empty(),
+        "a refused create must not leave a job behind"
+    );
+
+    // An explicit null is the same as omitting the field and stays accepted.
+    let (status, body) = json_request(
+        &h,
+        Method::POST,
+        "/api/schedules",
+        Some(serde_json::json!({
+            "name": "workflow-session-mode-null",
+            "cron": "0 9 * * 1-5",
+            "workflow_id": workflow_id,
+            "session_mode": null,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert!(body["session_mode"].is_null(), "{body:?}");
+
+    // PUT must not tell the caller to "recreate with the desired session_mode" when no workflow schedule can carry one.
+    let id = body["id"].as_str().expect("id present");
+    let (status, body) = json_request(
+        &h,
+        Method::PUT,
+        &format!("/api/schedules/{id}"),
+        Some(serde_json::json!({"session_mode": "new"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    let message = body["error"]
+        .as_str()
+        .or_else(|| body["error"]["message"].as_str())
+        .unwrap_or_default();
+    assert!(message.contains("WorkflowStep.session_mode"), "{body:?}");
 }
 
 /// Omitting the three fields keeps the historical defaults: no peer, no

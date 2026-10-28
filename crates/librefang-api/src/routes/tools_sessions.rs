@@ -605,7 +605,9 @@ pub async fn delete_session(
     // substrate directly leaked one tracker entry per ever-deleted session
     // for the daemon's lifetime — context-compression GC never runs on a
     // dead session.
-    match state.kernel.delete_session(session_id) {
+    // `ErrorTranslator` is `!Send`, so it must be gone before the await below.
+    drop(t);
+    match state.kernel.delete_session(session_id).await {
         Ok(removed) => {
             let removed_ids: Vec<String> = removed.iter().map(|sid| sid.0.to_string()).collect();
             (
@@ -847,11 +849,7 @@ pub async fn session_cleanup(State(state): State<Arc<AppState>>) -> impl IntoRes
     let mut total: u64 = 0;
 
     if cfg.retention_days > 0 {
-        match state
-            .kernel
-            .memory_substrate()
-            .cleanup_expired_sessions(cfg.retention_days)
-        {
+        match state.kernel.prune_expired_sessions(cfg.retention_days) {
             Ok(n) => total += n,
             Err(e) => return session_storage_error(e).into_json_tuple(),
         }
@@ -860,8 +858,7 @@ pub async fn session_cleanup(State(state): State<Arc<AppState>>) -> impl IntoRes
     if cfg.max_sessions_per_agent > 0 {
         match state
             .kernel
-            .memory_substrate()
-            .cleanup_excess_sessions(cfg.max_sessions_per_agent)
+            .prune_excess_sessions(cfg.max_sessions_per_agent)
         {
             Ok(n) => total += n,
             Err(e) => return session_storage_error(e).into_json_tuple(),

@@ -530,6 +530,20 @@ impl MemorySubstrate {
         self.structured.list_keys(agent_id)
     }
 
+    /// List the keys for an agent that begin with `prefix` and are not covered by `exclude_prefix`, at most `limit` of them.
+    ///
+    /// Used by the kernel's `memory_recall` miss hint (#8625) to name keys that do exist near the one an agent asked for, without loading the agent's whole key set to filter it here.
+    pub fn list_keys_with_prefix(
+        &self,
+        agent_id: AgentId,
+        prefix: &str,
+        exclude_prefix: Option<&str>,
+        limit: usize,
+    ) -> LibreFangResult<Vec<String>> {
+        self.structured
+            .list_keys_with_prefix(agent_id, prefix, exclude_prefix, limit)
+    }
+
     /// Delete a KV entry for an agent.
     pub fn structured_delete(&self, agent_id: AgentId, key: &str) -> LibreFangResult<()> {
         self.structured.delete(agent_id, key)
@@ -569,6 +583,14 @@ impl MemorySubstrate {
         value: serde_json::Value,
     ) -> LibreFangResult<bool> {
         self.structured.set_returning_existed(agent_id, key, value)
+    }
+
+    /// Read a session's scalar columns (owner, model override, token estimate, peer) without decoding its message history.
+    pub fn session_meta(
+        &self,
+        session_id: SessionId,
+    ) -> LibreFangResult<Option<crate::session::SessionMeta>> {
+        self.sessions.session_meta(session_id)
     }
 
     /// Get a session by ID.
@@ -746,13 +768,13 @@ impl MemorySubstrate {
         self.sessions.create_session_with_label(agent_id, label)
     }
 
-    /// Delete sessions older than `retention_days`. Returns count deleted.
-    pub fn cleanup_expired_sessions(&self, retention_days: u32) -> LibreFangResult<u64> {
+    /// Delete sessions older than `retention_days`. Returns the ids deleted.
+    pub fn cleanup_expired_sessions(&self, retention_days: u32) -> LibreFangResult<Vec<SessionId>> {
         self.sessions.cleanup_expired_sessions(retention_days)
     }
 
-    /// For each agent, keep only the newest `max_per_agent` sessions. Returns count deleted.
-    pub fn cleanup_excess_sessions(&self, max_per_agent: u32) -> LibreFangResult<u64> {
+    /// For each agent, keep only the newest `max_per_agent` sessions. Returns the ids deleted.
+    pub fn cleanup_excess_sessions(&self, max_per_agent: u32) -> LibreFangResult<Vec<SessionId>> {
         self.sessions.cleanup_excess_sessions(max_per_agent)
     }
 
@@ -1156,17 +1178,29 @@ impl MemorySubstrate {
 
     /// Post a new task to the shared queue, subject to `caps`. Returns the task ID.
     ///
+    /// `priority` orders the claim queue — higher is served first, ties broken
+    /// by age (see [`Self::task_claim`]). `0` is the historical value every
+    /// pre-existing row carries, so it is the neutral default.
+    ///
+    /// `timeout_secs` overrides `[task_board] claim_ttl_secs` for this row
+    /// alone: `None` inherits the global, `Some(0)` means "never reclaim",
+    /// and `Some(n)` reclaims after `n` seconds held `in_progress`
+    /// (see [`Self::task_reset_stuck`]).
+    ///
     /// Returns [`LibreFangError::QuotaExceeded`] — HTTP 429 — when a non-zero cap is already reached, which is what makes `[queue] max_depth_per_agent` / `max_depth_global` mean anything (#8219).
     /// Before that the two knobs were declared, documented as "New tasks are rejected when full", echoed back by `GET /api/queue/status`, and read by nothing: an agent looping on the `task_post` tool filled the table for the life of the install.
     ///
     /// The counts and the INSERT run in one `IMMEDIATE` transaction.
     /// Counting outside it would let two concurrent posts against a cap of N both read N-1 and both insert, which is the failure a depth cap exists to prevent and the one a loop reaches first.
+    #[allow(clippy::too_many_arguments)]
     pub async fn task_post(
         &self,
         title: &str,
         description: &str,
         assigned_to: Option<&str>,
         created_by: Option<&str>,
+        priority: i64,
+        timeout_secs: Option<u32>,
         caps: TaskQueueCaps,
     ) -> LibreFangResult<String> {
         let conn = self.pool.clone();
@@ -1217,9 +1251,9 @@ impl MemorySubstrate {
             }
 
             tx.execute(
-                "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, title, description, assigned_to, created_by)
-                 VALUES (?1, ?2, ?3, ?4, 'pending', 0, ?5, ?6, ?7, ?8, ?9)",
-                rusqlite::params![id, &created_by, &title, b"", now, title, description, assigned_to, created_by],
+                "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, title, description, assigned_to, created_by, timeout_secs)
+                 VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                rusqlite::params![id, &created_by, &title, b"", priority, now, title, description, assigned_to, created_by, timeout_secs],
             )
             .map_err(LibreFangError::memory)?;
             tx.commit().map_err(LibreFangError::memory)?;
@@ -1254,9 +1288,19 @@ impl MemorySubstrate {
     }
 
     /// Mark a task as completed with a result string.
-    pub async fn task_complete(&self, task_id: &str, result: &str) -> LibreFangResult<()> {
+    ///
+    /// Only the agent currently holding the claim may complete it: the UPDATE requires `assigned_to = completed_by`, the id `task_claim` stamped on the row.
+    /// That keeps the check atomic, so neither another agent nor a stale worker whose claim the stuck-task sweeper already handed to someone else can overwrite the result.
+    /// A missing row is `ResourceNotFound`; a row that is not `in_progress`, or is claimed by a different agent, is `Conflict`.
+    pub async fn task_complete(
+        &self,
+        task_id: &str,
+        completed_by: &str,
+        result: &str,
+    ) -> LibreFangResult<()> {
         let conn = self.pool.clone();
         let task_id = task_id.to_string();
+        let completed_by = completed_by.to_string();
         let result = result.to_string();
 
         tokio::task::spawn_blocking(move || {
@@ -1264,15 +1308,51 @@ impl MemorySubstrate {
             let now = now_chrono.to_rfc3339();
             let now_unix = now_chrono.timestamp();
             let db = conn.get().map_err(LibreFangError::memory)?;
-            let payload = task_dispatch::native_payload(&db, &task_id)?
-                .ok_or_else(|| LibreFangError::InvalidInput("task requires its original harness control".into()))?;
+            let Some(payload) = task_dispatch::native_payload(&db, &task_id)? else {
+                // `native_payload` is `None` both for a missing row and for one owned by a
+                // selected (non-native) harness. Only the latter is refused for lacking its
+                // original control; a missing row keeps the typed not-found contract.
+                use rusqlite::OptionalExtension as _;
+                let exists: Option<i64> = db
+                    .query_row("SELECT 1 FROM task_queue WHERE id = ?1", rusqlite::params![task_id], |row| row.get(0))
+                    .optional()
+                    .map_err(LibreFangError::memory)?;
+                return Err(match exists {
+                    None => LibreFangError::ResourceNotFound {
+                        kind: "task".to_string(),
+                        id: task_id,
+                    },
+                    Some(_) => LibreFangError::InvalidInput("task requires its original harness control".into()),
+                });
+            };
             // `finished_at` is the unix-epoch column the retention sweep reads (#3466).
             let rows = db.execute(
-                "UPDATE task_queue SET status = 'completed', result = ?2, completed_at = ?3, finished_at = ?4, claimed_at = NULL WHERE id = ?1 AND status = 'in_progress' AND payload = ?5",
-                rusqlite::params![task_id, result, now, now_unix, payload],
+                "UPDATE task_queue SET status = 'completed', result = ?2, completed_at = ?3, finished_at = ?4, claimed_at = NULL WHERE id = ?1 AND status = 'in_progress' AND payload = ?5 AND assigned_to = ?6",
+                rusqlite::params![task_id, result, now, now_unix, payload, completed_by],
             ).map_err(LibreFangError::memory)?;
             if rows == 0 {
-                return Err(LibreFangError::Internal(format!("Task not active: {task_id}")));
+                // Classify the miss so the caller gets a typed error instead of an opaque internal one.
+                use rusqlite::OptionalExtension as _;
+                let current: Option<(String, String)> = db
+                    .query_row(
+                        "SELECT status, assigned_to FROM task_queue WHERE id = ?1",
+                        rusqlite::params![task_id],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .optional()
+                    .map_err(LibreFangError::memory)?;
+                return Err(match current {
+                    None => LibreFangError::ResourceNotFound {
+                        kind: "task".to_string(),
+                        id: task_id,
+                    },
+                    Some((status, _)) if status != "in_progress" => {
+                        LibreFangError::Conflict(format!("Task not active: {task_id}"))
+                    }
+                    Some((_, claimer)) => LibreFangError::Conflict(format!(
+                        "Task {task_id} is claimed by another agent ({claimer})"
+                    )),
+                });
             }
             Ok(())
         })
@@ -1423,7 +1503,7 @@ impl MemorySubstrate {
                 ),
             };
             let sql = format!(
-                "SELECT id, title, description, status, assigned_to, created_by, created_at, completed_at, result, claimed_at FROM task_queue{where_sql} ORDER BY created_at DESC{window}"
+                "SELECT id, title, description, status, assigned_to, created_by, created_at, completed_at, result, claimed_at, priority, timeout_secs FROM task_queue{where_sql} ORDER BY created_at DESC{window}"
             );
 
             let mut stmt = db.prepare(&sql).map_err(LibreFangError::memory)?;
@@ -1439,6 +1519,8 @@ impl MemorySubstrate {
                     "completed_at": row.get::<_, Option<String>>(7).unwrap_or(None),
                     "result": row.get::<_, Option<String>>(8).unwrap_or(None),
                     "claimed_at": row.get::<_, Option<String>>(9).unwrap_or(None),
+                    "priority": row.get::<_, i64>(10).unwrap_or(0),
+                    "timeout_secs": row.get::<_, Option<u32>>(11).unwrap_or(None),
                 }))
             }).map_err(LibreFangError::memory)?;
 
@@ -1453,8 +1535,16 @@ impl MemorySubstrate {
     }
 
     /// Reset `in_progress` tasks whose worker stalled without calling
-    /// `task_complete` — fixes issue #2923. A task is considered stuck when
-    /// `claimed_at` is older than `ttl_secs` seconds from now.
+    /// `task_complete` — fixes issue #2923. A task is considered stuck when it
+    /// has been held longer than its **effective TTL**.
+    ///
+    /// The effective TTL is the row's own `timeout_secs` when it has one, and
+    /// `ttl_secs` (the global `[task_board] claim_ttl_secs`) otherwise. An
+    /// effective TTL of `0` means "never reclaim", so passing `ttl_secs = 0`
+    /// keeps the historical global-disable behaviour for every row that did
+    /// not opt in, while a row that declared its own non-zero timeout is still
+    /// swept — the per-task value is a more specific statement than the
+    /// global.
     ///
     /// When `max_retries > 0`: tasks that have already been reset that many
     /// times are marked `failed` instead of pending, preventing infinite retry
@@ -1471,23 +1561,32 @@ impl MemorySubstrate {
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
 
-            let cutoff = chrono::Utc::now()
-                - chrono::Duration::from_std(std::time::Duration::from_secs(ttl_secs))
-                    .unwrap_or_else(|_| chrono::Duration::seconds(0));
-            let cutoff_str = cutoff.to_rfc3339();
+            let now_rfc3339 = chrono::Utc::now().to_rfc3339();
+            // `claimed_at` is RFC3339 as written by `task_claim`, fractional
+            // seconds included. `strftime('%s', ...)` rounds that fraction to
+            // the nearest millisecond, half up, before truncating to a whole
+            // second — for fractions under .9995 that is effectively a floor,
+            // which discards up to a second of a claim's age on both sides of
+            // the comparison and can read a claim as either older or younger
+            // than it really is. `julianday` keeps the fractional part, so the
+            // elapsed-seconds arithmetic below is precise to the millisecond
+            // rather than floored to the second.
+            let global_ttl = ttl_secs as i64;
 
             let mut stmt = db
                 .prepare(
-                    "SELECT id, COALESCE(retry_count, 0) FROM task_queue \
+                    "SELECT id, COALESCE(retry_count, 0), claimed_at FROM task_queue \
                      WHERE status = 'in_progress' \
                        AND claimed_at IS NOT NULL \
-                       AND claimed_at < ?1",
+                       AND COALESCE(timeout_secs, ?1) > 0 \
+                       AND (julianday(?2) - julianday(claimed_at)) * 86400.0 \
+                           >= COALESCE(timeout_secs, ?1)",
                 )
                 .map_err(LibreFangError::memory)?;
 
-            let stuck: Vec<(String, u32)> = stmt
-                .query_map(rusqlite::params![cutoff_str], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+            let stuck: Vec<(String, u32, String)> = stmt
+                .query_map(rusqlite::params![global_ttl, now_rfc3339], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?, row.get::<_, String>(2)?))
                 })
                 .map_err(LibreFangError::memory)?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -1498,7 +1597,7 @@ impl MemorySubstrate {
             }
 
             let mut reset_ids = Vec::new();
-            for (id, retries) in &stuck {
+            for (id, retries, claimed_at) in &stuck {
                 let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, id)? else { continue; };
                 let exhausted = max_retries > 0 && *retries >= max_retries;
                 let changed = if exhausted {
@@ -1508,8 +1607,8 @@ impl MemorySubstrate {
                          SET status = 'failed', assigned_to = '', claimed_at = NULL, \
                              finished_at = ?2, payload = ?5, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?3 AND claimed_at < ?4",
-                        rusqlite::params![id, now_unix, payload, cutoff_str, native],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?3 AND claimed_at = ?4",
+                        rusqlite::params![id, now_unix, payload, claimed_at, native],
                     )
                     .map_err(LibreFangError::memory)?
                 } else {
@@ -1517,8 +1616,8 @@ impl MemorySubstrate {
                         "UPDATE task_queue \
                          SET status = 'pending', assigned_to = '', claimed_at = NULL, payload = ?4, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?2 AND claimed_at < ?3",
-                        rusqlite::params![id, payload, cutoff_str, native],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?2 AND claimed_at = ?3",
+                        rusqlite::params![id, payload, claimed_at, native],
                     )
                     .map_err(LibreFangError::memory)?
                 };
@@ -1541,7 +1640,7 @@ impl MemorySubstrate {
                 .prepare(
                     "SELECT id, title, description, status, assigned_to, created_by, \
                      created_at, completed_at, result, claimed_at, \
-                     COALESCE(retry_count, 0) \
+                     COALESCE(retry_count, 0), priority, timeout_secs \
                      FROM task_queue WHERE id = ?1",
                 )
                 .map_err(LibreFangError::memory)?;
@@ -1559,6 +1658,8 @@ impl MemorySubstrate {
                         "result":       row.get::<_, Option<String>>(8).unwrap_or(None),
                         "claimed_at":   row.get::<_, Option<String>>(9).unwrap_or(None),
                         "retry_count":  row.get::<_, u32>(10).unwrap_or(0),
+                        "priority":     row.get::<_, i64>(11).unwrap_or(0),
+                        "timeout_secs": row.get::<_, Option<u32>>(12).unwrap_or(None),
                     }))
                 })
                 .map_err(LibreFangError::memory)?;
@@ -1819,6 +1920,20 @@ impl MemorySubstrate {
         .map_err(|e| LibreFangError::Internal(e.to_string()))?
     }
 
+    /// Async wrapper for [`Self::write_jsonl_mirror`].
+    ///
+    /// The mirror re-serializes the whole session on every turn, so on a long session it is real blocking file I/O and must not run on a Tokio worker.
+    pub async fn write_jsonl_mirror_async(
+        &self,
+        session: Session,
+        sessions_dir: std::path::PathBuf,
+    ) -> Result<(), std::io::Error> {
+        let store = self.sessions.clone();
+        tokio::task::spawn_blocking(move || store.write_jsonl_mirror(&session, &sessions_dir))
+            .await
+            .map_err(std::io::Error::other)?
+    }
+
     /// Async wrapper for [`Self::vacuum_if_shrank`]. VACUUM rewrites the
     /// whole DB file and can take seconds — keeping it on the blocking
     /// pool is even more important than for the small CRUD wrappers above.
@@ -2032,6 +2147,8 @@ mod tests {
                     "body",
                     Some(assignee),
                     Some("boss"),
+                    0,
+                    None,
                     TaskQueueCaps::UNLIMITED,
                 )
                 .await
@@ -2045,7 +2162,7 @@ mod tests {
             .expect("claim")
             .expect("a pending task to claim");
         substrate
-            .task_complete(claimed["id"].as_str().unwrap(), "done")
+            .task_complete(claimed["id"].as_str().unwrap(), "agent-1", "done")
             .await
             .expect("complete");
         {
@@ -2105,6 +2222,40 @@ mod tests {
         // Zero is the documented "no cap" value and must survive as zero rather than being coerced back to the default.
         substrate.set_max_episodic_chars(0);
         assert_eq!(substrate.max_episodic_chars(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_write_jsonl_mirror_async_runs_off_the_worker() {
+        // A current-thread runtime has a single worker: a task spawned before the mirror write can only run while that write yields, which the old synchronous call never did.
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let mut session = substrate.create_session(AgentId::new()).unwrap();
+        for i in 0..200 {
+            session.push_message(librefang_types::message::Message::user(format!(
+                "message {i}"
+            )));
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observer = {
+            let ran = Arc::clone(&ran);
+            tokio::spawn(async move { ran.store(true, std::sync::atomic::Ordering::SeqCst) })
+        };
+        substrate
+            .write_jsonl_mirror_async(session.clone(), dir.path().join("sessions"))
+            .await
+            .unwrap();
+        assert!(
+            ran.load(std::sync::atomic::Ordering::SeqCst),
+            "the mirror write must yield the worker while the file is written"
+        );
+        observer.await.unwrap();
+        let written = std::fs::read_to_string(
+            dir.path()
+                .join("sessions")
+                .join(format!("{}.jsonl", session.id.0)),
+        )
+        .unwrap();
+        assert_eq!(written.lines().count(), 200);
     }
 
     #[tokio::test]
@@ -2219,6 +2370,8 @@ mod tests {
                 "Check the auth module for issues",
                 Some("auditor"),
                 Some("orchestrator"),
+                0,
+                None,
                 TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -2241,6 +2394,8 @@ mod tests {
                 "Security audit the /api/login endpoint",
                 Some("auditor"),
                 None,
+                0,
+                None,
                 TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -2258,7 +2413,7 @@ mod tests {
 
         // Complete the task
         substrate
-            .task_complete(&task_id, "No vulnerabilities found")
+            .task_complete(&task_id, "auditor", "No vulnerabilities found")
             .await
             .unwrap();
 
@@ -2301,6 +2456,8 @@ mod tests {
                 "Race target",
                 "Claim me exactly once",
                 Some("worker"),
+                None,
+                0,
                 None,
                 TaskQueueCaps::UNLIMITED,
             )
@@ -2365,6 +2522,8 @@ mod tests {
                     "claim me",
                     Some("worker"),
                     None,
+                    0,
+                    None,
                     TaskQueueCaps::UNLIMITED,
                 )
                 .await
@@ -2422,6 +2581,8 @@ mod tests {
                 "Check for anomalies",
                 Some("researcher"),
                 None,
+                0,
+                None,
                 TaskQueueCaps::UNLIMITED,
             )
             .await
@@ -2463,6 +2624,8 @@ mod tests {
                 "Long task",
                 "Takes forever",
                 Some("worker"),
+                None,
+                0,
                 None,
                 TaskQueueCaps::UNLIMITED,
             )
@@ -2518,6 +2681,63 @@ mod tests {
         assert!(reset_again.is_empty());
     }
 
+    /// Regression guard for the `strftime` → `julianday` fix on the sweep's
+    /// claim-age comparison.
+    ///
+    /// SQLite does not truncate the fractional second `strftime('%s', ...)`
+    /// drops — it rounds to the nearest millisecond, half up, before
+    /// truncating (`computeJD` in the SQLite source: `p->iJD += ... +
+    /// (sqlite3_int64)(p->s*1000 + 0.5)`), so only fractions below `.9995`
+    /// floor the way the old comment assumed; `.999999999` rounds *up* to
+    /// the next second instead and happens to cancel the bug out, which is
+    /// why an earlier version of this test used exactly that value and
+    /// passed against the pre-fix query too. `.999` stays under the
+    /// rounding threshold and reproduces the bug.
+    ///
+    /// This checks the two literal boolean expressions directly rather than
+    /// calling `task_reset_stuck`: that function reads `chrono::Utc::now()`
+    /// internally, and no fixed `claimed_at` can be pinned to a controlled
+    /// sub-second offset from a "now" the test does not control — any such
+    /// test is flaky by construction (verified: the discarded `.timestamp()`
+    /// truncation on the "now" side left up to ~1s of uncontrolled slack).
+    /// A fixed pair of timestamps sidesteps the wall clock entirely.
+    #[test]
+    fn task_reset_stuck_query_is_subsecond_precise_not_floored_to_a_second() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let claimed_at = "2026-09-08T21:32:23.999000000+00:00";
+        let now = "2026-09-08T21:32:25.000000000+00:00";
+        let ttl = 2i64;
+
+        // The pre-fix comparison: `CAST(strftime('%s', claimed_at) AS
+        // INTEGER) + ttl <= now_unix`, `now_unix` likewise via `strftime`.
+        let old_would_reset: bool = conn
+            .query_row(
+                "SELECT CAST(strftime('%s', ?1) AS INTEGER) + ?3 \
+                     <= CAST(strftime('%s', ?2) AS INTEGER)",
+                rusqlite::params![claimed_at, now, ttl],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            old_would_reset,
+            "fixture must reproduce the bug: the pre-fix query has to \
+             flag a claim that is only ~1s old as past a 2s deadline"
+        );
+
+        // The comparison `task_reset_stuck` ships today.
+        let new_would_reset: bool = conn
+            .query_row(
+                "SELECT (julianday(?2) - julianday(?1)) * 86400.0 >= ?3",
+                rusqlite::params![claimed_at, now, ttl],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            !new_would_reset,
+            "a claim ~1s old under a 2s TTL must not be flagged stuck"
+        );
+    }
+
     #[tokio::test]
     async fn task_reset_stuck_surfaces_corrupt_retry_count() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
@@ -2526,6 +2746,8 @@ mod tests {
                 "Corrupt task",
                 "Must not be skipped",
                 Some("worker"),
+                None,
+                0,
                 None,
                 TaskQueueCaps::UNLIMITED,
             )
@@ -2707,14 +2929,25 @@ mod tests {
     async fn test_task_complete_stamps_finished_at() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let task_id = substrate
-            .task_post("t", "d", Some("worker"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "t",
+                "d",
+                Some("worker"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
         let _ = substrate
             .task_claim("worker", Some("worker"))
             .await
             .unwrap();
-        substrate.task_complete(&task_id, "ok").await.unwrap();
+        substrate
+            .task_complete(&task_id, "worker", "ok")
+            .await
+            .unwrap();
 
         let conn = substrate.pool.get().unwrap();
         let finished_at: Option<i64> = conn
@@ -2734,7 +2967,15 @@ mod tests {
     async fn test_task_complete_cannot_revive_cancelled_claim() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let task_id = substrate
-            .task_post("t", "d", Some("worker"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "t",
+                "d",
+                Some("worker"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
         substrate
@@ -2747,12 +2988,89 @@ mod tests {
             .unwrap();
 
         assert!(substrate
-            .task_complete(&task_id, "late result")
+            .task_complete(&task_id, "worker", "late result")
             .await
             .is_err());
         let task = substrate.task_get(&task_id).await.unwrap().unwrap();
         assert_eq!(task["status"], "cancelled");
         assert_ne!(task["result"], "late result");
+    }
+
+    /// Only the claim holder may complete a task; any other caller gets a typed `Conflict` and the row is untouched.
+    #[tokio::test]
+    async fn test_task_complete_rejects_non_claimer() {
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let task_id = substrate
+            .task_post("t", "d", Some("a"), None, 0, None, TaskQueueCaps::UNLIMITED)
+            .await
+            .unwrap();
+        substrate.task_claim("a", Some("a")).await.unwrap();
+
+        let err = substrate
+            .task_complete(&task_id, "b", "forged")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, LibreFangError::Conflict(_)), "got {err:?}");
+        let task = substrate.task_get(&task_id).await.unwrap().unwrap();
+        assert_eq!(task["status"], "in_progress");
+        assert_eq!(task["assigned_to"], "a");
+        assert_ne!(task["result"], "forged");
+
+        substrate
+            .task_complete(&task_id, "a", "real")
+            .await
+            .unwrap();
+        let task = substrate.task_get(&task_id).await.unwrap().unwrap();
+        assert_eq!(task["status"], "completed");
+        assert_eq!(task["result"], "real");
+    }
+
+    /// A worker whose claim expired and was handed to another worker by the stuck-task sweeper must not be able to complete the re-claimed row.
+    #[tokio::test]
+    async fn test_task_complete_rejects_stale_claimer_after_ttl_reset() {
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let task_id = substrate
+            .task_post("t", "d", None, None, 0, None, TaskQueueCaps::UNLIMITED)
+            .await
+            .unwrap();
+        substrate.task_claim("a", Some("a")).await.unwrap();
+        {
+            let conn = substrate.pool.get().unwrap();
+            let five_min_ago = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
+            conn.execute(
+                "UPDATE task_queue SET claimed_at = ?1 WHERE id = ?2",
+                rusqlite::params![five_min_ago, task_id],
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            substrate.task_reset_stuck(60, 0).await.unwrap(),
+            vec![task_id.clone()]
+        );
+        let reclaimed = substrate.task_claim("b", Some("b")).await.unwrap();
+        assert_eq!(reclaimed.unwrap()["id"], task_id);
+
+        let err = substrate
+            .task_complete(&task_id, "a", "late")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, LibreFangError::Conflict(_)), "got {err:?}");
+        let task = substrate.task_get(&task_id).await.unwrap().unwrap();
+        assert_eq!(task["status"], "in_progress");
+        assert_eq!(task["assigned_to"], "b");
+    }
+
+    #[tokio::test]
+    async fn test_task_complete_unknown_task_is_not_found() {
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let err = substrate
+            .task_complete("no-such-task", "a", "x")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, LibreFangError::ResourceNotFound { .. }),
+            "got {err:?}"
+        );
     }
 
     #[tokio::test]
@@ -2820,7 +3138,15 @@ mod tests {
     async fn test_task_cancel_stamps_finished_at() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let task_id = substrate
-            .task_post("t", "d", Some("worker"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "t",
+                "d",
+                Some("worker"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
 
@@ -2855,7 +3181,15 @@ mod tests {
     async fn test_task_reset_to_pending_clears_finished_at() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let task_id = substrate
-            .task_post("t", "d", Some("worker"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "t",
+                "d",
+                Some("worker"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
 
@@ -2894,7 +3228,15 @@ mod tests {
     async fn test_task_reset_rejects_in_progress_to_prevent_duplicate_execution() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let task_id = substrate
-            .task_post("t", "d", Some("worker"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "t",
+                "d",
+                Some("worker"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
         {
@@ -3309,13 +3651,13 @@ mod tests {
 
         for i in 0..2 {
             substrate
-                .task_post(&format!("t{i}"), "d", None, None, caps)
+                .task_post(&format!("t{i}"), "d", None, None, 0, None, caps)
                 .await
                 .unwrap_or_else(|e| panic!("post {i} should be accepted: {e}"));
         }
 
         let err = substrate
-            .task_post("over", "d", None, None, caps)
+            .task_post("over", "d", None, None, 0, None, caps)
             .await
             .expect_err("the third post exceeds the cap");
         assert!(
@@ -3335,17 +3677,17 @@ mod tests {
         };
 
         substrate
-            .task_post("alice-1", "d", Some("alice"), None, caps)
+            .task_post("alice-1", "d", Some("alice"), None, 0, None, caps)
             .await
             .unwrap();
         let err = substrate
-            .task_post("alice-2", "d", Some("alice"), None, caps)
+            .task_post("alice-2", "d", Some("alice"), None, 0, None, caps)
             .await
             .expect_err("alice is at her cap");
         assert!(matches!(err, LibreFangError::QuotaExceeded(_)), "{err:?}");
 
         substrate
-            .task_post("bob-1", "d", Some("bob"), None, caps)
+            .task_post("bob-1", "d", Some("bob"), None, 0, None, caps)
             .await
             .expect("bob's own queue is empty");
     }
@@ -3361,7 +3703,7 @@ mod tests {
 
         for i in 0..5 {
             substrate
-                .task_post(&format!("pool-{i}"), "d", None, None, caps)
+                .task_post(&format!("pool-{i}"), "d", None, None, 0, None, caps)
                 .await
                 .unwrap_or_else(|e| panic!("unassigned post {i}: {e}"));
         }
@@ -3378,11 +3720,11 @@ mod tests {
         };
 
         substrate
-            .task_post("first", "d", Some("worker"), None, caps)
+            .task_post("first", "d", Some("worker"), None, 0, None, caps)
             .await
             .unwrap();
         substrate
-            .task_post("second", "d", Some("worker"), None, caps)
+            .task_post("second", "d", Some("worker"), None, 0, None, caps)
             .await
             .expect_err("the queue is full while the first is pending");
 
@@ -3393,7 +3735,7 @@ mod tests {
             .expect("a pending task to claim");
 
         substrate
-            .task_post("second", "d", Some("worker"), None, caps)
+            .task_post("second", "d", Some("worker"), None, 0, None, caps)
             .await
             .expect("the claimed task has left the pending set");
     }
@@ -3414,7 +3756,7 @@ mod tests {
             let substrate = std::sync::Arc::clone(&substrate);
             handles.push(tokio::spawn(async move {
                 substrate
-                    .task_post(&format!("racer-{i}"), "d", None, None, caps)
+                    .task_post(&format!("racer-{i}"), "d", None, None, 0, None, caps)
                     .await
                     .is_ok()
             }));
@@ -3441,6 +3783,8 @@ mod tests {
                     "d",
                     Some("worker"),
                     None,
+                    0,
+                    None,
                     TaskQueueCaps::UNLIMITED,
                 )
                 .await
@@ -3459,7 +3803,15 @@ mod tests {
     async fn ttl_expiry_cancels_the_row_and_leaves_it_prunable() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         let id = substrate
-            .task_post("unclaimed", "d", None, None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "unclaimed",
+                "d",
+                None,
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
 
@@ -3493,7 +3845,7 @@ mod tests {
     async fn a_zero_ttl_expires_nothing() {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         substrate
-            .task_post("keep", "d", None, None, TaskQueueCaps::UNLIMITED)
+            .task_post("keep", "d", None, None, 0, None, TaskQueueCaps::UNLIMITED)
             .await
             .unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -3510,6 +3862,8 @@ mod tests {
                 "claim me",
                 "d",
                 Some("worker"),
+                None,
+                0,
                 None,
                 TaskQueueCaps::UNLIMITED,
             )
@@ -3535,7 +3889,15 @@ mod tests {
         let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
         for i in 0..7 {
             substrate
-                .task_post(&format!("t{i}"), "d", None, None, TaskQueueCaps::UNLIMITED)
+                .task_post(
+                    &format!("t{i}"),
+                    "d",
+                    None,
+                    None,
+                    0,
+                    None,
+                    TaskQueueCaps::UNLIMITED,
+                )
                 .await
                 .unwrap();
         }
@@ -3575,13 +3937,23 @@ mod tests {
                     "d",
                     Some("alice"),
                     None,
+                    0,
+                    None,
                     TaskQueueCaps::UNLIMITED,
                 )
                 .await
                 .unwrap();
         }
         substrate
-            .task_post("b0", "d", Some("bob"), None, TaskQueueCaps::UNLIMITED)
+            .task_post(
+                "b0",
+                "d",
+                Some("bob"),
+                None,
+                0,
+                None,
+                TaskQueueCaps::UNLIMITED,
+            )
             .await
             .unwrap();
 
