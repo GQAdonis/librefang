@@ -5551,6 +5551,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/boss-libre.png", get(|| async { "logo" }))

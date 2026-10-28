@@ -1540,6 +1540,9 @@ fn ensure_table_like(item: &mut toml_edit::Item) {
 /// `Option`-valued `max_history_messages` and `agent_max_iterations`. There is
 /// no TOML spelling of `None`, so the caller falls back to dropping the key,
 /// and the response then stops claiming an apply that did not happen.
+// Only the file write path calls this: `config_set_surreal` drops the override entry
+// and re-resolves from `config.toml`, so it never edits a top-level key in place.
+#[cfg(not(feature = "surreal-backend"))]
 fn config_default_top_level_item(key: &str) -> Option<toml_edit::Item> {
     let rendered = toml::to_string(&librefang_types::config::KernelConfig::default()).ok()?;
     let defaults: toml_edit::DocumentMut = rendered.parse().ok()?;

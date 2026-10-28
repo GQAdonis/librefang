@@ -2976,17 +2976,6 @@ export async function listModelRouterProfiles(): Promise<ModelRouterProfiles> {
  *  `"stable_mode"`: the kernel runs in Stable mode, which freezes model choice to `pinned_model` (else the manifest model) and runs neither the profile router nor the tier router. */
 export type ModelRoutingInertReason = "stable_mode";
 
-export async function getAgentModelRouting(agentId: string): Promise<AgentModelRouting> {
-  return get<AgentModelRouting>(`/api/agents/${encodeURIComponent(agentId)}/model_routing`);
-}
-
-export async function updateAgentModelRouting(
-  agentId: string,
-  routing: AgentModelRouting,
-): Promise<AgentModelRouting> {
-  return put<AgentModelRouting>(`/api/agents/${encodeURIComponent(agentId)}/model_routing`, routing);
-}
-
 export interface UarCatalogStatus {
   state: "ready" | "empty" | "unavailable";
   error?: string;

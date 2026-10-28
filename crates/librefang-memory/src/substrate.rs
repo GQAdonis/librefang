@@ -1308,8 +1308,23 @@ impl MemorySubstrate {
             let now = now_chrono.to_rfc3339();
             let now_unix = now_chrono.timestamp();
             let db = conn.get().map_err(LibreFangError::memory)?;
-            let payload = task_dispatch::native_payload(&db, &task_id)?
-                .ok_or_else(|| LibreFangError::InvalidInput("task requires its original harness control".into()))?;
+            let Some(payload) = task_dispatch::native_payload(&db, &task_id)? else {
+                // `native_payload` is `None` both for a missing row and for one owned by a
+                // selected (non-native) harness. Only the latter is refused for lacking its
+                // original control; a missing row keeps the typed not-found contract.
+                use rusqlite::OptionalExtension as _;
+                let exists: Option<i64> = db
+                    .query_row("SELECT 1 FROM task_queue WHERE id = ?1", rusqlite::params![task_id], |row| row.get(0))
+                    .optional()
+                    .map_err(LibreFangError::memory)?;
+                return Err(match exists {
+                    None => LibreFangError::ResourceNotFound {
+                        kind: "task".to_string(),
+                        id: task_id,
+                    },
+                    Some(_) => LibreFangError::InvalidInput("task requires its original harness control".into()),
+                });
+            };
             // `finished_at` is the unix-epoch column the retention sweep reads (#3466).
             let rows = db.execute(
                 "UPDATE task_queue SET status = 'completed', result = ?2, completed_at = ?3, finished_at = ?4, claimed_at = NULL WHERE id = ?1 AND status = 'in_progress' AND payload = ?5 AND assigned_to = ?6",
@@ -1560,7 +1575,7 @@ impl MemorySubstrate {
 
             let mut stmt = db
                 .prepare(
-                    "SELECT id, COALESCE(retry_count, 0) FROM task_queue \
+                    "SELECT id, COALESCE(retry_count, 0), claimed_at FROM task_queue \
                      WHERE status = 'in_progress' \
                        AND claimed_at IS NOT NULL \
                        AND COALESCE(timeout_secs, ?1) > 0 \
@@ -1569,9 +1584,9 @@ impl MemorySubstrate {
                 )
                 .map_err(LibreFangError::memory)?;
 
-            let stuck: Vec<(String, u32)> = stmt
+            let stuck: Vec<(String, u32, String)> = stmt
                 .query_map(rusqlite::params![global_ttl, now_rfc3339], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+                    Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?, row.get::<_, String>(2)?))
                 })
                 .map_err(LibreFangError::memory)?
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -1582,7 +1597,7 @@ impl MemorySubstrate {
             }
 
             let mut reset_ids = Vec::new();
-            for (id, retries) in &stuck {
+            for (id, retries, claimed_at) in &stuck {
                 let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, id)? else { continue; };
                 let exhausted = max_retries > 0 && *retries >= max_retries;
                 let changed = if exhausted {
@@ -1592,8 +1607,8 @@ impl MemorySubstrate {
                          SET status = 'failed', assigned_to = '', claimed_at = NULL, \
                              finished_at = ?2, payload = ?5, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?3 AND claimed_at < ?4",
-                        rusqlite::params![id, now_unix, payload, cutoff_str, native],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?3 AND claimed_at = ?4",
+                        rusqlite::params![id, now_unix, payload, claimed_at, native],
                     )
                     .map_err(LibreFangError::memory)?
                 } else {
@@ -1601,8 +1616,8 @@ impl MemorySubstrate {
                         "UPDATE task_queue \
                          SET status = 'pending', assigned_to = '', claimed_at = NULL, payload = ?4, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?2 AND claimed_at < ?3",
-                        rusqlite::params![id, payload, cutoff_str, native],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?2 AND claimed_at = ?3",
+                        rusqlite::params![id, payload, claimed_at, native],
                     )
                     .map_err(LibreFangError::memory)?
                 };

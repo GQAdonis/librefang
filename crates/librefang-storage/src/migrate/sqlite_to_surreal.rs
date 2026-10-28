@@ -712,6 +712,11 @@ fn copy_task_queue(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
             "finished_at".into(),
             json_opt(opt::<i64>(row, "finished_at")),
         );
+        // Per-task claim TTL (upstream v62). Absent on databases older than v62, which `opt` reads as NULL.
+        body.insert(
+            "timeout_secs".into(),
+            json_opt(opt::<i64>(row, "timeout_secs")),
+        );
         pending.push((id, payload, body));
     }
     drop(rows);
@@ -1165,7 +1170,8 @@ mod tests {
             CREATE TABLE task_queue (
                 id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_type TEXT NOT NULL, payload BLOB NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending', priority INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
-                created_at TEXT NOT NULL, completed_at TEXT, assigned_to TEXT, finished_at INTEGER DEFAULT NULL
+                created_at TEXT NOT NULL, completed_at TEXT, assigned_to TEXT, finished_at INTEGER DEFAULT NULL,
+                timeout_secs INTEGER DEFAULT NULL
             );",
         )
         .unwrap();
@@ -1248,8 +1254,8 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, assigned_to) \
-             VALUES ('t-1', ?1, 'task', x'', 'pending', 0, '2026-04-21', 'helper')",
+            "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, assigned_to, timeout_secs) \
+             VALUES ('t-1', ?1, 'task', x'', 'pending', 0, '2026-04-21', 'helper', 300)",
             params![AGENT],
         )
         .unwrap();
@@ -1454,6 +1460,7 @@ mod tests {
         assert!(experiment.get("started_at").is_none());
         let task = select_one(session, "task_queue", "t-1").await;
         assert_eq!(task["assigned_to"], "helper");
+        assert_eq!(task["timeout_secs"], 300, "a per-task claim TTL must survive the import");
         assert!(task.get("payload").is_none());
 
         // Idempotent: a second run converges on the same rows.

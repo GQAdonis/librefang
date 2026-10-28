@@ -216,7 +216,7 @@ async fn test_assemble_no_overflow() {
 async fn test_assemble_repairs_orphaned_tool_results_without_overflow() {
     use librefang_types::message::{ContentBlock, MessageContent, Role};
 
-    let engine = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+    let engine = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), make_semantic(), None);
     let mixed_delivery = Message {
         role: Role::User,
         content: MessageContent::Blocks(vec![
@@ -1096,7 +1096,7 @@ async fn test_default_engine_compact_honours_reasoning_echo_policy() {
         }),
         ..Default::default()
     };
-    let engine = DefaultContextEngine::new(config, make_memory(), None);
+    let engine = DefaultContextEngine::new(config, make_memory(), make_semantic(), None);
     let mut messages = Vec::new();
     for n in 0..4 {
         messages.push(Message::user(format!("question {n}")));
@@ -1206,14 +1206,15 @@ async fn test_engine_compaction_honours_the_callers_resolved_config() {
         Box::new(DefaultContextEngine::new(
             config.clone(),
             make_memory(),
+            make_semantic(),
             None,
         )),
         Box::new(SummaryContextEngine::new(
-            DefaultContextEngine::new(config.clone(), make_memory(), None),
+            DefaultContextEngine::new(config.clone(), make_memory(), make_semantic(), None),
             0.8,
         )),
         Box::new(StackedContextEngine::new(vec![Box::new(
-            DefaultContextEngine::new(config.clone(), make_memory(), None),
+            DefaultContextEngine::new(config.clone(), make_memory(), make_semantic(), None),
         )])),
     ];
     for engine in engines {

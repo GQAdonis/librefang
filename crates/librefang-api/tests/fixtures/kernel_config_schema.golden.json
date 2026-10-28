@@ -16,6 +16,13 @@
         }
       ]
     },
+    "a2a_public_url": {
+      "description": "Public base URL advertised by BossFang's A2A surface. This is distinct from every UAR service and model-provider endpoint.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "agent_max_iterations": {
       "description": "Operator override for the agent-loop iteration cap. When set, any agent without its own `[autonomous] max_iterations` uses this value instead of the compiled-in default (`AutonomousConfig::DEFAULT_MAX_ITERATIONS`). Lower it when running cheap models to bound cost per turn; raise it for long-horizon autonomous agents. `None` means \"use the compiled-in default\".",
       "type": [
@@ -5180,7 +5187,7 @@
           ]
         },
         "vector_backend": {
-          "description": "Vector store backend selection.\n\n| Value | Behaviour | |-------|-----------| | `\"auto\"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in; SQLite otherwise. | | `\"surreal\"` | Force SurrealDB HNSW+BM25 hybrid search via `SurrealSemanticBackend`. Requires `surreal-backend` feature. | | `\"sqlite\"` | Force SQLite cosine-similarity in-process store (`SqliteVectorStore`). | | `\"http\"` | Remote HTTP vector store (`HttpVectorStore`); see `vector_store_url`. |",
+          "description": "Vector store backend selection.\n\n| Value | Behaviour | |-------|-----------| | `\"auto\"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in and an embedding driver is configured; SQLite otherwise, and when the SurrealDB memory store cannot be opened (logged). | | `\"surreal\"` | SurrealDB HNSW index in the surreal-memory store (`SurrealSemanticBackend` as the substrate's `VectorStore`). Boot fails without the `surreal-backend` feature, an embedding driver, or a reachable store. | | `\"sqlite\"` | Force SQLite cosine-similarity in-process store (`SqliteVectorStore`). | | `\"http\"` | Remote HTTP vector store (`HttpVectorStore`); see `vector_store_url`. |\n\nSQLite remains the system of record in every mode; the external backend only ranks vectors, and recall hydrates its hits from SQLite.",
           "default": null,
           "type": [
             "string",
@@ -8336,6 +8343,13 @@
             "null"
           ]
         },
+        "instances": {
+          "description": "Named replaceable UAR service instances. Empty preserves the legacy singleton configuration above as `legacy-default`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UarServiceInstanceConfig"
+          }
+        },
         "model": {
           "description": "Default model in `provider/model` format (e.g. `\"openai/gpt-4o\"`).\n\nTakes precedence over `UAR_LLM__MODEL` and `LLM_MODEL` env vars.",
           "type": "string"
@@ -8359,6 +8373,18 @@
               "type": "null"
             }
           ]
+        },
+        "remote_auth_level": {
+          "description": "Authentication scope for `[uar.remote]`: `root`, `namespace`, or `database`. UAR namespace users provisioned by The Boss use the default.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "remote_durability_attested": {
+          "description": "Assert that the configured remote SurrealDB server uses persistent storage. Required before UAR admits durable cross-host work; merely reaching a ws:// endpoint does not establish server durability.",
+          "default": false,
+          "type": "boolean"
         },
         "restart": {
           "description": "Direct sidecar restart toggle.",
@@ -8403,6 +8429,13 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "selected_instance_id": {
+          "description": "Stable identifier of the instance selected for new UAR work.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "share_librefang_storage": {
           "description": "When `true`, UAR reuses the same `RemoteSurrealConfig` as `KernelConfig.storage` (with `namespace = \"uar\"` so isolation is preserved). Defaults to `false`.",
           "default": false,
@@ -8437,22 +8470,218 @@
         }
       }
     },
+    "UarServiceCredentialRefs": {
+      "description": "Opaque host-store references for credentials used by each UAR endpoint role. Values are resolved inside the host and are never sent to status or compatibility APIs as credential material.",
+      "type": "object",
+      "properties": {
+        "administration": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "console": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "UarServiceEndpoints": {
+      "description": "Named endpoint roles. The upstream model-provider endpoint remains separate from UAR's own runtime and administrative surfaces.",
+      "type": "object",
+      "properties": {
+        "administration": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "console": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_provider": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "UarServiceInstanceConfig": {
+      "description": "One configured, replaceable UAR service instance.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "credential_ref": {
+          "description": "Legacy all-role reference. New configurations should use [`Self::credential_refs`] so each endpoint role has explicit authority.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "credential_refs": {
+          "description": "Opaque host-store references such as `vault://uar_runtime`. Never raw credential values.",
+          "default": {
+            "runtime": null,
+            "administration": null,
+            "models": null,
+            "console": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarServiceCredentialRefs"
+            }
+          ]
+        },
+        "endpoints": {
+          "default": {
+            "model_provider": null,
+            "runtime": null,
+            "administration": null,
+            "models": null,
+            "console": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarServiceEndpoints"
+            }
+          ]
+        },
+        "id": {
+          "default": "",
+          "type": "string"
+        },
+        "ownership": {
+          "default": "external",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarServiceOwnership"
+            }
+          ]
+        },
+        "profile": {
+          "default": "uar.service-instance/1",
+          "type": "string"
+        },
+        "required_capabilities": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_profile": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sidecar": {
+          "default": {
+            "enabled": false,
+            "command": "",
+            "endpoint": null,
+            "restart": true,
+            "restart_initial_backoff_ms": 500,
+            "restart_max_backoff_ms": 30000,
+            "restart_max_retries": 10,
+            "restart_reset_after_secs": 60,
+            "ready_timeout_ms": 30000,
+            "shutdown_grace_secs": 5
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarSidecarConfig"
+            }
+          ]
+        },
+        "workspace": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspace_locality": {
+          "default": "local",
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarWorkspaceLocality"
+            }
+          ]
+        }
+      }
+    },
+    "UarServiceOwnership": {
+      "description": "Historical ownership vocabulary. BossFang connections always borrow UAR.",
+      "type": "string",
+      "enum": [
+        "managed",
+        "external"
+      ]
+    },
     "UarSidecarConfig": {
-      "description": "Supervision settings for UAR running as an out-of-process sidecar.\n\nUAR ships a purpose-built `uar-sidecar` binary that binds `127.0.0.1:0`, prints one `READY:{port}` line to stdout once its listener is bound, and exits cleanly on stdin EOF. When [`Self::enabled`] is set, the daemon spawns and supervises that binary; the driver then talks to it over loopback HTTP.\n\nField names deliberately mirror [`SidecarChannelConfig`] so operators learn one vocabulary for every supervised child process, not two.",
+      "description": "Historical sidecar fields retained for config migration. Only endpoint and readiness timeout participate in BossFang connections; no UAR process is owned.",
       "type": "object",
       "properties": {
         "command": {
-          "description": "Program to execute.\n\nEmpty (the default) or the bare stem `uar-sidecar` is *implicit*: the daemon resolves the bundled binary next to its own executable, then in `<home>/bin/`, and only then falls back to `PATH`. An absolute or relative path is *explicit* and is used verbatim — operator intent always wins.\n\nLeave this empty unless you are running a custom build. Pointing it at a binary that does not exist is the one way to reintroduce a `PATH` dependency.",
+          "description": "Migration-only historical executable selection; preserved, never executed.",
           "default": "",
           "type": "string"
         },
         "enabled": {
-          "description": "Spawn and supervise the UAR sidecar. Defaults to `false` — UAR is opt-in, matching the `uar-driver` cargo feature it pairs with.",
+          "description": "Migration-only historical process flag; never starts a UAR process.",
           "default": false,
           "type": "boolean"
         },
         "endpoint": {
-          "description": "Connect to an already-running UAR at this base URL instead of spawning one (e.g. `\"http://uar-svc.uar.svc.cluster.local:1906\"`).\n\n**Takes precedence over spawning.** When set, no child process is started and [`Self::command`] is ignored — the daemon health-checks the remote and uses it. This is how an existing standalone UAR deployment stays usable.\n\nNot to be confused with [`UarConfig::base_url`], which overrides the *LLM provider* endpoint passed through to liter-llm. This one addresses UAR itself.",
+          "description": "Existing UAR runtime endpoint, distinct from legacy upstream base_url. Only loopback HTTP or HTTPS connections are admitted.",
           "default": null,
           "type": [
             "string",
@@ -8460,7 +8689,7 @@
           ]
         },
         "ready_timeout_ms": {
-          "description": "How long to wait for the child's `READY:{port}` line before declaring the spawn failed. A child that never announces itself must not hang boot.",
+          "description": "Readiness request timeout for the selected existing endpoint.",
           "default": 30000,
           "type": "integer",
           "format": "uint64",
@@ -8476,7 +8705,7 @@
           "minimum": 0.0
         },
         "restart": {
-          "description": "Restart the sidecar when it exits unexpectedly.",
+          "description": "Migration-only historical restart flag; BossFang never restarts UAR.",
           "default": true,
           "type": "boolean"
         },
@@ -8516,6 +8745,14 @@
           "minimum": 0.0
         }
       }
+    },
+    "UarWorkspaceLocality": {
+      "description": "Declared locality of the workspace used by one UAR instance.",
+      "type": "string",
+      "enum": [
+        "local",
+        "remote"
+      ]
     },
     "UpdateChannel": {
       "description": "CLI update channel (like Apple software update channels).\n\nControls which GitHub releases are considered for `librefang update`: - **Stable**: only non-prerelease tags (default). - **Beta**: stable + beta tags (excludes `-rc`). - **Rc**: all tags including release candidates.",

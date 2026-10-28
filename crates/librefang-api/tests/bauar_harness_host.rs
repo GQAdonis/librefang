@@ -78,6 +78,8 @@ async fn command(
                     "Bound safe fixture effect once.",
                     Some(&agent_id),
                     None,
+                    0,
+                    None,
                     librefang_memory::TaskQueueCaps::UNLIMITED,
                 )
                 .await

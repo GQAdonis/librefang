@@ -3902,7 +3902,7 @@ mod tests {
     /// Every soft-delete path on the store must remove the vector from the external backend; otherwise forgotten content stays searchable there and dead vectors take live ones' top-k slots.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn forget_paths_delete_from_external_vector_store() {
-        let mut store = setup();
+        let store = setup();
         let vs = Arc::new(RecordingVectorStore {
             inserted: std::sync::Mutex::new(Vec::new()),
         });
@@ -3946,7 +3946,7 @@ mod tests {
     /// A vector whose row was soft-deleted behind the store's back (consolidation, decay) must not starve a `limit`-sized recall: the backend is over-fetched and the result truncated back to `limit`.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn vector_store_recall_overfetches_past_dead_hits() {
-        let mut store = setup();
+        let store = setup();
         let vs = Arc::new(RecordingVectorStore {
             inserted: std::sync::Mutex::new(Vec::new()),
         });
@@ -4850,7 +4850,7 @@ mod tests {
     /// The external VectorStore path has no bm25 of its own, so the keyword hits come from the local index and are fused the same way, still under the caller's filter.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn vector_store_recall_fuses_local_keyword_matches() {
-        let mut store = setup();
+        let store = setup();
         let agent = AgentId::new();
         let other_agent = AgentId::new();
         let mut neighbour_ids = Vec::new();

@@ -2286,7 +2286,7 @@ export function AgentsPage() {
             </p>
           ) : (
             <>
-              <UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={manifestEditorFormState.model.model} modelIds={formModelsQuery.data?.models.map(model => model.id)} />
+              <UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={manifestEditorFormState.model.model} modelIds={formModelsQuery.data?.models?.map(model => model.id)} />
             <AgentManifestForm
               modelSelector={manifestEditorFormState.model.provider === "uar" ? <UarTargetSettings agentId={agent.id} /> : undefined}
               value={manifestEditorFormState}
@@ -4370,7 +4370,7 @@ export function AgentsPage() {
 
           {createMode === "form" ? (
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 max-h-[60vh] overflow-y-auto pr-1">
-              {formModelsQueryProvider === "uar" && <div className="lg:col-span-2"><UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={formState.model.model} modelIds={formModelsQuery.data?.models.map(model => model.id)} /></div>}
+              {formModelsQueryProvider === "uar" && <div className="lg:col-span-2"><UarCatalogNotice provider={formModelsQueryProvider} status={formModelsQuery.data?.uar_catalog} loading={formModelsQuery.isLoading} selectedModel={formState.model.model} modelIds={formModelsQuery.data?.models?.map(model => model.id)} /></div>}
               <AgentManifestForm
                 value={formState}
                 onChange={setFormState}

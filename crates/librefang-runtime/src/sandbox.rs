@@ -383,6 +383,11 @@ pub(crate) fn new_guest_state(
         // `None` would compile and silently exempt every Component Model guest
         // from the rolling-hour byte quota while the classic path stays metered.
         network_meter: crate::network_meter::current(),
+        // Same reasoning as `network_meter`: the snapshot is task-local, so it has
+        // to be taken on the dispatching task. `Default::default()` would compile
+        // and drop the locks the dispatching turn holds, so an `agent_send` from a
+        // Component Model guest could not tell it was already inside them.
+        held_locks: crate::held_agent_locks::snapshot(),
         limiter: MemoryLimiter {
             max_bytes: config.max_memory_bytes,
         },

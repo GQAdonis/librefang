@@ -2259,6 +2259,7 @@ echo '{"greeting": "hello from shell"}'
             },
             prompt_context: None,
             source: None,
+            host_capabilities: Vec::new(),
             config: std::collections::HashMap::new(),
             config_vars: Vec::new(),
             env_passthrough: Vec::new(),

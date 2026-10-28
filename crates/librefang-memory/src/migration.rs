@@ -5257,6 +5257,54 @@ mod tests {
         );
     }
 
+    /// BossFang shipped the workflow-cancelled step as v62 before upstream took 62-64 for the claim TTL, `ephemeral_runs.truncated` and the read-path indexes.
+    /// A BossFang database stamped 62 therefore never ran upstream's v62, because `run_step!` gates on `current_version < 62`, and would open on a valid stamp and then fail on the first read of `task_queue.timeout_secs`.
+    /// The renumbered v65 re-adds the column so that database is repaired rather than stranded.
+    #[test]
+    fn migrate_v65_repairs_a_database_stamped_at_62_by_the_bossfang_build() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Stand where that build left it: stamped 62 as the workflow-cancelled step, with none of upstream's 62-64 applied.
+        conn.execute("ALTER TABLE task_queue DROP COLUMN timeout_secs", [])
+            .unwrap();
+        conn.execute("ALTER TABLE ephemeral_runs DROP COLUMN truncated", [])
+            .unwrap();
+        conn.execute("DELETE FROM migrations WHERE version >= 62", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO migrations (version, applied_at, description) \
+             VALUES (62, datetime('now'), 'Allow cancelled state in workflow_runs persistence')",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 62i64).unwrap();
+        assert!(
+            !try_column_exists(&conn, "task_queue", "timeout_secs").unwrap(),
+            "the fixture must actually be missing upstream's v62 column"
+        );
+
+        run_migrations(&conn).expect("a BossFang-stamped-62 database must still open");
+
+        assert!(
+            try_column_exists(&conn, "task_queue", "timeout_secs").unwrap(),
+            "v65 must re-add the claim TTL column the renumber skipped"
+        );
+        assert!(
+            try_column_exists(&conn, "ephemeral_runs", "truncated").unwrap(),
+            "v63 still runs above a database stamped 62"
+        );
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        let applied: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM migrations WHERE version IN (63, 64, 65)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(applied, 3, "63, 64 and 65 must all be recorded");
+    }
+
     // ---------------------------------------------------------------------
     // v64: created_at indexes + sessions_fts_map
     // ---------------------------------------------------------------------

@@ -11,6 +11,8 @@ async fn post(store: &MemorySubstrate, agent: &str) -> String {
             "safe body",
             Some(agent),
             Some("owner"),
+            0,
+            None,
             TaskQueueCaps::UNLIMITED,
         )
         .await
@@ -114,7 +116,7 @@ async fn selected_preflight_pause_and_restart_never_release_to_native() {
     assert!(!store.task_update_status(&job, "cancelled").await.unwrap());
     assert!(!store.task_delete(&job).await.unwrap());
     assert!(store
-        .task_complete(&job, "wrong native result")
+        .task_complete(&job, "worker", "wrong native result")
         .await
         .is_err());
     drop(store);
@@ -161,7 +163,7 @@ async fn native_exact_winner_survives_retry_and_is_not_a_second_loop_grant() {
             .unwrap(),
         SelectedClaim::Conflict
     );
-    store.task_complete(&job, "native result").await.unwrap();
+    store.task_complete(&job, "worker", "native result").await.unwrap();
     assert!(store.task_retry(&job).await.unwrap());
     assert_eq!(
         store

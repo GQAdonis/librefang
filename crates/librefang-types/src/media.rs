@@ -483,7 +483,7 @@ pub fn agent_avatar_url(agent_id: &str) -> String {
 /// Where an avatar for `agent_id` is stored, for one extension.
 ///
 /// `agent_id` is a UUID rendered by `AgentId::to_string`, so the joined name is entirely server-derived: no part of it comes from the request.
-/// That is what makes the shared [`filename_guard`](https://github.com/librefang/librefang/blob/main/crates/librefang-api/src/validation/filename_guard.rs) unnecessary here rather than merely satisfied — there is no client-supplied name to check.
+/// That is what makes the shared [`filename_guard`](https://github.com/GQAdonis/librefang/blob/main/crates/librefang-api/src/validation/filename_guard.rs) unnecessary here rather than merely satisfied — there is no client-supplied name to check.
 ///
 /// The per-user avatars (#8339) reuse this function, and they are the reason the argument is documented as "a UUID" rather than "an `AgentId`".
 /// A user is addressed by a name, and that name **does** come from the request — so the route never passes it here.

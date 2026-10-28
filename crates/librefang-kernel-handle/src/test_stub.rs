@@ -29,8 +29,8 @@
 use crate::{
     A2ARegistry, AcpFsBridge, AcpTerminalBridge, AgentControl, AgentInfo, ApiAuth, ApiAuthSnapshot,
     ApprovalGate, CatalogQuery, ChannelSender, CronControl, EventBus, GoalControl, HandsControl,
-    KernelOpError, KnowledgeGraph, MemoryAccess, PromptStore, SessionWriter, TaskQueue, ToolPolicy,
-    WikiAccess, WorkflowRunner,
+    KernelOpError, KnowledgeGraph, MemoryAccess, PromptStore, SessionWriter, TaskPostOptions,
+    TaskQueue, ToolPolicy, WikiAccess, WorkflowRunner,
 };
 use async_trait::async_trait;
 use std::{
@@ -166,6 +166,7 @@ impl TaskQueue for KernelHandleStub {
         _description: &str,
         _assigned_to: Option<&str>,
         _created_by: Option<&str>,
+        _opts: &TaskPostOptions,
     ) -> Result<String, KernelOpError> {
         Err(KernelOpError::unavailable("stub"))
     }
