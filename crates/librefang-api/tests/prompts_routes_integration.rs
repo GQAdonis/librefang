@@ -398,13 +398,9 @@ async fn list_experiments_rejects_non_uuid_agent_id() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn create_experiment_with_unknown_agent_surfaces_store_error() {
-    // The experiments table has FK constraints on the agent. Posting an
-    // experiment for an agent_id that has no rows in the agents/prompt
-    // store yields a 500 with the FK violation surfaced through the
-    // structured error envelope. This pins the contract that the route
-    // does NOT panic on store failure and that the bad_request path is
-    // distinguishable (4xx) from the store-failure path (5xx).
+async fn create_experiment_with_unknown_prompt_version_is_not_found() {
+    // Variants posted without a `prompt_version_id` reference the nil version, which does not exist.
+    // The store checks every variant's version inside the creating transaction and reports the missing one as a 404 with the structured error envelope, instead of letting the foreign-key violation surface as a 500.
     let h = boot().await;
     let path = format!("/api/agents/{AGENT_UUID}/prompts/experiments");
     let (status, body) = json_request(
@@ -420,7 +416,7 @@ async fn create_experiment_with_unknown_agent_surfaces_store_error() {
         })),
     )
     .await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "body={body:?}");
+    assert_eq!(status, StatusCode::NOT_FOUND, "body={body:?}");
     assert!(body.get("error").is_some(), "error envelope: {body:?}");
 }
 
@@ -469,6 +465,55 @@ async fn get_experiment_metrics_empty_for_unknown_id() {
     let (status, body) = json_request(&h, Method::GET, &path, None).await;
     assert_eq!(status, StatusCode::OK, "body={body:?}");
     assert_eq!(body, serde_json::json!([]));
+}
+
+/// A malformed version / experiment id in the path is a client error: it must reach the caller as 400 with the parse message, not a scrubbed 500.
+#[tokio::test(flavor = "multi_thread")]
+async fn prompt_routes_reject_non_uuid_path_ids_with_400() {
+    let h = boot().await;
+    let agent_id = seeded_agent_id(&h);
+    let cases = [
+        (Method::GET, "/api/prompts/versions/not-a-uuid", None),
+        (Method::DELETE, "/api/prompts/versions/not-a-uuid", None),
+        (
+            Method::POST,
+            "/api/prompts/versions/not-a-uuid/activate",
+            Some(serde_json::json!({ "agent_id": agent_id })),
+        ),
+        (Method::GET, "/api/prompts/experiments/not-a-uuid", None),
+        (
+            Method::GET,
+            "/api/prompts/experiments/not-a-uuid/metrics",
+            None,
+        ),
+        (
+            Method::POST,
+            "/api/prompts/experiments/not-a-uuid/start",
+            None,
+        ),
+        (
+            Method::POST,
+            "/api/prompts/experiments/not-a-uuid/pause",
+            None,
+        ),
+        (
+            Method::POST,
+            "/api/prompts/experiments/not-a-uuid/complete",
+            None,
+        ),
+    ];
+    for (method, path, body) in cases {
+        let (status, resp) = json_request(&h, method.clone(), path, body).await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "{method} {path}: body={resp:?}"
+        );
+        assert!(
+            resp.to_string().contains("Invalid"),
+            "{method} {path}: expected the parse message, got {resp:?}"
+        );
+    }
 }
 
 // ----- create-handler input-validation guards -----

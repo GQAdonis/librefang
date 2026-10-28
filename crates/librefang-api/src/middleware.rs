@@ -189,6 +189,10 @@ pub struct AuthState {
     /// rejected by the role gate. Wrapped in `Option` because some test
     /// harnesses construct `AuthState` without a kernel attached.
     pub audit_log: Option<Arc<librefang_kernel::audit::AuditLog>>,
+    /// The A2A agent-listing path when `[a2a] listen_path` mounts the protocol endpoints somewhere other than `/a2a`.
+    /// `PUBLIC_ROUTES_GET_ONLY` can only name the default `/a2a/agents`, so without this the listing that the A2A spec makes public would demand a bearer token under a custom prefix.
+    /// `None` when the default mount is in use; the mount is decided at boot, so this never changes while the daemon runs.
+    pub a2a_agents_path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -338,6 +342,8 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
             // expanding the trust surface; restrict to Owner so non-Owner API keys
             // cannot fill the registry or stage impersonation attempts (#3483).
             | "/api/a2a/discover"
+            // A restore writes the archive's config.toml back — master `api_key`, `[[users]]` roles and key hashes, `[[mcp_servers]]` stdio commands — so it is a superset of `/api/config` + `/api/users*` and sits on the same side of the line.
+            | "/api/restore"
     ) {
         return true;
     }
@@ -400,6 +406,25 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
     if (*method == axum::http::Method::PUT || *method == axum::http::Method::DELETE)
         && path.starts_with("/api/mcp/servers/")
         && !path["/api/mcp/servers/".len()..].contains('/')
+    {
+        return true;
+    }
+    // `POST /api/extensions/install` is a documented alias of `POST /api/mcp/servers`: it upserts a catalog entry into config.toml and calls `reload_mcp_servers()`, which spawns a stdio entry's `command` under the daemon UID.
+    // Leaving the alias at Admin would reopen the exact gate above.
+    if *method == axum::http::Method::POST && path == "/api/extensions/install" {
+        return true;
+    }
+    // `POST` / `PUT /api/registry/content/{mcp,plugin}` write the on-disk MCP catalog entry and the plugin manifest.
+    // An MCP catalog entry carries a raw stdio `command` + `args` that the extensions-install alias spawns, and a freshly written plugin directory has no `.disabled` marker, so it is enabled by default and an overwrite can drop the manifest's `[integrity]` table.
+    // Both therefore cross the same "config write" to "process spawn" line as the MCP server and plugin install gates, so they are Owner-only too.
+    // The other content types (`provider`, `agent`, `hand`, `skill`) stay at Admin: `hand` is covered by the Owner-only `install-deps` gate above at the point where it would execute anything.
+    // The `{content_type}` segment is compared decoded: axum percent-decodes the capture before the handler sees it, so `/api/registry/content/%6Dcp` would otherwise slip past this raw-path check as Admin and still write the MCP catalog (`create_registry_content` re-checks the decoded value as well).
+    if (*method == axum::http::Method::POST || *method == axum::http::Method::PUT)
+        && path
+            .strip_prefix("/api/registry/content/")
+            .is_some_and(|segment| {
+                matches!(crate::percent_decode(segment).as_str(), "mcp" | "plugin")
+            })
     {
         return true;
     }
@@ -1277,14 +1302,16 @@ pub async fn reject_oversized_upload(
     next.run(request).await
 }
 
-/// Cap how many `POST /api/agents/{id}/upload` requests may be mid-flight at once.
+/// Cap how many raw-body upload requests may be mid-flight at once.
 ///
-/// `upload_file` extracts `axum::body::Bytes`, buffering the whole body into RAM before the
-/// handler runs. Nothing bounds concurrency on that path otherwise: `RequestBodyLimitLayer` and
-/// `DefaultBodyLimit` are both per-request caps, so N parallel uploads at `max_upload_size_bytes`
-/// cost `N * max_upload_size_bytes` in RSS — 40 requests against a 100 MB cap is ~4 GB. Acquiring
-/// the permit here, before `next.run` reaches the extractor, is what makes the cap effective:
-/// gating inside the handler body would run after the buffering already happened.
+/// Two routes take `axum::body::Bytes`, which buffers the whole body into RAM before the handler
+/// runs, and each applies this layer with its own permit pool: `POST /api/agents/{id}/upload`
+/// (sized by `max_upload_size_bytes` / `max_concurrent_uploads`) and `POST /api/agents/{id}/avatar`
+/// ([`crate::routes::agents::avatar::MAX_CONCURRENT_AVATAR_UPLOADS`]). Nothing bounds concurrency on
+/// either path otherwise: `RequestBodyLimitLayer` and `DefaultBodyLimit` are both per-request caps,
+/// so N parallel uploads at the route's cap cost `N * cap` in RSS — 40 requests against a 100 MB cap
+/// is ~4 GB. Acquiring the permit here, before `next.run` reaches the extractor, is what makes the
+/// cap effective: gating inside the handler body would run after the buffering already happened.
 ///
 /// A saturated pool gets a fast 429 rather than queueing, matching `try_acquire_comms_stream_permit`
 /// in `routes/network.rs` — an upload is retriable, and queuing would just hold the connection open
@@ -1825,6 +1852,10 @@ pub async fn auth(
     // carry a valid session or per-user API key (e.g. the CLI, a Vite
     // dev-proxy). After attribution the request falls through to the normal
     // is_public / token-verification flow below — there is no early return.
+    //
+    // The master-hash and per-user-key results computed here are remembered, keyed by the token they were computed for, so the main token-check path below reuses them instead of paying the Argon2id cost a second time.
+    let mut loopback_master_hash_hit: Option<(String, bool)> = None;
+    let mut loopback_user_hit: Option<(String, Option<ApiUserAuth>)> = None;
     {
         let is_loopback = request
             .extensions()
@@ -1855,16 +1886,22 @@ pub async fn auth(
                     // Fall through to normal auth — the session token will be
                     // validated again in the main token-check path below.
                 }
-                // Try per-user API keys (Argon2 verify against api_key_hash).
-                // Use the local `user_api_keys` snapshot taken at the top of
-                // `auth()` — single source of truth for this request.
-                else if let Some(user) = user_api_keys
-                    .iter()
-                    .find(|user| {
-                        crate::password_hash::verify_password(&token_str, &user.api_key_hash)
-                    })
-                    .cloned()
-                {
+                // The master key needs no per-user attribution (the main path attributes it as root), so check it before scanning the per-user table: a loopback master-key caller must not pay one failed Argon2id verify per `[[users]]` entry.
+                else if crate::server::matches_master_token(api_key.trim(), &token_str) || {
+                    let hit = !master_key_hash.is_empty()
+                        && crate::server::master_hash_matches(&master_key_hash, &token_str).await;
+                    loopback_master_hash_hit = Some((token_str.clone(), hit));
+                    hit
+                } {
+                    // Fall through to normal auth, which admits and attributes the master key.
+                }
+                // Try per-user API keys against the local `user_api_keys` snapshot taken at the top of `auth()` (single source of truth for this request).
+                // `find_user_api_key` keeps the Argon2id verifies off the async worker.
+                else if let Some(user) = {
+                    let hit = crate::server::find_user_api_key(&user_api_keys, &token_str).await;
+                    loopback_user_hit = Some((token_str.clone(), hit.clone()));
+                    hit
+                } {
                     // Apply the role gate so a Viewer/User key on loopback
                     // cannot smuggle a write it would be denied over the LAN.
                     if !user_role_allows_request(user.role, &method, path) {
@@ -1903,8 +1940,7 @@ pub async fn auth(
                         role: user.role,
                         user_id: user.user_id,
                     });
-                    // Fall through to normal auth — the token will be
-                    // re-verified in the main token-check path below.
+                    // Fall through to normal auth — the main token-check path below reuses the `loopback_user_hit` result instead of verifying again.
                 }
             }
             // No early return — loopback requests continue through the
@@ -1990,7 +2026,8 @@ pub async fn auth(
         && (PUBLIC_ROUTES_GET_ONLY
             .iter()
             .any(|r| matches_route(r, path, is_get))
-            || dashboard_shell_public);
+            || dashboard_shell_public
+            || auth_state.a2a_agents_path.as_deref() == Some(path));
 
     let always_public =
         always_public_method_free || always_public_get_only || is_mcp_oauth_callback;
@@ -2175,7 +2212,11 @@ pub async fn auth(
     // `MasterKeyState`.
     if header_auth == Some(false) && !master_key_hash.is_empty() {
         if let Some(token_str) = api_token {
-            if crate::server::master_hash_matches(&master_key_hash, token_str).await {
+            let hit = match loopback_master_hash_hit.take() {
+                Some((token, hit)) if token == token_str => hit,
+                _ => crate::server::master_hash_matches(&master_key_hash, token_str).await,
+            };
+            if hit {
                 header_auth = Some(true);
                 master_authenticated = true;
             }
@@ -2313,11 +2354,12 @@ pub async fn auth(
         }
         drop(sessions);
 
-        if let Some(user) = user_api_keys
-            .iter()
-            .find(|user| crate::password_hash::verify_password(token_str, &user.api_key_hash))
-            .cloned()
-        {
+        // Reuse the loopback block's scan when it ran for this same token, so no request verifies the per-user table twice.
+        let user_hit = match loopback_user_hit.take() {
+            Some((token, hit)) if token == token_str => hit,
+            _ => crate::server::find_user_api_key(&user_api_keys, token_str).await,
+        };
+        if let Some(user) = user_hit {
             if !user_role_allows_request(user.role, &method, path) {
                 // RBAC M5: `rbac_denied_response` surfaces the denial in the
                 // hash-chained audit log (best-effort via the `audit_log`
@@ -2465,6 +2507,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         }
     }
 
@@ -2568,6 +2611,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         }
     }
 
@@ -2688,6 +2732,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         assert!(write_api_key_upgrade_hint(&state, "plain-master-key").is_none());
     }
@@ -2784,6 +2829,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/private", get(|| async { "ok" }))
@@ -3219,6 +3265,48 @@ mod tests {
             assert!(
                 user_role_allows_request(UserRole::Admin, &method, path),
                 "Admin must still be allowed to {method} {path} (not a spawn-command mutation)"
+            );
+        }
+    }
+
+    // The extensions-install alias and the MCP / plugin registry content writes reach the same spawn path as `POST /api/mcp/servers`, so they share its Owner gate.
+    #[test]
+    fn test_mcp_spawn_aliases_are_owner_only() {
+        let owner_only = [
+            (axum::http::Method::POST, "/api/extensions/install"),
+            (axum::http::Method::POST, "/api/registry/content/mcp"),
+            (axum::http::Method::PUT, "/api/registry/content/mcp"),
+            (axum::http::Method::POST, "/api/registry/content/plugin"),
+            (axum::http::Method::PUT, "/api/registry/content/plugin"),
+            // axum percent-decodes the `{content_type}` capture, so an encoded spelling reaches the same handler arm and must hit the same gate.
+            (axum::http::Method::POST, "/api/registry/content/%6Dcp"),
+            (axum::http::Method::PUT, "/api/registry/content/plug%69n"),
+            (axum::http::Method::POST, "/api/registry/content/%6d%63%70"),
+            (axum::http::Method::POST, "/api/restore"),
+        ];
+        for (method, path) in owner_only {
+            for role in [UserRole::Viewer, UserRole::User, UserRole::Admin] {
+                assert!(
+                    !user_role_allows_request(role, &method, path),
+                    "{role:?} must NOT be allowed to {method} {path}"
+                );
+            }
+            assert!(
+                user_role_allows_request(UserRole::Owner, &method, path),
+                "Owner must be allowed to {method} {path}"
+            );
+        }
+        // Content types that do not carry a spawn command stay at Admin, and uninstall removes code rather than adding it.
+        for (method, path) in [
+            (axum::http::Method::POST, "/api/registry/content/provider"),
+            (axum::http::Method::PUT, "/api/registry/content/agent"),
+            (axum::http::Method::POST, "/api/registry/content/skill"),
+            (axum::http::Method::POST, "/api/registry/content/%73kill"),
+            (axum::http::Method::POST, "/api/extensions/uninstall"),
+        ] {
+            assert!(
+                user_role_allows_request(UserRole::Admin, &method, path),
+                "Admin must still be allowed to {method} {path}"
             );
         }
     }
@@ -3762,6 +3850,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/private", get(|| async { "ok" }))
@@ -3798,6 +3887,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route(
@@ -3837,6 +3927,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route(
@@ -3876,6 +3967,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route(
@@ -3915,6 +4007,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/budget", get(|| async { "ok" }))
@@ -3953,6 +4046,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route(
@@ -3997,6 +4091,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/", get(|| async { "dashboard html" }))
@@ -4036,6 +4131,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route(
@@ -4074,6 +4170,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/agents", get(|| async { "agents listing" }))
@@ -4110,6 +4207,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/agents", get(|| async { "agents listing" }))
@@ -4143,6 +4241,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/health", get(|| async { "ok" }))
@@ -4175,6 +4274,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/agents", get(|| async { "agents listing" }))
@@ -4211,6 +4311,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/auto-dream/status", get(|| async { "status" }))
@@ -4250,6 +4351,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app_off = Router::new()
             .route("/api/health", get(|| async { "ok" }))
@@ -4298,6 +4400,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app_on = Router::new()
             .route("/api/health/detail", get(|| async { "detail" }))
@@ -4330,6 +4433,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/status", get(|| async { "status" }))
@@ -4372,6 +4476,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/agents", get(|| async { "agents listing" }))
@@ -4423,6 +4528,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/api/agents", get(|| async { "agents listing" }))
@@ -4466,6 +4572,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         }
     }
 
@@ -4479,6 +4586,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         }
     }
 
@@ -4654,6 +4762,45 @@ mod tests {
         );
     }
 
+    /// Under a custom `[a2a] listen_path` the agent listing is public at its mounted path, and only there: the tasks under the same prefix still demand a token.
+    #[tokio::test]
+    async fn a2a_agents_listing_is_public_under_a_custom_listen_path() {
+        let state = AuthState {
+            a2a_agents_path: Some("/peers/agents".to_string()),
+            ..with_key_state("secret")
+        };
+        let app = Router::new()
+            .route("/peers/agents", get(|| async { "agent list" }))
+            .route(
+                "/peers/tasks/{id}",
+                get(|| async { "full task transcript" }),
+            )
+            .layer(axum::middleware::from_fn_with_state(state, auth));
+
+        let listing = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/peers/agents")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(listing.status(), StatusCode::OK);
+
+        let task = app
+            .oneshot(
+                Request::builder()
+                    .uri("/peers/tasks/some-uuid")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(task.status(), StatusCode::UNAUTHORIZED);
+    }
+
     /// GET /a2a/tasks/{id} must require auth (Bug #3781). Task transcripts
     /// contain full agent prompts and LLM outputs — sensitive operational data.
     #[tokio::test]
@@ -4772,6 +4919,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
 
         let app = Router::new()
@@ -4812,6 +4960,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
 
         let app = Router::new()
@@ -4858,6 +5007,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
 
         let app = Router::new()
@@ -4910,6 +5060,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
 
         let app = Router::new()
@@ -4949,6 +5100,7 @@ mod tests {
             require_auth_for_reads: false,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
 
         let app = Router::new()
@@ -5306,6 +5458,7 @@ mod tests {
             require_auth_for_reads: true,
             allow_no_auth: false,
             audit_log: None,
+            a2a_agents_path: None,
         };
         let app = Router::new()
             .route("/dashboard", get(|| async { "dashboard shell" }))

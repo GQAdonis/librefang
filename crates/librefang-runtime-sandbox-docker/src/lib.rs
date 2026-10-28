@@ -263,6 +263,61 @@ pub async fn is_docker_available() -> bool {
     }
 }
 
+/// Removes a named container on drop unless disarmed.
+///
+/// `create_sandbox` holds one from just before `docker run` until it returns the container id.
+/// If the caller is cancelled first (a tool timeout, `/stop`, a client disconnect, often during a slow implicit image pull), the daemon still creates and starts the container, and since its id never reaches a pool or a guard nothing would ever remove it.
+struct PendingContainerGuard {
+    name: Option<String>,
+    on_abandon: Option<Box<dyn FnOnce(String) + Send>>,
+}
+
+impl PendingContainerGuard {
+    fn new(name: &str, on_abandon: Box<dyn FnOnce(String) + Send>) -> Self {
+        Self {
+            name: Some(name.to_string()),
+            on_abandon: Some(on_abandon),
+        }
+    }
+
+    /// The container was handed to the caller, which now owns its lifetime.
+    fn disarm(&mut self) {
+        self.name = None;
+    }
+}
+
+impl Drop for PendingContainerGuard {
+    fn drop(&mut self) {
+        if let (Some(name), Some(on_abandon)) = (self.name.take(), self.on_abandon.take()) {
+            on_abandon(name);
+        }
+    }
+}
+
+/// Spawn a best-effort `docker rm -f <name>` for a container whose creation was abandoned.
+fn remove_abandoned_container(name: String) {
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        warn!(container = %name, "No runtime to remove an abandoned Docker sandbox; it may leak");
+        return;
+    };
+    handle.spawn(async move {
+        let result = tokio::process::Command::new("docker")
+            .arg("rm")
+            .arg("-f")
+            .arg(&name)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await;
+        match result {
+            Ok(status) if status.success() => {
+                debug!(container = %name, "Removed abandoned Docker sandbox")
+            }
+            _ => debug!(container = %name, "No abandoned Docker sandbox to remove"),
+        }
+    });
+}
+
 /// Create and start a sandbox container for an agent.
 pub async fn create_sandbox(
     config: &DockerSandboxConfig,
@@ -330,8 +385,13 @@ pub async fn create_sandbox(
     cmd.stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
+    // Dropping the future must also stop the CLI, and the guard below removes whatever the daemon created by then.
+    cmd.kill_on_drop(true);
+
     debug!(container = %container_name, image = %config.image, "Creating Docker sandbox");
 
+    let mut pending =
+        PendingContainerGuard::new(&container_name, Box::new(remove_abandoned_container));
     let output = cmd
         .output()
         .await
@@ -343,6 +403,7 @@ pub async fn create_sandbox(
     }
 
     let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    pending.disarm();
 
     Ok(SandboxContainer {
         container_id,
@@ -781,10 +842,27 @@ fn path_is_within(path: &str, prefix: &str) -> bool {
     }
 }
 
+/// Whether mounting `path` would expose `blocked`: the mount is inside the blocked path, or the blocked path is inside the mount (mounting `/`, `/var` or `/run`'s parent exposes everything beneath it).
+fn mount_overlaps_blocked(path: &str, blocked: &str) -> bool {
+    path_is_within(path, blocked) || path_is_within(blocked, path)
+}
+
+/// Canonical-path variant of [`mount_overlaps_blocked`]: also compares against the blocked path's own canonical form.
+/// On macOS `/etc` is a symlink to `/private/etc`, so the canonical mount `/private` overlaps no blocked entry by name while still exposing `/etc` beneath it.
+fn canonical_mount_overlaps_blocked(canonical: &str, blocked: &str) -> bool {
+    if mount_overlaps_blocked(canonical, blocked) {
+        return true;
+    }
+    match std::path::Path::new(blocked).canonicalize() {
+        Ok(resolved) => mount_overlaps_blocked(canonical, &resolved.to_string_lossy()),
+        Err(_) => false,
+    }
+}
+
 /// Validate a bind mount path for security.
 ///
 /// Blocks:
-/// - Sensitive system paths (/etc, /proc, /sys, Docker socket)
+/// - Sensitive system paths (/etc, /proc, /sys, Docker socket), and any ancestor of them such as `/` or `/var`
 /// - Non-absolute paths
 /// - Symlink escape attempts
 /// - Paths in the configured blocked_mounts list
@@ -806,7 +884,7 @@ pub fn validate_bind_mount(path: &str, blocked: &[String]) -> Result<(), String>
 
     // Check default blocked paths
     for blocked_path in BLOCKED_MOUNT_PATHS {
-        if path_is_within(path, blocked_path) {
+        if mount_overlaps_blocked(path, blocked_path) {
             return Err(format!(
                 "Bind mount to '{blocked_path}' is blocked for security"
             ));
@@ -815,7 +893,7 @@ pub fn validate_bind_mount(path: &str, blocked: &[String]) -> Result<(), String>
 
     // Check user-configured blocked paths
     for bp in blocked {
-        if path_is_within(path, bp.as_str()) {
+        if mount_overlaps_blocked(path, bp.as_str()) {
             return Err(format!("Bind mount to '{bp}' is blocked by configuration"));
         }
     }
@@ -857,7 +935,7 @@ pub fn validate_bind_mount(path: &str, blocked: &[String]) -> Result<(), String>
 
     let canonical_str = canonical.to_string_lossy();
     for blocked_path in BLOCKED_MOUNT_PATHS {
-        if path_is_within(&canonical_str, blocked_path) {
+        if canonical_mount_overlaps_blocked(&canonical_str, blocked_path) {
             return Err(format!(
                 "Bind mount resolves to blocked path via symlink: {} → {}",
                 path, canonical_str
@@ -866,7 +944,7 @@ pub fn validate_bind_mount(path: &str, blocked: &[String]) -> Result<(), String>
     }
     // Also check user-configured blocked paths against resolved path
     for bp in blocked {
-        if path_is_within(&canonical_str, bp.as_str()) {
+        if canonical_mount_overlaps_blocked(&canonical_str, bp.as_str()) {
             return Err(format!(
                 "Bind mount resolves to blocked path via symlink: {} → {}",
                 path, canonical_str
@@ -897,6 +975,36 @@ pub fn config_hash(config: &DockerSandboxConfig) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pending_guard_recording() -> (
+        PendingContainerGuard,
+        std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    ) {
+        let removed = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&removed);
+        let guard = PendingContainerGuard::new(
+            "librefang-sandbox-x",
+            Box::new(move |name| sink.lock().unwrap().push(name)),
+        );
+        (guard, removed)
+    }
+
+    /// A `create_sandbox` future dropped while `docker run` is pending must remove the container by name, because its id never reaches anything that could.
+    #[test]
+    fn pending_container_guard_removes_an_abandoned_container() {
+        let (guard, removed) = pending_guard_recording();
+        drop(guard);
+        assert_eq!(*removed.lock().unwrap(), ["librefang-sandbox-x"]);
+    }
+
+    /// Once the id is returned the caller owns the container, so the guard must leave it alone.
+    #[test]
+    fn pending_container_guard_leaves_a_delivered_container() {
+        let (mut guard, removed) = pending_guard_recording();
+        guard.disarm();
+        drop(guard);
+        assert!(removed.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn test_sanitize_container_name_valid() {
@@ -982,6 +1090,17 @@ mod tests {
         // (sh treats them literally).
         assert!(contains_shell_metacharacters(r#"echo "a && b""#).is_none());
         assert!(contains_shell_metacharacters(r#"echo "a > b""#).is_none());
+    }
+
+    /// An unquoted `\'` is a literal quote under `sh -c`, so it must not open a quoted region that hides the metacharacters after it (mirrors the subprocess sandbox fix).
+    #[test]
+    fn test_docker_metachar_escaped_quote_does_not_hide_operators() {
+        use self::helpers::contains_shell_metacharacters;
+        assert!(contains_shell_metacharacters(r"echo \' & id \'").is_some());
+        assert!(contains_shell_metacharacters(r"echo \'> /tmp/x \'").is_some());
+        assert!(contains_shell_metacharacters(r#"echo \" | id \""#).is_some());
+        assert!(contains_shell_metacharacters("echo 'a & b'").is_none());
+        assert!(validate_command(r"echo \' & touch /tmp/pwn \'").is_err());
     }
 
     #[test]
@@ -1486,6 +1605,50 @@ mod tests {
         assert!(validate_bind_mount("/var/run/docker.sock", &[]).is_err());
     }
 
+    /// Mounting an ancestor of a blocked path exposes it through the mount, so `/`, `/var` (parent of `/var/run/docker.sock`) and similar must be rejected too.
+    #[test]
+    fn test_validate_bind_mount_rejects_ancestors_of_blocked_paths() {
+        for p in ["/", "//", "/var", "/var/", "/var/run"] {
+            assert!(validate_bind_mount(p, &[]).is_err(), "{p} must be rejected");
+        }
+        assert!(validate_bind_mount("/data", &["/data/secrets".to_string()]).is_err());
+        // Siblings of blocked paths remain allowed.
+        assert!(validate_bind_mount("/home/user/workspace", &[]).is_ok());
+        assert!(validate_bind_mount("/data/public", &["/data/secrets".to_string()]).is_ok());
+    }
+
+    /// A blocked path reached through a symlink must still block mounts of its real ancestors (macOS `/private` above `/etc` -> `/private/etc`).
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_bind_mount_rejects_ancestor_of_symlinked_blocked_path() {
+        let tmp = std::env::temp_dir().join(format!(
+            "librefang-bind-mount-symlink-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        let real = tmp.join("real");
+        std::fs::create_dir_all(real.join("secret")).unwrap();
+        let link = tmp.join("link");
+        std::os::unix::fs::symlink(real.join("secret"), &link).unwrap();
+        let blocked = vec![link.to_string_lossy().into_owned()];
+        let ancestor = validate_bind_mount(&real.to_string_lossy(), &blocked);
+        let sibling = tmp.join("other");
+        std::fs::create_dir_all(&sibling).unwrap();
+        let sibling_result = validate_bind_mount(&sibling.to_string_lossy(), &blocked);
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert!(
+            ancestor.is_err(),
+            "ancestor of symlinked blocked path must be rejected"
+        );
+        assert!(sibling_result.is_ok(), "{sibling_result:?}");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_validate_bind_mount_rejects_macos_private() {
+        assert!(validate_bind_mount("/private", &[]).is_err());
+    }
+
     #[test]
     fn test_validate_bind_mount_traversal() {
         assert!(validate_bind_mount("/home/user/../etc/passwd", &[]).is_err());
@@ -1862,6 +2025,15 @@ pub mod helpers {
         let mut i = 0;
         while i < len {
             match chars[i] {
+                '\\' => {
+                    result.push('\\');
+                    if i + 1 < len {
+                        result.push(chars[i + 1]);
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
                 '\'' => {
                     i += 1;
                     while i < len && chars[i] != '\'' {

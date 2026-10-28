@@ -275,6 +275,76 @@ impl LibreFangKernel {
         // Apply global budget defaults to agent resource quotas
         apply_budget_defaults(&self.current_budget(), &mut manifest.resources);
 
+        // An agent must never be handed *another agent's* directory as its workspace.
+        //
+        // Spawn writes the resolved absolute workspace back into `agent.toml` (`manifest.workspace = Some(workspace_dir)`, below), so every live agent's file carries its own path — and that path is where its `.identity/IDENTITY.md`, its sessions and its memory live.
+        // Anything that copies such a manifest forward hands all three over: a template instantiation from an agent instance, a clone, the CLI's `agent spawn --template`, or any caller posting a `manifest_toml`.
+        // The new agent then reads the other agent's identity file and presents itself as the agent it was copied from.
+        //
+        // The check is deliberately here rather than at the template lookup, because the lookup is only one of those doors: `resolve_manifest` never sees a caller that supplies `manifest_toml` directly.
+        //
+        // It is also about where the path *points*, not what the agent is called.
+        // `resolved_workspace_dir` honours an absolute path under the workspaces root on purpose (#4991, so a recreate or a restart reuses the same directory), and another agent's directory is under that root — so the question has to be "is this mine?", answered against the directory this agent would otherwise get.
+        // A shared directory is reached through the sibling `[workspaces]` table and lives under the named-workspaces root, so it is left alone, as is a hand's relative `hands/<hand>/<role>`.
+        //
+        // The relative spelling of the same path is the same request: it is joined onto the workspaces root below, so judging where the path *points* means resolving it first.
+        // A check on the spelling alone would let `agents/vivo` alias `vivo` where the absolute path cannot.
+        if let Some(requested) = manifest.workspace.as_ref() {
+            let agents_root = cfg.effective_agent_workspaces_dir();
+            // Resolve against the root spawn is about to join the path onto, so both spellings are judged on where they point.
+            // This is also where `..` traversal and absolute paths outside the root are *rejected*, and propagating that error keeps the fail-closed contract: clearing the path here would turn a traversal attempt into a quiet 201, which is a different contract from the one `resolve_workspace_dir` enforces and `agents_routes_integration.rs` pins.
+            let resolved = resolved_workspace_dir(
+                &cfg.effective_workspaces_dir(),
+                Some(requested.clone()),
+                &name,
+                agent_id,
+            )?;
+            if resolved.starts_with(&agents_root) {
+                let own = resolved_workspace_dir(&agents_root, None, &name, agent_id)?;
+                if resolved != own {
+                    // The directory is another agent's when a live entry calls it its workspace, or when the manifest inside it names a different agent.
+                    // A rename leaves the directory where it was and rewrites the manifest inside it, so a recreate from that manifest finds a directory naming *this* agent and must reuse it (#4991) rather than abandon the identity, sessions and files it holds.
+                    let owned_by_another =
+                        self.agents.registry.list_arcs().iter().any(|entry| {
+                            entry.id != agent_id
+                                && entry.manifest.workspace.as_deref() == Some(resolved.as_path())
+                        }) || manifest_in_dir_names_another_agent(&resolved, &name);
+                    if owned_by_another {
+                        // Whether the directory being left behind holds anything is the difference between correcting a manifest and abandoning an agent's identity, sessions and memory, so say which one it is rather than emitting the same line for both.
+                        let abandoned = resolved.is_dir() && directory_has_entries(&resolved);
+                        if abandoned {
+                            tracing::warn!(
+                                agent = %name,
+                                requested_workspace = %requested.display(),
+                                resolved_workspace = %resolved.display(),
+                                own_workspace = %own.display(),
+                                "manifest names another agent's workspace directory, and that \
+                                 directory is not empty — this agent is moving to its own, and \
+                                 whatever it kept there stays behind under the other agent's"
+                            );
+                        } else {
+                            tracing::warn!(
+                                agent = %name,
+                                requested_workspace = %requested.display(),
+                                resolved_workspace = %resolved.display(),
+                                own_workspace = %own.display(),
+                                "manifest names another agent's workspace directory; using this \
+                                 agent's own"
+                            );
+                        }
+                        manifest.workspace = None;
+                    } else {
+                        tracing::info!(
+                            agent = %name,
+                            requested_workspace = %requested.display(),
+                            resolved_workspace = %resolved.display(),
+                            "manifest names a workspace directory no other agent owns; reusing it"
+                        );
+                    }
+                }
+            }
+        }
+
         // Create workspace directory for the agent.
         // Hand agents set a relative workspace path (hands/<hand>/<role>) resolved
         // against the workspaces root. Standalone agents go to workspaces/agents/<name>.
@@ -525,26 +595,45 @@ impl LibreFangKernel {
                 name: name.clone(),
             }),
         );
-        // Evaluate triggers synchronously (we can't await in a sync fn, so just evaluate)
+        self.evaluate_lifecycle_triggers_sync(&event);
+
+        Ok(agent_id)
+    }
+
+    /// Evaluate and dispatch triggers for a lifecycle event from a sync call site.
+    ///
+    /// Spawn, kill and the per-agent quota check are synchronous, so they cannot await `publish_event`; this runs the same evaluation and dispatch pair it does, including its `PUBLISH_EVENT_DEPTH` cycle guard.
+    /// The guard matters most for `QuotaEnforced`: a trigger on an over-quota agent's own quota event dispatches a turn that is refused by the same quota check and emits the event again, so without the depth step that chain re-fired at the same depth for as long as the agent stayed over quota.
+    pub(crate) fn evaluate_lifecycle_triggers_sync(&self, event: &Event) {
+        let depth = PUBLISH_EVENT_DEPTH.try_with(|c| c.get()).unwrap_or(0);
+        let max_trigger_depth = self.config.load().triggers.max_depth as u32;
+        // Checked before evaluation, as `publish_event_inner` does, so a suppressed fire is not charged to the trigger's cooldown or `max_fires` budget.
+        if depth >= max_trigger_depth {
+            warn!(
+                depth,
+                "Trigger depth limit reached, skipping lifecycle trigger evaluation to prevent circular chain"
+            );
+            return;
+        }
         let event_timestamp = event.timestamp;
-        let (triggered, trigger_state_mutated) = self
-            .workflows
-            .triggers
-            .evaluate_with_resolver(&event, |id| {
-                self.agents.registry.get(id).map(|e| e.name.clone())
+        let (triggered, trigger_state_mutated) =
+            self.workflows.triggers.evaluate_with_resolver(event, |id| {
+                self.agents.registry.get_arc(id).map(|e| e.name.clone())
             });
         if !triggered.is_empty() || trigger_state_mutated {
             if let Err(e) = self.workflows.triggers.persist() {
-                warn!("Failed to persist trigger jobs after spawn event: {e}");
+                warn!("Failed to persist trigger jobs after lifecycle event: {e}");
             }
         }
         // Evaluation already charged each match its `fire_count`, its cooldown stamp and a step towards `max_fires`, so dropping the matches here would spend a trigger's budget on a fire that delivered nothing.
-        // Dispatch through the same path the event bus uses so an `agent_spawned` trigger reaches its agent or starts its workflow under the same concurrency, ordering and timeout guarantees.
+        // Dispatch through the same path the event bus uses so an `agent_spawned` / `agent_terminated` trigger reaches its agent or starts its workflow under the same concurrency, ordering and timeout guarantees.
+        // `dispatch_trigger_matches` hands its spawned tasks the depth it reads from the current scope, so dispatch one level deeper than this event, exactly as `publish_event_inner` does while its depth guard is held.
+        // `sync_scope` also covers callers outside any scope (a spawn from an HTTP handler), where the depth would otherwise read as 0 on every link of the chain.
         if !triggered.is_empty() {
-            self.dispatch_trigger_matches(&triggered, event_timestamp);
+            PUBLISH_EVENT_DEPTH.sync_scope(std::cell::Cell::new(depth + 1), || {
+                self.dispatch_trigger_matches(&triggered, event_timestamp);
+            });
         }
-
-        Ok(agent_id)
     }
 
     /// Verify a signed manifest envelope (Ed25519 + SHA-256).
@@ -600,4 +689,32 @@ impl LibreFangKernel {
         }
         Ok(keys)
     }
+}
+
+/// Whether the manifest stored in `dir` names an agent other than `name`.
+///
+/// Used by the spawn guard as an ownership signal for a directory that no live registry entry claims.
+/// The `name` key is read without deserializing an `AgentManifest`, because a directory holding a hand definition or a partially written file must not count as another agent's just because it fails to parse.
+/// A missing file or a missing key is not evidence of another owner, so the guard's other signals decide.
+fn manifest_in_dir_names_another_agent(dir: &Path, name: &str) -> bool {
+    let Ok(source) = std::fs::read_to_string(dir.join("agent.toml")) else {
+        return false;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&source) else {
+        return false;
+    };
+    value
+        .get("name")
+        .and_then(|declared| declared.as_str())
+        .is_some_and(|declared| declared != name)
+}
+
+/// Whether a directory holds anything worth keeping.
+///
+/// Used by the spawn guard to tell "this manifest names the wrong directory" from "and moving on would leave an agent's identity, sessions and memory behind", so the two read differently in the log.
+/// A read error answers `false`: the guard's own decision does not depend on it, and a directory it cannot read is not evidence that something was abandoned there.
+fn directory_has_entries(path: &Path) -> bool {
+    std::fs::read_dir(path)
+        .map(|mut entries| entries.next().is_some())
+        .unwrap_or(false)
 }

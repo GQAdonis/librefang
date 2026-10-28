@@ -183,6 +183,8 @@ fn is_protected_write_target(write_path: &Path, protected: &[std::path::PathBuf]
 struct SsrfResolved {
     hostname: String,
     resolved: Vec<std::net::SocketAddr>,
+    /// `host:port` of the connection target (IPv6 literals keep their brackets), used for the `NetConnect` capability check so it sees the same host reqwest connects to.
+    capability_host: String,
 }
 
 /// SSRF protection: check if a hostname resolves to a private/internal IP.
@@ -204,8 +206,27 @@ fn is_ssrf_target(url: &str) -> Result<SsrfResolved, serde_json::Value> {
         }
     }
 
-    let host = extract_host_from_url(url);
-    let hostname = host.split(':').next().unwrap_or(&host);
+    // Take the host and port from the same WHATWG parser reqwest uses to pick the connection target.
+    // A split on `/` alone disagrees with it on where the authority ends (`?`, `#` and `\` all terminate it), so `http://169.254.169.254?.1.2.3.4.nip.io/` would be validated as a public wildcard-DNS name while reqwest connects to IMDS.
+    let parsed = url::Url::parse(url)
+        .map_err(|e| json!({"error": format!("SSRF blocked: invalid URL: {e}")}))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(json!({"error": "Only http:// and https:// URLs are allowed"}));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(json!({"error": "SSRF blocked: URLs with userinfo are not permitted"}));
+    }
+    // IPv6 literals keep their brackets so `host:port` stays unambiguous for the resolver and the capability string.
+    let hostname = match parsed.host() {
+        Some(url::Host::Domain(d)) => d.to_string(),
+        Some(url::Host::Ipv4(ip)) => ip.to_string(),
+        Some(url::Host::Ipv6(ip)) => format!("[{ip}]"),
+        None => return Err(json!({"error": "SSRF blocked: URL has no host"})),
+    };
+    let hostname = hostname.as_str();
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
 
     // Check hostname-based blocklist first (catches metadata endpoints)
     let blocked_hostnames = [
@@ -220,7 +241,6 @@ fn is_ssrf_target(url: &str) -> Result<SsrfResolved, serde_json::Value> {
     }
 
     // Resolve DNS and check every returned IP
-    let port = if url.starts_with("https") { 443 } else { 80 };
     let socket_addr = format!("{hostname}:{port}");
     let mut resolved = Vec::new();
     match socket_addr.to_socket_addrs() {
@@ -263,6 +283,7 @@ fn is_ssrf_target(url: &str) -> Result<SsrfResolved, serde_json::Value> {
     Ok(SsrfResolved {
         hostname: hostname.to_string(),
         resolved,
+        capability_host: socket_addr,
     })
 }
 
@@ -556,9 +577,10 @@ fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json:
                 };
                 // Capability gate on THIS hop's host — a redirect must not reach
                 // a destination the guest lacks `NetConnect` for.
-                let host = extract_host_from_url(&current_url);
-                if let Err(e) = check_capability(&state.capabilities, &Capability::NetConnect(host))
-                {
+                if let Err(e) = check_capability(
+                    &state.capabilities,
+                    &Capability::NetConnect(ssrf_result.capability_host.clone()),
+                ) {
                     return e;
                 }
 
@@ -632,22 +654,6 @@ fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json:
             None => handle.block_on(fetch),
         }
     })
-}
-
-/// Extract host:port from a URL for capability checking.
-fn extract_host_from_url(url: &str) -> String {
-    if let Some(after_scheme) = url.split("://").nth(1) {
-        let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
-        if host_port.contains(':') {
-            host_port.to_string()
-        } else if url.starts_with("https") {
-            format!("{host_port}:443")
-        } else {
-            format!("{host_port}:80")
-        }
-    } else {
-        url.to_string()
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1024,6 +1030,10 @@ fn host_agent_send(state: &GuestState, params: &serde_json::Value) -> serde_json
     ) {
         return e;
     }
+    // Mirrors the builtin `agent_send` tool: the turn running this guest holds the agent's own lock, so a send to itself can only deadlock.
+    if target == state.agent_id {
+        return json!({"error": "agent_send: an agent cannot send a message to itself"});
+    }
     let kernel = match &state.kernel {
         Some(k) => k,
         None => return json!({"error": "No kernel handle available"}),
@@ -1032,7 +1042,12 @@ fn host_agent_send(state: &GuestState, params: &serde_json::Value) -> serde_json
     // while the host-to-agent round-trip is in flight. Plain block_on inside
     // spawn_blocking creates a nested runtime that starves the watchdog.
     let handle = state.tokio_handle.clone();
-    match tokio::task::block_in_place(|| handle.block_on(kernel.send_to_agent(target, message))) {
+    // Re-establish the dispatching turn's held locks around the nested send, so a cycle back to this agent (by name, or through another agent) is rejected by the kernel's re-entry check instead of parking on the lock this turn holds.
+    let send = crate::held_agent_locks::scope_with(
+        state.held_locks.clone(),
+        kernel.send_to_agent(target, message),
+    );
+    match tokio::task::block_in_place(|| handle.block_on(send)) {
         Ok(response) => json!({"ok": response}),
         Err(e) => json!({"error": e.to_string()}),
     }
@@ -1552,6 +1567,8 @@ mod tests {
             std::collections::HashMap<(Option<String>, String), serde_json::Value>,
         >,
         protected_paths: std::sync::Mutex<Vec<std::path::PathBuf>>,
+        /// The held-agent-locks registry each `send_to_agent` call observed.
+        sends_saw_held: std::sync::Mutex<Vec<Vec<librefang_types::agent::AgentId>>>,
     }
 
     impl RecordingKernel {
@@ -1561,6 +1578,7 @@ mod tests {
                 recalled: std::sync::Mutex::new(Vec::new()),
                 preloaded: std::sync::Mutex::new(std::collections::HashMap::new()),
                 protected_paths: std::sync::Mutex::new(Vec::new()),
+                sends_saw_held: std::sync::Mutex::new(Vec::new()),
             })
         }
 
@@ -1590,7 +1608,11 @@ mod tests {
             _: &str,
             _: &str,
         ) -> Result<String, librefang_kernel_handle::KernelOpError> {
-            Err("not implemented".into())
+            self.sends_saw_held
+                .lock()
+                .unwrap()
+                .push(crate::held_agent_locks::held_snapshot());
+            Ok("pong".to_string())
         }
         fn list_agents(&self) -> Vec<librefang_kernel_handle::AgentInfo> {
             vec![]
@@ -1655,6 +1677,7 @@ mod tests {
             _: &str,
             _: Option<&str>,
             _: Option<&str>,
+            _opts: &librefang_kernel_handle::TaskPostOptions,
         ) -> Result<String, librefang_kernel_handle::KernelOpError> {
             Err("not implemented".into())
         }
@@ -1789,6 +1812,39 @@ mod tests {
             agent_id.to_string(),
             tokio::runtime::Handle::current(),
         )
+    }
+
+    /// The guest runs off the task holding its agent's lock, so the nested send must carry the dispatching turn's held locks for the kernel's #5125 re-entry check to see them.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn agent_send_carries_the_dispatching_turns_held_locks() {
+        let kernel = RecordingKernel::new();
+        let me = librefang_types::agent::AgentId::new();
+        let mut state = state_with_kernel(
+            &me.to_string(),
+            vec![Capability::AgentMessage("*".to_string())],
+            std::sync::Arc::clone(&kernel),
+        );
+        state.held_locks = crate::held_agent_locks::HeldLocksSnapshot {
+            agents: vec![me],
+            sessions: vec![],
+        };
+        let out = host_agent_send(&state, &json!({"target": "peer", "message": "hi"}));
+        assert_eq!(out, json!({"ok": "pong"}));
+        assert_eq!(*kernel.sends_saw_held.lock().unwrap(), vec![vec![me]]);
+    }
+
+    /// A send to the guest's own agent id can only deadlock on the lock its own turn holds, so it is refused before reaching the kernel.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn agent_send_to_self_is_rejected() {
+        let kernel = RecordingKernel::new();
+        let state = state_with_kernel(
+            "agent-self",
+            vec![Capability::AgentMessage("*".to_string())],
+            std::sync::Arc::clone(&kernel),
+        );
+        let out = host_agent_send(&state, &json!({"target": "agent-self", "message": "hi"}));
+        assert!(out["error"].as_str().unwrap().contains("itself"), "{out}");
+        assert!(kernel.sends_saw_held.lock().unwrap().is_empty());
     }
 
     /// Regression test for Bug #3837: kv_get must pass agent_id to the
@@ -2176,22 +2232,65 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_host_from_url() {
+    fn test_ssrf_capability_host() {
+        // IP literals resolve without DNS.
         assert_eq!(
-            extract_host_from_url("https://api.openai.com/v1/chat"),
-            "api.openai.com:443"
+            is_ssrf_target("https://8.8.8.8/v1/chat")
+                .unwrap()
+                .capability_host,
+            "8.8.8.8:443"
         );
         assert_eq!(
-            extract_host_from_url("http://localhost:8080/api"),
-            "localhost:8080"
+            is_ssrf_target("http://1.1.1.1:8080/api")
+                .unwrap()
+                .capability_host,
+            "1.1.1.1:8080"
         );
         assert_eq!(
-            extract_host_from_url("http://example.com"),
-            "example.com:80"
+            is_ssrf_target("http://1.1.1.1?q=1")
+                .unwrap()
+                .capability_host,
+            "1.1.1.1:80"
         );
     }
 
-    /// Regression for #3814: double-`..` traversal path.
+
+    #[test]
+    fn test_ssrf_host_matches_url_parser_on_query_and_fragment_delimiters() {
+        // reqwest (WHATWG url) sees an internal IP literal as the host in all of these, so the SSRF check must too and reject it without consulting DNS.
+        for u in [
+            "http://169.254.169.254?.1.2.3.4.nip.io/latest/meta-data/",
+            "http://169.254.169.254#.1.2.3.4.nip.io/",
+            "http://127.0.0.1?.1.2.3.4.nip.io/",
+            "http://169.254.169.254\\.1.2.3.4.nip.io/",
+            "http://10.0.0.5#.1.2.3.4.nip.io/",
+        ] {
+            let err = match is_ssrf_target(u) {
+                Ok(r) => panic!("{u} must be blocked, resolved to {:?}", r.resolved),
+                Err(e) => e,
+            };
+            let msg = err["error"].as_str().unwrap_or("");
+            assert!(
+                msg.contains("restricted hostname") || msg.contains("private IP"),
+                "{u}: must be blocked as a private/metadata host, not by DNS luck: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_ssrf_ipv6_literal_is_parsed_not_mangled() {
+        let err = is_ssrf_target("http://[::1]:8080/").unwrap_err();
+        let msg = err["error"].as_str().unwrap();
+        assert!(msg.contains("private IP"), "{msg}");
+        let r =
+            is_ssrf_target("https://[2606:4700:4700::1111]/").expect("public v6 literal allowed");
+        assert_eq!(r.capability_host, "[2606:4700:4700::1111]:443");
+    }
+
+    /// Regression for #3814: capability check must use the canonical path,
+    /// not the raw path supplied by the guest. A traversal path like
+    /// `../../etc/passwd` must be rejected by path resolution *before* any
+    /// capability comparison can be made — it must never reach the file read.
     #[tokio::test]
     async fn test_fs_read_deep_traversal_rejected_before_capability_check() {
         // Even with a wildcard FileRead grant, traversal paths are rejected.

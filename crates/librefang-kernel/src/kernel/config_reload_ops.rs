@@ -22,14 +22,15 @@ impl LibreFangKernel {
         let old_cfg = self.config.load();
         use crate::config_reload::{should_store_config, validate_config_for_reload};
 
-        // Read and parse the on-disk config via the strict loader (#4664).
-        // Unlike `crate::config::load_config`, `try_load_config` returns `Err`
-        // on every failure mode (TOML syntax error, broken `include = [...]`
-        // chain, migration failure, deserialize-shape mismatch) instead of
-        // silently falling back to `KernelConfig::default()`. Without this,
-        // the diff-and-apply path below would treat the defaults as the
-        // operator's intent and wipe out their `default_model`,
-        // `provider_api_keys`, channels, etc.
+        // Read and parse the on-disk config via the strict loader (#4664),
+        // loading the document over the live config rather than over the
+        // compiled defaults (#8459). Unlike `crate::config::load_config`,
+        // `try_load_config_over` returns `Err` on every failure mode (TOML
+        // syntax error, broken `include = [...]` chain, migration failure,
+        // deserialize-shape mismatch) instead of silently falling back to
+        // `KernelConfig::default()`. Without this, the diff-and-apply path
+        // below would treat the defaults as the operator's intent and wipe
+        // out their `default_model`, `provider_api_keys`, channels, etc.
         //
         // Surfacing `Err` here lets the watcher's
         // `Err(e) => tracing::warn!("Config hot-reload failed: {e}")` branch
@@ -38,7 +39,13 @@ impl LibreFangKernel {
         // re-introduced the pre-#4664 tolerant path during the mod.rs split;
         // this restores the strict loader.)
         let config_path = self.config_path_boot.clone();
-        let mut new_config = crate::config::try_load_config(&config_path)
+        // The running config is the base, so a field the document does not state keeps its live
+        // value instead of reverting to its compiled default.
+        // `KernelConfig` is `#[serde(default)]` at the container level, and strictness stops at
+        // parseability, so without this a document that parses and is *partial* — which is what the
+        // API's own config writes produce when the file did not exist yet — resets everything it
+        // does not mention: home, data directory, API key. See #8459.
+        let mut new_config = crate::config::try_load_config_over(&config_path, Some(&old_cfg))
             .map_err(|e| format!("Config reload failed; live config unchanged: {e}"))?;
 
         // Clamp bounds on the new config before validating or applying.
@@ -79,15 +86,22 @@ impl LibreFangKernel {
         // the old config.
         //
         // Store the new config in Hot / Hybrid modes whenever the plan carries
-        // any effective change — including `noop_changes`. Those "no-op" fields
-        // are read live from `config.load()` on each message/request and rely
-        // on this swap to take effect (e.g. `max_history_messages`,
+        // a hot action or a `noop_changes` entry. Those "no-op" fields are read
+        // live from `config.load()` on each message/request and rely on this
+        // swap to take effect (e.g. `max_history_messages`,
         // `agent_max_iterations`, `compaction`, `prompt_caching`); gating the
         // swap on `hot_actions` alone made such edits silently no-op while the
         // reload response still reported success. `apply_hot_actions_inner`
         // iterates `plan.hot_actions`, so it is a harmless no-op when only
-        // `noop_changes` are present. In Off / Restart modes the user expects
-        // no runtime change until a full restart.
+        // `noop_changes` are present.
+        //
+        // A plan whose ONLY change is restart-required is deliberately not
+        // stored: swapping it in would leave every live reader of a
+        // restart-required field on a value boot never wired (e.g.
+        // `protected_write_paths` reads `data_dir` live) and would stop the
+        // next reload from reporting `restart_required` for a change that has
+        // not taken effect. In Off / Restart modes the user expects no runtime
+        // change until a full restart either way.
         if should_store_config(old_cfg.reload.mode, &plan) {
             // Serialize MCP config replacement with every connection creator before taking the config write lock.
             // An in-flight connection may still publish `NeedsAuth`; waiting here ensures the hot action clears that result only after the old operation has finished, without holding `config_reload_lock` across the potentially long connection wait.
@@ -255,7 +269,7 @@ impl LibreFangKernel {
     ///
     /// **Caller must hold `config_reload_lock` write guard** so that the
     /// config swap and side effects are atomic with respect to message handlers.
-    async fn apply_hot_actions_inner(
+    pub(super) async fn apply_hot_actions_inner(
         &self,
         plan: &crate::config_reload::ReloadPlan,
         new_config: &librefang_types::config::KernelConfig,
@@ -378,20 +392,14 @@ impl LibreFangKernel {
                     self.mesh.channel_adapters.clear();
                 }
                 HotAction::ReloadSkills => {
-                    self.reload_skills();
+                    // Hot actions run before `reload_config` swaps the new config in, so the registry has to be rebuilt from the incoming `[skills]` rather than from `self.config`, which still holds the old policy here.
+                    self.reload_skills_with(&new_config.skills);
                 }
                 HotAction::UpdateUsageFooter => {
                     info!(
                         "Hot-reload: usage footer mode updated to {:?} \
                          (takes effect on next response)",
                         new_config.usage_footer
-                    );
-                }
-                HotAction::ReloadWebConfig => {
-                    info!(
-                        "Hot-reload: web config updated (search_provider={:?}, \
-                         cache_ttl={}min) — takes effect on next web tool invocation",
-                        new_config.web.search_provider, new_config.web.cache_ttl_minutes
                     );
                 }
                 HotAction::UpdateWebhookConfig => {
@@ -548,10 +556,69 @@ impl LibreFangKernel {
                     }
                 }
                 HotAction::ReloadA2aConfig => {
+                    // `mesh.a2a_external_agents` is the trust list `/api/a2a/send` and `a2a_send` gate on, filled once from `[[a2a.external_agents]]` by the boot discovery task.
+                    // A reload that only logged left a removed entry trusted and a newly declared one invisible until restart, so reconcile the config-declared part of the store here.
+                    // `self.config` still holds the previous config at this point; it is what tells a config-seeded entry from one an operator approved through `/api/a2a/discover`.
+                    let old_a2a = self.config.load().a2a.clone();
+                    let to_discover = {
+                        let mut store = self
+                            .mesh
+                            .a2a_external_agents
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        reconcile_a2a_store(&mut store, old_a2a.as_ref(), new_config.a2a.as_ref())
+                    };
                     info!(
-                        "Hot-reload: A2A config updated — takes effect on next \
-                         discovery/send operation"
+                        to_discover = to_discover.len(),
+                        "Hot-reload: A2A config updated — trust list reconciled"
                     );
+                    if !to_discover.is_empty() {
+                        match self.self_handle.get().and_then(|weak| weak.upgrade()) {
+                            Some(kernel) => {
+                                spawn_logged("a2a_rediscover_external", async move {
+                                    let discovered =
+                                        librefang_runtime::a2a::discover_external_agents(
+                                            &to_discover,
+                                        )
+                                        .await;
+                                    // Discovery outlives the reload, so a later reload may have removed an agent or disabled `[a2a]` meanwhile; only agents the live config still declares may enter the trust list.
+                                    // The read guard waits out a reload still holding the write guard, so a discovery that finishes before this reload's own config swap does not check against the previous config.
+                                    let _config_guard = kernel.config_reload_lock.read().await;
+                                    let still_declared: std::collections::BTreeSet<String> =
+                                        match kernel.config.load().a2a.as_ref() {
+                                            Some(cfg) if cfg.enabled => cfg
+                                                .external_agents
+                                                .iter()
+                                                .map(|a| {
+                                                    librefang_runtime::a2a::canonicalize_a2a_url(
+                                                        &a.url,
+                                                    )
+                                                    .unwrap_or_else(|| a.url.clone())
+                                                })
+                                                .collect(),
+                                            _ => std::collections::BTreeSet::new(),
+                                        };
+                                    let mut store = kernel
+                                        .mesh
+                                        .a2a_external_agents
+                                        .lock()
+                                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                                    for (url, card) in discovered {
+                                        if !still_declared.contains(&url) {
+                                            continue;
+                                        }
+                                        match store.iter_mut().find(|(u, _)| *u == url) {
+                                            Some(slot) => slot.1 = card,
+                                            None => store.push((url, card)),
+                                        }
+                                    }
+                                });
+                            }
+                            None => warn!(
+                                "Hot-reload: kernel self-handle unavailable — newly declared A2A agents will be discovered on next restart"
+                            ),
+                        }
+                    }
                 }
                 HotAction::ReloadFallbackProviders => {
                     let count = new_config.fallback_providers.len();
@@ -707,6 +774,40 @@ impl LibreFangKernel {
     }
 }
 
+/// Drop config-declared A2A trust entries the new config no longer declares, and return the declarations that need discovery.
+///
+/// An entry whose URL was declared in the old `[[a2a.external_agents]]` and is absent from the new list is removed; disabling `[a2a]` clears the store entirely, matching a boot with A2A off.
+/// Entries the old config never declared were approved through `/api/a2a/discover` and are kept.
+/// Every agent the new config declares is returned for (re)discovery, so a changed card at an existing URL is refreshed too.
+fn reconcile_a2a_store(
+    store: &mut Vec<(String, librefang_runtime::a2a::AgentCard)>,
+    old: Option<&librefang_types::config::A2aConfig>,
+    new: Option<&librefang_types::config::A2aConfig>,
+) -> Vec<librefang_types::config::ExternalAgent> {
+    let canonical = |url: &str| {
+        librefang_runtime::a2a::canonicalize_a2a_url(url).unwrap_or_else(|| url.to_string())
+    };
+    let new_agents: Vec<librefang_types::config::ExternalAgent> = match new {
+        Some(cfg) if cfg.enabled => cfg.external_agents.clone(),
+        _ => {
+            store.clear();
+            return Vec::new();
+        }
+    };
+    let old_urls: std::collections::BTreeSet<String> = old
+        .map(|cfg| {
+            cfg.external_agents
+                .iter()
+                .map(|a| canonical(&a.url))
+                .collect()
+        })
+        .unwrap_or_default();
+    let new_urls: std::collections::BTreeSet<String> =
+        new_agents.iter().map(|a| canonical(&a.url)).collect();
+    store.retain(|(url, _)| !old_urls.contains(url) || new_urls.contains(url));
+    new_agents
+}
+
 /// Rebuild credential pools from a new config snapshot.
 ///
 /// Called on boot and hot-reload. Replaces the contents of the existing
@@ -790,5 +891,67 @@ fn rebuild_credential_pools(
             "Hot-reload: rebuilt credential pool"
         );
         pools.insert(pool_cfg.provider.clone(), pool);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reconcile_a2a_store;
+    use librefang_runtime::a2a::AgentCard;
+    use librefang_types::config::{A2aConfig, ExternalAgent};
+
+    fn card(name: &str) -> AgentCard {
+        AgentCard {
+            name: name.to_string(),
+            description: String::new(),
+            url: String::new(),
+            version: "1".to_string(),
+            capabilities: Default::default(),
+            skills: Vec::new(),
+            default_input_modes: Vec::new(),
+            default_output_modes: Vec::new(),
+        }
+    }
+
+    fn a2a(enabled: bool, urls: &[&str]) -> A2aConfig {
+        A2aConfig {
+            enabled,
+            external_agents: urls
+                .iter()
+                .map(|u| ExternalAgent {
+                    name: u.to_string(),
+                    url: u.to_string(),
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    /// A reload that removes an `[[a2a.external_agents]]` entry must stop trusting it, keep agents approved at runtime, and hand every declared agent to discovery.
+    #[test]
+    fn reconcile_a2a_store_drops_removed_config_agents_and_keeps_approved_ones() {
+        let removed = "https://removed.example.com";
+        let kept = "https://kept.example.com";
+        let approved = "https://approved.example.com";
+        let canonical = |u: &str| librefang_runtime::a2a::canonicalize_a2a_url(u).unwrap();
+        let mut store = vec![
+            (canonical(removed), card("removed")),
+            (canonical(kept), card("kept")),
+            (canonical(approved), card("approved")),
+        ];
+        let old = a2a(true, &[removed, kept]);
+        let new = a2a(true, &[kept, "https://added.example.com"]);
+
+        let to_discover = reconcile_a2a_store(&mut store, Some(&old), Some(&new));
+
+        let names: Vec<_> = store.iter().map(|(_, c)| c.name.as_str()).collect();
+        assert_eq!(names, vec!["kept", "approved"]);
+        let urls: Vec<_> = to_discover.iter().map(|a| a.url.as_str()).collect();
+        assert_eq!(urls, vec![kept, "https://added.example.com"]);
+
+        // Disabling `[a2a]` leaves nothing trusted, as a boot with A2A off would.
+        let to_discover = reconcile_a2a_store(&mut store, Some(&new), Some(&a2a(false, &[kept])));
+        assert!(store.is_empty());
+        assert!(to_discover.is_empty());
     }
 }

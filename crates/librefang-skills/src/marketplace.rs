@@ -17,6 +17,35 @@ use tracing::info;
 /// Bounds the in-memory download buffer against a huge release asset.
 const MAX_DOWNLOAD_BYTES: u64 = 256 * 1024 * 1024;
 
+/// Read a download response body into memory, rejecting anything larger than `MAX_DOWNLOAD_BYTES`.
+///
+/// The advertised Content-Length is checked first, then the body is streamed chunk-by-chunk so an absent or lying Content-Length header cannot force an unbounded in-memory buffer.
+/// Shared by the GitHub marketplace, ClawHub and Skillhub download paths so the cap cannot drift between them.
+pub(crate) async fn read_body_capped(mut resp: reqwest::Response) -> Result<Vec<u8>, SkillError> {
+    if let Some(len) = resp.content_length() {
+        if len > MAX_DOWNLOAD_BYTES {
+            return Err(SkillError::Network(format!(
+                "download size {len} bytes exceeds the {MAX_DOWNLOAD_BYTES}-byte limit"
+            )));
+        }
+    }
+
+    let mut buf: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp
+        .chunk()
+        .await
+        .map_err(|e| SkillError::Network(format!("Download stream failed: {e}")))?
+    {
+        if buf.len() as u64 + chunk.len() as u64 > MAX_DOWNLOAD_BYTES {
+            return Err(SkillError::Network(format!(
+                "download exceeded the {MAX_DOWNLOAD_BYTES}-byte limit"
+            )));
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(buf)
+}
+
 /// Maximum number of entries permitted in a bundle zip.
 /// Guards against an archive with an absurd number of tiny entries.
 /// `pub(crate)` so the ClawHub/Skillhub install path shares the same caps
@@ -759,35 +788,10 @@ impl MarketplaceClient {
             .send()
             .await
             .map_err(|e| SkillError::Network(format!("Download request failed: {e}")))?;
-        let mut resp = resp
+        let resp = resp
             .error_for_status()
             .map_err(|e| SkillError::Network(format!("Download failed: {e}")))?;
-
-        // Early reject when the server advertises a body larger than the cap.
-        if let Some(len) = resp.content_length() {
-            if len > MAX_DOWNLOAD_BYTES {
-                return Err(SkillError::Network(format!(
-                    "download size {len} bytes exceeds the {MAX_DOWNLOAD_BYTES}-byte limit"
-                )));
-            }
-        }
-
-        // Stream the body chunk-by-chunk so an absent or lying Content-Length
-        // header cannot force an unbounded in-memory buffer.
-        let mut buf: Vec<u8> = Vec::new();
-        while let Some(chunk) = resp
-            .chunk()
-            .await
-            .map_err(|e| SkillError::Network(format!("Download stream failed: {e}")))?
-        {
-            if buf.len() as u64 + chunk.len() as u64 > MAX_DOWNLOAD_BYTES {
-                return Err(SkillError::Network(format!(
-                    "download exceeded the {MAX_DOWNLOAD_BYTES}-byte limit"
-                )));
-            }
-            buf.extend_from_slice(&chunk);
-        }
-        Ok(buf)
+        read_body_capped(resp).await
     }
 
     async fn github_get_json(
@@ -933,7 +937,10 @@ fn extract_bundle_zip_bytes(bytes: &[u8], skill_dir: &Path) -> Result<(), SkillE
         let file = archive
             .by_index(index)
             .map_err(|err| SkillError::InvalidManifest(format!("Read zip entry: {err}")))?;
-        if let Some(path) = sanitize_zip_path(file.name()) {
+        let name = file
+            .name()
+            .map_err(|err| SkillError::InvalidManifest(format!("Read zip entry name: {err}")))?;
+        if let Some(path) = sanitize_zip_path(&name) {
             safe_paths.push(path);
         }
     }
@@ -944,7 +951,10 @@ fn extract_bundle_zip_bytes(bytes: &[u8], skill_dir: &Path) -> Result<(), SkillE
         let mut file = archive
             .by_index(index)
             .map_err(|err| SkillError::InvalidManifest(format!("Read zip entry: {err}")))?;
-        let Some(mut relative_path) = sanitize_zip_path(file.name()) else {
+        let name = file
+            .name()
+            .map_err(|err| SkillError::InvalidManifest(format!("Read zip entry name: {err}")))?;
+        let Some(mut relative_path) = sanitize_zip_path(&name) else {
             continue;
         };
         if let Some(ref root) = shared_root {

@@ -47,20 +47,89 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         )
 }
 
-/// Build protocol-level A2A routes (not versioned, mounted at the root path).
-pub fn protocol_router() -> axum::Router<std::sync::Arc<AppState>> {
+/// Mount point of the protocol-level A2A endpoints when `[a2a] listen_path` is unset or unusable.
+pub const DEFAULT_A2A_LISTEN_PATH: &str = "/a2a";
+
+/// First path segments already owned by other top-level routes.
+/// Mounting the A2A endpoints under one of them would either panic at router build on an overlapping route (`/api/agents`) or shadow a dashboard / webhook path, so such a `listen_path` falls back to the default.
+const RESERVED_A2A_ROOT_SEGMENTS: &[&str] = &[
+    "api",
+    "v1",
+    "mcp",
+    "hooks",
+    "channels",
+    "dashboard",
+    "auth",
+    "locales",
+    ".well-known",
+];
+
+/// The path the protocol-level A2A routes are mounted under, carried to the handlers so the agent cards advertise the path that actually serves them.
+#[derive(Debug, Clone)]
+pub struct A2aListenPath(pub String);
+
+/// Normalize `[a2a] listen_path` into the prefix `protocol_router` mounts under.
+///
+/// Leading and trailing slashes are normalized, so `a2a/`, `/a2a` and `/a2a/` all mount at `/a2a`.
+/// A value that cannot be mounted safely — empty, the root, a `.` / `..` segment, a character outside the unreserved URL set, or a first segment another route owns — falls back to [`DEFAULT_A2A_LISTEN_PATH`] with a warning instead of failing the boot.
+pub fn resolve_a2a_listen_path(configured: Option<&str>) -> String {
+    let Some(raw) = configured else {
+        return DEFAULT_A2A_LISTEN_PATH.to_string();
+    };
+    let segments: Vec<&str> = raw.trim().split('/').filter(|s| !s.is_empty()).collect();
+    let valid_chars = |seg: &&str| {
+        seg.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~'))
+    };
+    let usable = !segments.is_empty()
+        && segments.iter().all(valid_chars)
+        && segments.iter().all(|s| *s != "." && *s != "..")
+        && !RESERVED_A2A_ROOT_SEGMENTS.contains(&segments[0]);
+    if !usable {
+        tracing::warn!(
+            listen_path = %raw,
+            fallback = DEFAULT_A2A_LISTEN_PATH,
+            "[a2a] listen_path cannot be mounted; serving the A2A endpoints at the default path"
+        );
+        return DEFAULT_A2A_LISTEN_PATH.to_string();
+    }
+    format!("/{}", segments.join("/"))
+}
+
+/// The mounted A2A prefix a handler should advertise, defaulting when the router was built without the extension.
+fn a2a_prefix(listen_path: Option<&axum::Extension<A2aListenPath>>) -> &str {
+    listen_path
+        .map(|ext| ext.0 .0.as_str())
+        .unwrap_or(DEFAULT_A2A_LISTEN_PATH)
+}
+
+/// Build protocol-level A2A routes (not versioned).
+///
+/// The agent card stays at `/.well-known/agent.json` as the A2A spec requires; every other endpoint is mounted under `listen_path`, the value [`resolve_a2a_listen_path`] produced from `[a2a] listen_path`.
+/// The mount is decided once at router build, so a changed `listen_path` takes effect on restart.
+pub fn protocol_router(listen_path: &str) -> axum::Router<std::sync::Arc<AppState>> {
     axum::Router::new()
         .route(
             "/.well-known/agent.json",
             axum::routing::get(a2a_agent_card),
         )
-        .route("/a2a/agents", axum::routing::get(a2a_list_agents))
-        .route("/a2a/tasks/send", axum::routing::post(a2a_send_task))
-        .route("/a2a/tasks/{id}", axum::routing::get(a2a_get_task))
         .route(
-            "/a2a/tasks/{id}/cancel",
+            &format!("{listen_path}/agents"),
+            axum::routing::get(a2a_list_agents),
+        )
+        .route(
+            &format!("{listen_path}/tasks/send"),
+            axum::routing::post(a2a_send_task),
+        )
+        .route(
+            &format!("{listen_path}/tasks/{{id}}"),
+            axum::routing::get(a2a_get_task),
+        )
+        .route(
+            &format!("{listen_path}/tasks/{{id}}/cancel"),
             axum::routing::post(a2a_cancel_task),
         )
+        .layer(axum::Extension(A2aListenPath(listen_path.to_string())))
 }
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -300,7 +369,10 @@ pub async fn network_trusted_peers(State(state): State<Arc<AppState>>) -> impl I
         (status = 200, description = "Get the A2A agent card", body = crate::types::JsonObject)
     )
 )]
-pub async fn a2a_agent_card(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn a2a_agent_card(
+    State(state): State<Arc<AppState>>,
+    listen_path: Option<axum::Extension<A2aListenPath>>,
+) -> impl IntoResponse {
     // Read-only aggregation; cheap Arc clones over full manifest deep-copy (#3569).
     let agents = state.kernel.agent_registry().list_arcs();
     let cfg = state.kernel.config_ref();
@@ -330,7 +402,7 @@ pub async fn a2a_agent_card(State(state): State<Arc<AppState>>) -> impl IntoResp
     let card = librefang_kernel::a2a::AgentCard {
         name: service_name,
         description: service_description,
-        url: format!("{base_url}/a2a"),
+        url: format!("{base_url}{}", a2a_prefix(listen_path.as_ref())),
         version: librefang_types::VERSION.to_string(),
         capabilities: librefang_kernel::a2a::AgentCapabilities {
             streaming: true,
@@ -357,15 +429,21 @@ pub async fn a2a_agent_card(State(state): State<Arc<AppState>>) -> impl IntoResp
         (status = 200, description = "List all A2A agent cards", body = crate::types::JsonObject)
     )
 )]
-pub async fn a2a_list_agents(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn a2a_list_agents(
+    State(state): State<Arc<AppState>>,
+    listen_path: Option<axum::Extension<A2aListenPath>>,
+) -> impl IntoResponse {
     // Read-only iteration; cheap Arc clones over full manifest deep-copy (#3569).
     let agents = state.kernel.agent_registry().list_arcs();
     let base_url = format!("http://{}", state.kernel.config_ref().api_listen);
+    let endpoint = format!("{base_url}{}", a2a_prefix(listen_path.as_ref()));
 
     let items: Vec<serde_json::Value> = agents
         .iter()
         .map(|entry| {
-            let card = librefang_kernel::a2a::build_agent_card(&entry.manifest, &base_url);
+            let mut card = librefang_kernel::a2a::build_agent_card(&entry.manifest, &base_url);
+            // `build_agent_card` hard-codes the default `/a2a` prefix; advertise the path this router actually serves.
+            card.url = endpoint.clone();
             serde_json::to_value(&card).unwrap_or_default()
         })
         .collect();
@@ -509,22 +587,41 @@ pub async fn a2a_send_task(
             }
         }
         Err(e) => {
+            let (status, reason) = a2a_task_failure(&e);
             let error_msg = librefang_kernel::a2a::A2aMessage {
                 role: "agent".to_string(),
                 parts: vec![librefang_kernel::a2a::A2aPart::Text {
-                    text: format!("Error: {e}"),
+                    text: format!("Error: {reason}"),
                 }],
             };
             state.kernel.a2a_tasks().fail(&task_id, error_msg);
             match state.kernel.a2a_tasks().get(&task_id) {
                 Some(failed_task) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                    status,
                     Json(serde_json::to_value(&failed_task).unwrap_or_default()),
                 ),
                 None => ApiErrorResponse::internal_scrub(e).into_json_tuple(),
             }
         }
     }
+}
+
+/// Status and peer-visible reason for an A2A task whose delivery failed.
+///
+/// The reason is written into the stored task, which `GET /a2a/tasks/{id}` returns to the remote peer, so it follows the same scrub rule as every other message route (audit: rusqlite-errors-leak).
+/// A caller-side failure (`AgentNotFound`, `QuotaExceeded`, `InvalidInput`, …) keeps its reason and its 4xx status from `kernel_op_status`; anything else is logged in full and reported as a generic internal error with a 500.
+fn a2a_task_failure(e: &crate::error::KernelError) -> (StatusCode, String) {
+    if let crate::error::KernelError::LibreFang(inner) = e {
+        let status = crate::error::kernel_op_status(inner);
+        if status.is_client_error() {
+            return (status, inner.to_string());
+        }
+    }
+    tracing::error!(error = %e, "A2A task delivery failed; reason scrubbed before response");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Internal error".to_string(),
+    )
 }
 
 /// GET /a2a/tasks/{id} — Get task status from the task store.
@@ -661,7 +758,9 @@ pub async fn a2a_list_external_agents(State(state): State<Arc<AppState>>) -> imp
 /// patterns (e.g. `"*.internal.example.com"`), or literal IPs/hostnames.
 /// Cloud metadata ranges (`169.254.0.0/16`, `100.64.0.0/10`) remain blocked
 /// unconditionally regardless of allowlist entries.
-fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), String> {
+///
+/// Hostname resolution goes through `tokio::net::lookup_host`, so a slow or unresponsive resolver parks this task instead of stalling a runtime worker thread for the full resolver timeout (the same convention as `librefang_runtime::web_fetch::check_ssrf_async`).
+async fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), String> {
     let parsed = url::Url::parse(raw_url).map_err(|e| format!("Invalid URL: {e}"))?;
 
     // Only allow http and https schemes
@@ -683,9 +782,9 @@ fn is_url_safe_for_ssrf(raw_url: &str, allowed_hosts: &[String]) -> Result<(), S
     let addrs: Vec<IpAddr> = if let Ok(ip) = host.parse::<IpAddr>() {
         vec![ip]
     } else {
-        // Resolve hostname — use port 80 as a dummy for resolution
-        let socket_addr = format!("{host}:80");
-        match std::net::ToSocketAddrs::to_socket_addrs(&socket_addr.as_str()) {
+        // Resolve hostname — use port 80 as a dummy for resolution.
+        // The `"{host}:80"` string form (not a `(host, 80)` tuple) is kept so a bracketed IPv6 literal from `host_str()` such as `[::1]` still parses as a socket address and is classified below.
+        match tokio::net::lookup_host(format!("{host}:80")).await {
             Ok(iter) => iter.map(|sa| sa.ip()).collect(),
             Err(_) => {
                 // If resolution fails, we still block — don't allow unresolvable hosts
@@ -935,7 +1034,7 @@ pub async fn a2a_discover_external(
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return ApiErrorResponse::bad_request(reason).into_json_tuple();
     }
 
@@ -1167,7 +1266,7 @@ async fn a2a_send_external_inner(state: Arc<AppState>, body_bytes: &[u8]) -> (St
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return json_error_tuple(StatusCode::BAD_REQUEST, "a2a_ssrf_blocked", reason);
     }
 
@@ -1254,7 +1353,7 @@ pub async fn a2a_external_task_status(
         .fetch
         .ssrf_allowed_hosts
         .clone();
-    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed) {
+    if let Err(reason) = is_url_safe_for_ssrf(&url, &ssrf_allowed).await {
         return ApiErrorResponse::bad_request(reason).into_json_tuple();
     }
 
@@ -2276,13 +2375,35 @@ pub async fn comms_send(
 }
 
 /// POST /api/comms/task — Post a task to the agent task queue.
+///
+/// The body is typed ([`librefang_types::comms::CommsTaskRequest`]), and that
+/// is what splits the error contract in two:
+///
+/// * **422** — a body that is valid JSON but does not deserialize into the
+///   request type: `"priority": 1.5`, `"timeout_secs": "soon"`, or any other
+///   shape mismatch. The `Json` extractor rejects it before this handler runs,
+///   because a fractional or negative-second limit must not be rounded,
+///   clamped, or dropped on the way to a 201.
+/// * **400** — a body that deserializes but is semantically wrong: an empty
+///   `title`, or an `assigned_to` that names no known agent.
+///
+/// Sibling `POST /api/tasks` carries the same fields but reads them from an
+/// untyped `serde_json::Value`, so every body mistake there — syntax included
+/// — is its own 400. Both routes refuse the same inputs; the status differs
+/// because one body is typed and the other is inspected field by field, and
+/// this note is what makes that difference a contract rather than a surprise.
+///
+/// `priority` and `timeout_secs` are enforced, not merely recorded: they
+/// reach the claim queue's `ORDER BY` and the sweeper's per-row deadline.
 #[utoipa::path(
     post,
     path = "/api/comms/task",
     tag = "network",
     request_body = crate::types::JsonObject,
     responses(
-        (status = 200, description = "Post a task to the agent task queue", body = crate::types::JsonObject)
+        (status = 201, description = "Task enqueued", body = crate::types::JsonObject),
+        (status = 400, description = "Missing title, or an unknown assignee", body = crate::types::JsonObject),
+        (status = 422, description = "Body does not deserialize into the request type (wrong type or out-of-range value)", body = crate::types::JsonObject),
     )
 )]
 pub async fn comms_task(
@@ -2293,6 +2414,15 @@ pub async fn comms_task(
         return ApiErrorResponse::bad_request("Title is required").into_json_tuple();
     }
 
+    // The same per-task controls `task_queue_post_root` honours. Hardcoding
+    // the defaults here made this route answer 201 while silently discarding
+    // a caller's `priority` / `timeout_secs`, which is the one outcome that
+    // leaves the caller unable to tell (#7974 review).
+    let opts = librefang_kernel_handle::TaskPostOptions {
+        priority: req.priority.unwrap_or(0),
+        timeout_secs: req.timeout_secs,
+    };
+
     match state
         .kernel
         .task_post(
@@ -2300,6 +2430,7 @@ pub async fn comms_task(
             &req.description,
             req.assigned_to.as_deref(),
             Some("ui-user"),
+            &opts,
         )
         .await
     {
@@ -2308,6 +2439,15 @@ pub async fn comms_task(
             Json(serde_json::json!({
                 "ok": true,
                 "task_id": task_id,
+            })),
+        ),
+        // Mirrors `task_queue_post_root`: an unresolvable `assigned_to` is a
+        // bad request body, not a server failure, so it is reported as 400
+        // rather than falling through to the generic 500 scrub below.
+        Err(librefang_kernel_handle::KernelOpError::AgentNotFound(name)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!("Field 'assigned_to' names no known agent: '{name}'")
             })),
         ),
         Err(e) => ApiErrorResponse::internal_scrub(e).into_json_tuple(),
@@ -2340,13 +2480,48 @@ pub(crate) fn remove_toml_section(content: &str, section: &str) -> String {
 mod tests {
     use super::{
         authenticated_a2a_caller, canonical_ip, find_external_agent_by_identity,
-        hostname_matches_glob_suffix, is_cloud_metadata_ip, is_private_ip,
+        hostname_matches_glob_suffix, is_cloud_metadata_ip, is_private_ip, is_url_safe_for_ssrf,
         try_acquire_comms_stream_permit,
     };
     use librefang_kernel::MemorySubsystemApi;
     use librefang_kernel::MeshSubsystemApi;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Arc;
+
+    // The A2A SSRF gate resolves hostnames with `tokio::net::lookup_host` so it never blocks a runtime worker; these pin that the policy is unchanged by the async move.
+    #[tokio::test]
+    async fn ssrf_check_is_async_and_blocks_loopback() {
+        assert!(is_url_safe_for_ssrf("http://127.0.0.1/", &[])
+            .await
+            .is_err());
+        assert!(is_url_safe_for_ssrf("http://localhost/", &[])
+            .await
+            .is_err());
+        // A bracketed IPv6 literal must still reach classification rather than failing to resolve, and cloud metadata stays blocked even when allowlisted.
+        let err = is_url_safe_for_ssrf(
+            "http://[::ffff:169.254.169.254]/",
+            &["169.254.0.0/16".to_string()],
+        )
+        .await
+        .unwrap_err();
+        assert!(err.contains("private/internal"), "{err}");
+        let err = is_url_safe_for_ssrf("http://[::1]/", &[])
+            .await
+            .unwrap_err();
+        assert!(err.contains("private/internal"), "{err}");
+        assert!(is_url_safe_for_ssrf("http://93.184.216.34/", &[])
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn ssrf_check_rejects_unresolvable_host() {
+        // RFC 6761 reserves `.invalid`, so this never resolves.
+        let err = is_url_safe_for_ssrf("http://a2a-ssrf.invalid/", &[])
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("Cannot resolve host"), "{err}");
+    }
 
     // -----------------------------------------------------------------
     // Regression test for #3644: /api/peers must reflect the live kernel
@@ -2608,5 +2783,39 @@ mod tests {
         let found = find_external_agent_by_identity(&agents, "0").expect("numeric name");
 
         assert_eq!(found.1.name, "0");
+    }
+}
+
+#[cfg(test)]
+mod a2a_task_failure_tests {
+    use super::a2a_task_failure;
+    use crate::error::KernelError;
+    use axum::http::StatusCode;
+    use librefang_types::error::LibreFangError;
+
+    #[test]
+    fn internal_error_text_is_scrubbed() {
+        let (status, reason) = a2a_task_failure(&KernelError::LibreFang(LibreFangError::Internal(
+            "no such column: sessions.chat_scope".to_string(),
+        )));
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(!reason.contains("chat_scope"), "{reason}");
+    }
+
+    #[test]
+    fn budget_refusal_is_429_with_reason() {
+        let (status, reason) = a2a_task_failure(&KernelError::LibreFang(
+            LibreFangError::QuotaExceeded("hourly budget".to_string()),
+        ));
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert!(reason.contains("hourly budget"), "{reason}");
+    }
+
+    #[test]
+    fn missing_agent_is_404() {
+        let (status, _) = a2a_task_failure(&KernelError::LibreFang(LibreFangError::AgentNotFound(
+            "a".to_string(),
+        )));
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }

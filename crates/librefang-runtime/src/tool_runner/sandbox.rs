@@ -28,7 +28,11 @@ use tracing::warn;
 /// to block; releasing to the pool is a synchronous map insert.
 struct SandboxGuard {
     container: Option<SandboxContainer>,
+    /// The pool key the container is released under on drop; `None` destroys it instead.
+    /// Empty until [`SandboxGuard::rearm`], so a guard dropped mid-exec (the turn was cancelled, the tool timed out, the client disconnected) destroys a container whose workload may still be running rather than pooling it.
     key: Option<PoolKey>,
+    /// The key the container would be pooled under once an exec has finished cleanly.
+    reusable_key: Option<PoolKey>,
     pool: Arc<ContainerPool>,
     /// The agent this call runs as, recorded on release so `scope = "shared"` can tell an
     /// agent picking its own container back up from a handover to a different one.
@@ -44,7 +48,8 @@ impl SandboxGuard {
     ) -> Self {
         Self {
             container: Some(container),
-            key,
+            key: None,
+            reusable_key: key,
             pool,
             agent_id: agent_id.to_string(),
         }
@@ -71,6 +76,15 @@ impl SandboxGuard {
     /// releasing it to the pool.
     fn poison(&mut self) {
         self.key = None;
+        self.reusable_key = None;
+    }
+
+    /// Mark the container fit for reuse, so the guard releases it to the pool on drop.
+    /// Called only once an exec has completed with a result that leaves the container idle.
+    fn rearm(&mut self) {
+        if let Some(key) = self.reusable_key.take() {
+            self.key = Some(key);
+        }
     }
 }
 
@@ -83,17 +97,37 @@ impl Drop for SandboxGuard {
             Some(key) => self.pool.release(container, key, &self.agent_id),
             None => {
                 let container_id = container.container_id.clone();
-                tokio::task::block_in_place(|| {
-                    let rt = tokio::runtime::Handle::current();
-                    rt.block_on(async {
-                        if let Err(e) = crate::docker_sandbox::destroy_sandbox(&container).await {
-                            warn!("Failed to destroy Docker sandbox {container_id}: {e}");
-                        }
-                    });
-                });
+                // This path now also runs whenever a `docker_exec` future is dropped mid-exec, so it must not panic where `block_in_place` cannot be used: outside any runtime, or on a current-thread runtime.
+                let Ok(rt) = tokio::runtime::Handle::try_current() else {
+                    warn!("No Tokio runtime to destroy Docker sandbox {container_id}; it may leak");
+                    return;
+                };
+                let destroy = async move {
+                    if let Err(e) = crate::docker_sandbox::destroy_sandbox(&container).await {
+                        warn!("Failed to destroy Docker sandbox {container_id}: {e}");
+                    }
+                };
+                if rt.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread {
+                    tokio::task::block_in_place(|| rt.block_on(destroy));
+                } else {
+                    rt.spawn(destroy);
+                }
             }
         }
     }
+}
+
+/// Whether a `docker exec` result is the Docker CLI reporting that the target container no longer exists or is not running, as opposed to output of the command itself.
+/// In that case the command never started, so it is safe to run it again on a fresh container.
+/// The CLI prints these as `Error response from daemon: …` on stderr and exits non-zero.
+/// A command that never started cannot have written to stdout, so any stdout rules the report out: that keeps a command which merely prints a similar line (and has already run) from being run a second time.
+fn docker_exec_reports_container_gone(exit_code: i32, stdout: &str, stderr: &str) -> bool {
+    if exit_code == 0 || !stdout.is_empty() {
+        return false;
+    }
+    let stderr = stderr.trim_start();
+    stderr.starts_with("Error response from daemon:")
+        && (stderr.contains("No such container") || stderr.contains("is not running"))
 }
 
 pub(super) async fn tool_docker_exec(
@@ -154,15 +188,19 @@ pub(super) async fn tool_docker_exec(
     let mut exec_result =
         crate::docker_sandbox::exec_in_sandbox(guard.container(), command, timeout).await;
 
-    // A pooled container can have been removed out from under us — a Docker daemon restart,
-    // an operator's `docker rm`, an out-of-disk eviction. That is not a tool failure, but
-    // without this retry the dead container would be handed straight back to the pool and
-    // every later call for the same key would fail the same way.
-    if exec_result.is_err() && from_pool {
+    // A pooled container can have been removed out from under us — a Docker daemon restart, an operator's `docker rm`, an out-of-disk eviction.
+    // That is not a tool failure, but without this retry the dead container would be handed straight back to the pool and every later call for the same key would fail the same way.
+    // Retry only when `docker exec` itself reports the container missing or stopped: the command never started there, so running it on a fresh container runs it exactly once.
+    // Any other failure (above all a timeout) means the command did or may still run in the old container, and a retry would execute a non-idempotent command twice.
+    let pooled_container_gone = from_pool
+        && exec_result
+            .as_ref()
+            .is_ok_and(|r| docker_exec_reports_container_gone(r.exit_code, &r.stdout, &r.stderr));
+    if pooled_container_gone {
         if let Some(dead) = guard.take() {
             warn!(
                 container = %dead.container_id,
-                "Pooled Docker sandbox failed; discarding it and retrying on a fresh container"
+                "Pooled Docker sandbox is gone; discarding it and retrying on a fresh container"
             );
             if let Err(e) = crate::docker_sandbox::destroy_sandbox(&dead).await {
                 warn!("Failed to destroy stale pooled Docker sandbox: {e}");
@@ -176,7 +214,11 @@ pub(super) async fn tool_docker_exec(
             crate::docker_sandbox::exec_in_sandbox(guard.container(), command, timeout).await;
     }
 
-    if exec_result.is_err() {
+    // A container `docker exec` reports as gone must not go back to the pool either, or the next call for the same key fails the same way.
+    let container_gone = exec_result
+        .as_ref()
+        .is_ok_and(|r| docker_exec_reports_container_gone(r.exit_code, &r.stdout, &r.stderr));
+    if exec_result.is_err() || container_gone {
         // A failed exec leaves the container unfit for reuse. On a timeout `exec_in_sandbox`
         // only SIGKILLs the host-side `docker exec` client — the in-container workload keeps
         // running, and destroying the container is the only thing that bounds it. Anything
@@ -184,6 +226,8 @@ pub(super) async fn tool_docker_exec(
         // container is in. Dropping the pool key makes the guard tear it down rather than
         // hand it on.
         guard.poison();
+    } else {
+        guard.rearm();
     }
     let exec_result = exec_result.map_err(ToolError::upstream_msg)?;
 
@@ -254,6 +298,43 @@ mod tests {
         assert!(msg.contains("Command blocked"), "got: {msg}");
     }
 
+    /// Only the Docker CLI's own "container gone" report may trigger the fresh-container retry.
+    /// A timeout surfaces as `Err` and never reaches this check, and ordinary command failures (including a command that prints a similar phrase) must not be re-run either.
+    #[test]
+    fn container_gone_detection_is_limited_to_docker_daemon_errors() {
+        assert!(docker_exec_reports_container_gone(
+            1,
+            "",
+            "Error response from daemon: No such container: librefang-sandbox-abc\n"
+        ));
+        assert!(docker_exec_reports_container_gone(
+            1,
+            "",
+            "Error response from daemon: container 3f2a is not running\n"
+        ));
+        assert!(!docker_exec_reports_container_gone(
+            0,
+            "",
+            "Error response from daemon: No such container: x"
+        ));
+        assert!(!docker_exec_reports_container_gone(
+            1,
+            "",
+            "curl: (7) Failed to connect\n"
+        ));
+        assert!(!docker_exec_reports_container_gone(
+            2,
+            "",
+            "grep: No such container: pattern\n"
+        ));
+        // Output on stdout proves the command ran, so a look-alike stderr line must not trigger a second run.
+        assert!(!docker_exec_reports_container_gone(
+            1,
+            "charged\n",
+            "Error response from daemon: No such container: x\n"
+        ));
+    }
+
     /// The guard hands a scope-keyed container back to the pool instead of destroying it —
     /// that is what makes `scope = "agent"` / `"shared"` mean anything. Exercised with a
     /// synthetic container so no Docker daemon is needed: the release path never shells out.
@@ -273,7 +354,9 @@ mod tests {
             created_at: chrono::Utc::now(),
         };
 
-        let guard = SandboxGuard::new(container, Some(key.clone()), Arc::clone(&pool), "agent-1");
+        let mut guard =
+            SandboxGuard::new(container, Some(key.clone()), Arc::clone(&pool), "agent-1");
+        guard.rearm();
         drop(guard);
 
         assert_eq!(
@@ -311,6 +394,33 @@ mod tests {
         assert!(
             pool.is_empty(),
             "a poisoned container must be destroyed, not pooled"
+        );
+    }
+
+    /// A guard dropped before its exec finished (a cancelled turn, a tool timeout, a client disconnect) must not pool the container: the in-container workload may still be running, and the next call for the same key would run beside it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn guard_dropped_mid_exec_does_not_return_the_container_to_the_pool() {
+        let pool = Arc::new(ContainerPool::new());
+        let cfg = librefang_types::config::DockerSandboxConfig {
+            enabled: true,
+            scope: DockerScope::Agent,
+            ..Default::default()
+        };
+        let key = PoolKey::derive(&cfg, "agent-1", None, std::path::Path::new("/tmp"))
+            .expect("agent scope always yields a key");
+        let container = SandboxContainer {
+            container_id: "guard-cancelled-1".to_string(),
+            agent_id: "agent-1".to_string(),
+            created_at: chrono::Utc::now(),
+        };
+
+        // No `rearm`: this is the state the guard is in while `exec_in_sandbox` is still pending.
+        let guard = SandboxGuard::new(container, Some(key), Arc::clone(&pool), "agent-1");
+        drop(guard);
+
+        assert!(
+            pool.is_empty(),
+            "a container whose exec never finished must be destroyed, not pooled"
         );
     }
 

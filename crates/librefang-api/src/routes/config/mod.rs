@@ -29,11 +29,7 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route("/status", axum::routing::get(status))
         .route(
             "/dashboard/snapshot",
-            axum::routing::get({
-                |State(state): State<Arc<AppState>>| async move {
-                    axum::Json(dashboard_snapshot_inner(&state).await)
-                }
-            }),
+            axum::routing::get(dashboard_snapshot),
         )
         .route("/version", axum::routing::get(version))
         .route("/config", axum::routing::get(get_config))
@@ -298,6 +294,22 @@ fn redact_url_credentials(url: &str) -> String {
         }
     }
     url.to_string()
+}
+
+/// Redact every part of a URL that conventionally carries a credential: `user:pass@` userinfo, the query string and the fragment.
+///
+/// Used for MCP endpoint URLs in `GET /api/config`, where a remote server's token normally sits in the query string (`?token=...`).
+/// The query and fragment are replaced by a `***` marker rather than dropped, so a reader can still tell that the configured URL carries one.
+/// Provider `base_url`s keep their query (`api-version=` on Azure is configuration, not a secret) and go through [`redact_url_credentials`] only.
+fn redact_url_secrets(url: &str) -> String {
+    let redacted = redact_url_credentials(url);
+    if let Some(pos) = redacted.find('?') {
+        format!("{}?***", &redacted[..pos])
+    } else if let Some(pos) = redacted.find('#') {
+        format!("{}#***", &redacted[..pos])
+    } else {
+        redacted
+    }
 }
 
 /// Known framework source directories under the user's OS home, used as the
@@ -1149,10 +1161,41 @@ pub fn json_to_toml_value(value: &serde_json::Value) -> toml::Value {
 ///
 /// Replaces 7 parallel frontend requests (health, status, providers, channels,
 /// skills, agents, workflows) with one round-trip, cutting poll overhead by ~7x.
+///
+/// The `agents` array is owner-scoped exactly like `GET /api/agents` (#6753): a caller below Admin only sees agents whose manifest author matches its name.
+/// The memoized payload stays role-independent; the filter runs on every response after the cache lookup, so one caller's view never leaks into another's.
 pub async fn dashboard_snapshot(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> axum::Json<serde_json::Value> {
-    axum::Json(dashboard_snapshot_inner(&state).await)
+    let mut payload = dashboard_snapshot_inner(&state).await;
+    scope_snapshot_agents(&state, &mut payload, api_user.as_ref());
+    axum::Json(payload)
+}
+
+/// Drop every `agents` entry the caller may not access, using the same predicate as the agent-scoped routes ([`super::can_access_agent`]).
+///
+/// Admin+ (including the Owner-level `root` identity the middleware gives the master key and the trusted no-auth caller) and a request with no `api_user` at all keep the full list.
+fn scope_snapshot_agents(
+    state: &AppState,
+    payload: &mut serde_json::Value,
+    api_user: Option<&axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+) {
+    let restricted = api_user.is_some_and(|user| user.0.role < crate::middleware::UserRole::Admin);
+    if !restricted {
+        return;
+    }
+    if let Some(agents) = payload
+        .get_mut("agents")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        agents.retain(|agent| {
+            agent["id"]
+                .as_str()
+                .and_then(|id| id.parse::<librefang_types::agent::AgentId>().ok())
+                .is_some_and(|id| super::can_access_agent(state, id, api_user))
+        });
+    }
 }
 
 /// TTL for the [`dashboard_snapshot_inner`] memoization cache.
@@ -1229,6 +1272,20 @@ async fn dashboard_snapshot_inner(state: &Arc<AppState>) -> serde_json::Value {
     let prune_threshold = DASHBOARD_SNAPSHOT_TTL * 60;
     cache.retain(|_, v| v.generated_at.elapsed() < prune_threshold);
     (*payload).clone()
+}
+
+/// Evict the memoized dashboard payload for `state`, so the next request
+/// rebuilds it.
+///
+/// The TTL is short (900 ms), but it is long enough to swallow the refetch a
+/// dashboard mutation itself triggers: the identity and avatar writes
+/// invalidate the snapshot key the moment they answer, and a memoized entry
+/// from the last poll would hand that refetch the pre-write payload — the row
+/// would then keep the old emoji or image until the next 5 s tick (#8371
+/// review). These writes are rare and user-initiated, so dropping the entry
+/// costs one recompute and nothing else.
+pub(crate) fn invalidate_dashboard_snapshot(state: &AppState) {
+    dashboard_snapshot_cache().remove(&(state as *const AppState as usize));
 }
 
 async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value {

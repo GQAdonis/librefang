@@ -128,6 +128,37 @@ impl ReplyEnvelope {
     }
 }
 
+/// What the auto-reply pre-check decided for one inbound message.
+///
+/// The three states are not "some reply / no reply" collapsed: the engine's
+/// decision to run a turn is itself the state that matters to the caller.
+/// An empty or silent reply means the turn *ran and consumed the message*, so
+/// the ordinary dispatch must not run it again — an `Option<String>` cannot
+/// tell that apart from "the engine never claimed the message", and treating
+/// both as "not fired" re-runs the identical turn in the same channel session,
+/// duplicating the user message in history and paying a second LLM turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AutoReplyOutcome {
+    /// The engine did not claim the message (auto-reply disabled, or a
+    /// suppression pattern matched). `dispatch_message` continues to the
+    /// ordinary turn.
+    NotFired,
+    /// The engine claimed the message and its turn already ran: `Some(text)`
+    /// is the reply to deliver, `None` a turn with nothing to say (silent or
+    /// empty response). Either way the message is spent — dispatching it again
+    /// would duplicate it in the same channel session.
+    Fired(Option<String>),
+    /// The engine claimed the message and its turn failed; the failure was
+    /// already logged where it happened. The message is spent for the same
+    /// reason as [`AutoReplyOutcome::Fired`]: re-dispatching would re-run the
+    /// identical turn, and the failure is not evidence that no turn ran.
+    /// The string is the error the turn failed with, so the bridge can tell
+    /// the user (unless the adapter suppresses error responses) and record a
+    /// failed delivery — the two things the ordinary path does on a kernel
+    /// failure.
+    Failed(String),
+}
+
 /// Kernel operations needed by channel adapters.
 ///
 /// Defined here to avoid circular deps (librefang-channels can't depend on librefang-kernel).
@@ -640,9 +671,28 @@ pub trait ChannelBridgeHandle: Send + Sync {
     }
 
     /// Check if auto-reply is enabled and the message should trigger one.
-    /// Returns Some(reply_text) if auto-reply fires, None otherwise.
-    async fn check_auto_reply(&self, _agent_id: AgentId, _message: &str) -> Option<String> {
-        None
+    ///
+    /// Returns [`AutoReplyOutcome::NotFired`] when the engine does not claim
+    /// the message, so `dispatch_message` may run the ordinary turn. Once the
+    /// engine claims it (`Fired` / `Failed`), that turn has consumed the
+    /// message and the caller must not run the ordinary turn as well — see
+    /// [`AutoReplyOutcome`].
+    ///
+    /// `sender` is the same [`SenderContext`] the ordinary dispatch path
+    /// builds for a channel message, and it carries the identity the tool
+    /// authorization gate reads (`channel` + `user_id`). The auto-reply runs
+    /// a full agent turn — tools included — so it must be handed the sender
+    /// it is running on behalf of, exactly as `send_message_with_sender`
+    /// hands it to a normal turn. Dropping it here silently demotes the turn
+    /// to an unidentified sender, which the RBAC gate answers with
+    /// `NeedsApproval` for every tool outside the read-only allowlist.
+    async fn check_auto_reply(
+        &self,
+        _agent_id: AgentId,
+        _message: &str,
+        _sender: &SenderContext,
+    ) -> AutoReplyOutcome {
+        AutoReplyOutcome::NotFired
     }
 
     // ── Automation: workflows, triggers, schedules, approvals ──
@@ -2122,6 +2172,15 @@ impl BridgeManager {
                                     // thing.
                                     let mut covered_by_any_adapter = false;
                                     let mut skipped: Vec<SkippedApprovalAdapter> = Vec::new();
+                                    // Adapters the #8228 narrowing suppressed,
+                                    // with the index of their `skipped` entry
+                                    // so a failed fallback below can re-label
+                                    // the reason. See the fallback after the
+                                    // loop.
+                                    let mut narrow_suppressed: Vec<(
+                                        Arc<dyn ChannelAdapter>,
+                                        usize,
+                                    )> = Vec::new();
 
                                     // #4985 / PR #4994 follow-up: scope
                                     // delivery to adapters bound to the
@@ -2153,6 +2212,16 @@ impl BridgeManager {
                                     // listener has no such fallback
                                     // semantics — each adapter must
                                     // match on its own configured key.
+                                    //
+                                    // `reported_account_id()` is passed
+                                    // alongside for the same reason
+                                    // `resolve_channel_adapter` matches
+                                    // it: adapters that stamp their own
+                                    // `metadata["account_id"]` on inbound
+                                    // (dingtalk / email / google_chat)
+                                    // are bound by that id, and the
+                                    // listener has no inbound metadata to
+                                    // fall back on.
                                     let adapter_routing = |adapter: &Arc<dyn ChannelAdapter>| {
                                         let channel_type = adapter.channel_type();
                                         let ct_str = channel_type_str(&channel_type);
@@ -2166,6 +2235,7 @@ impl BridgeManager {
                                             requesting_agent,
                                             ct_str,
                                             adapter.account_id(),
+                                            adapter.reported_account_id(),
                                         );
                                         (bound_agent, binding_peers)
                                     };
@@ -2369,6 +2439,20 @@ impl BridgeManager {
                                                 channel: ct_str.to_string(),
                                                 reason: ApprovalSkipReason::NoRouting,
                                             });
+                                            // #8418: this adapter was
+                                            // suppressed only because *some
+                                            // sibling* routes the agent. That
+                                            // evidence is routing config, not
+                                            // membership: the sibling may not
+                                            // be in the originating chat, while
+                                            // this suppressed adapter is the
+                                            // one that carried the message.
+                                            if narrow_direct_route {
+                                                narrow_suppressed.push((
+                                                    Arc::clone(adapter),
+                                                    skipped.len() - 1,
+                                                ));
+                                            }
                                             continue;
                                         }
 
@@ -2486,6 +2570,77 @@ impl BridgeManager {
                                                 channel: ct_str.to_string(),
                                                 reason: ApprovalSkipReason::DeliveryFailed,
                                             });
+                                        }
+                                    }
+
+                                    // #8418: narrowing must not turn into a
+                                    // silent drop. The narrow check only sees
+                                    // routing *config*; an agent reached by an
+                                    // explicit @-mention in a chat served by a
+                                    // bot whose own default points elsewhere
+                                    // routes through a mechanism the check
+                                    // cannot see, and the sibling that does
+                                    // show a route may not be a member of that
+                                    // chat at all. When the routing adapters
+                                    // delivered nothing, retry the direct route
+                                    // through the adapters narrowing
+                                    // suppressed: an extra attempt — in the
+                                    // limit, the pre-#8228 N-1 warnings — is a
+                                    // smaller failure than a silently dropped
+                                    // approval.
+                                    if !covered_by_any_adapter && narrow_direct_route {
+                                        if let (Some(src_sender), Some(src_channel)) = (
+                                            approval.sender_id.as_deref(),
+                                            approval.channel.as_deref(),
+                                        ) {
+                                            let target_id = approval
+                                                .chat_id
+                                                .as_deref()
+                                                .filter(|c| !c.is_empty())
+                                                .unwrap_or(src_sender)
+                                                .to_string();
+                                            let direct_recipient = ChannelUser {
+                                                platform_id: target_id,
+                                                display_name: String::new(),
+                                                librefang_user: None,
+                                            };
+                                            for (adapter, skip_idx) in &narrow_suppressed {
+                                                if channel_type_str(&adapter.channel_type())
+                                                    != src_channel
+                                                {
+                                                    continue;
+                                                }
+                                                if let Err(e) = adapter
+                                                    .send_interactive(
+                                                        &direct_recipient,
+                                                        &approval_keyboard,
+                                                    )
+                                                    .await
+                                                {
+                                                    warn!(
+                                                        adapter = adapter.name(),
+                                                        request_id = %approval.request_id,
+                                                        recipient = %direct_recipient.platform_id,
+                                                        error = %e,
+                                                        "Failed to deliver approval notification (narrowed-direct-route fallback)"
+                                                    );
+                                                    skipped[*skip_idx].reason =
+                                                        ApprovalSkipReason::DeliveryFailed;
+                                                } else {
+                                                    info!(
+                                                        adapter = adapter.name(),
+                                                        request_id = %approval.request_id,
+                                                        recipient = %direct_recipient.platform_id,
+                                                        "Delivered approval notification (narrowed-direct-route fallback to originating chat)"
+                                                    );
+                                                    covered_by_any_adapter = true;
+                                                    // One delivered keyboard is
+                                                    // the guarantee; stop before
+                                                    // piling duplicates into
+                                                    // sibling chats.
+                                                    break;
+                                                }
+                                            }
                                         }
                                     }
 
@@ -6093,36 +6248,136 @@ async fn dispatch_message(
         .map(|d| d.admission.occurrence_id.as_str())
         .unwrap_or(&message.platform_message_id);
 
+    // Build the sender's identity once, ahead of everything below that can branch on it.
+    //
+    // Every turn this function runs from here on — the auto-reply one and the
+    // ordinary one alike — runs on behalf of this sender, and the tool
+    // authorization gate derives its `(channel, sender_id)` pair from this
+    // context. When the construction sat after the auto-reply branch instead,
+    // that branch could return without it: the turn reached the gate with no
+    // channel and no sender, and the gate answered with the guest allowlist —
+    // the seven read-only tools, everything else `NeedsApproval`.
+    let sender_ctx = build_sender_context(message, overrides.as_ref());
+
     // Auto-reply is a channel effect too. It happens after the durable claim
     // so a replay cannot bypass occurrence deduplication just because no LLM
     // call was needed.
-    if let Some(reply) = handle.check_auto_reply(agent_id, &text).await {
-        let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
-        let replied = send_scoped_response(
-            adapter,
-            handle,
-            durable.as_ref(),
-            &message.sender,
-            reply,
-            thread_id,
-            output_format,
-        )
-        .await;
-        handle
-            .record_delivery(
-                agent_id,
-                ct_str,
-                &message.sender.platform_id,
-                replied,
-                None,
+    match handle.check_auto_reply(agent_id, &text, &sender_ctx).await {
+        AutoReplyOutcome::Fired(Some(reply)) => {
+            let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
+            let replied = send_scoped_response(
+                adapter,
+                handle,
+                durable.as_ref(),
+                &message.sender,
+                reply,
                 thread_id,
+                output_format,
             )
             .await;
-        if let Some(j) = journal {
-            j.record_outcome(journal_id, replied, None).await;
+            handle
+                .record_delivery(
+                    agent_id,
+                    ct_str,
+                    &message.sender.platform_id,
+                    replied,
+                    None,
+                    thread_id,
+                )
+                .await;
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, replied, None).await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), replied).await;
+            return;
         }
-        finish_durable_dispatch(handle, durable.as_ref(), replied).await;
-        return;
+        // The engine claimed the message and the turn already ran with nothing
+        // to say (silent or empty reply): the message is spent, and silence is
+        // not a failure to report. The ordinary fallback books the same shape
+        // as a successful delivery — it skips only the send for an empty
+        // response — so book it here too: otherwise the identical silent turn
+        // counts as delivered on one path and disappears from the metrics on
+        // the other.
+        AutoReplyOutcome::Fired(None) => {
+            handle
+                .record_delivery(
+                    agent_id,
+                    ct_str,
+                    &message.sender.platform_id,
+                    true,
+                    None,
+                    thread_id,
+                )
+                .await;
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, true, None).await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), true).await;
+            return;
+        }
+        // The engine claimed the message and the turn failed. The message is
+        // still spent — falling through would dispatch the identical turn a
+        // second time in the same channel session, duplicating the user message
+        // in history and paying a second LLM turn — but the failure must reach
+        // the user and the delivery metrics through the same handler the
+        // ordinary path's kernel-failure arm uses. `handle_send_error`
+        // re-resolves a stale channel default by name and retries once, so a
+        // channel whose agent was respawned under a new id recovers here
+        // instead of locking every inbound message onto the dead id.
+        // A durable route is retained and its outcome is uncertain, so it
+        // reports the error without re-resolving, exactly as the ordinary arm.
+        AutoReplyOutcome::Failed(error) => {
+            if durable.is_some() {
+                error!(channel = ct_str, error = %error,
+                    "Durable channel auto-reply failed; route is retained and outcome is uncertain");
+                if !adapter.suppress_error_responses() {
+                    let _ = send_scoped_response(
+                        adapter,
+                        handle,
+                        durable.as_ref(),
+                        &message.sender,
+                        format!("Agent error: {error}"),
+                        thread_id,
+                        output_format,
+                    )
+                    .await;
+                }
+            } else {
+                let sender_ctx_retry = sender_ctx.clone();
+                handle_send_error(
+                    &error,
+                    agent_id,
+                    &channel_key,
+                    handle,
+                    router,
+                    adapter,
+                    &message.sender,
+                    &message.platform_message_id,
+                    ct_str,
+                    thread_id,
+                    output_format,
+                    overrides.as_ref(),
+                    |new_id| {
+                        let h = handle.clone();
+                        let t = text.clone();
+                        async move {
+                            h.send_message_with_sender(new_id, &t, &sender_ctx_retry)
+                                .await
+                        }
+                    },
+                )
+                .await;
+            }
+            if let Some(j) = journal {
+                j.record_outcome(journal_id, false, Some(error.to_string()))
+                    .await;
+            }
+            finish_durable_dispatch(handle, durable.as_ref(), false).await;
+            return;
+        }
+        // The engine did not claim the message — the ordinary dispatch below
+        // handles it.
+        AutoReplyOutcome::NotFired => {}
     }
 
     // --- Group-history drain (all dispatch gates have passed) ---
@@ -6165,9 +6420,6 @@ async fn dispatch_message(
 
     upsert_sender_into_roster(handle, message).await;
     upsert_enumerated_members_into_roster(handle, message).await;
-
-    // Build sender context to propagate identity to the agent
-    let sender_ctx = build_sender_context(message, overrides.as_ref());
 
     // Streaming path: if the adapter supports progressive output, pipe text
     // deltas directly to it instead of waiting for the full response.
@@ -6792,6 +7044,49 @@ fn has_file_saved_block(blocks: &[ContentBlock]) -> bool {
         ContentBlock::Text { text, .. } => text.starts_with(FILE_SAVED_BLOCK_PREFIX),
         _ => false,
     })
+}
+
+/// Blocks for a downloaded non-image attachment: the `[File: …] saved to …`
+/// marker first, then whatever `enrich_saved_file` produced.
+///
+/// The order is the point. The marker is the affordance an agent keys on to
+/// reach the raw file on disk, and the inlined body that follows can run to
+/// `MAX_ENRICHED_TEXT_CHARS` (200k) — trailing the marker, it pushes the
+/// affordance past the point a model reads, so the agent works from the
+/// truncated inline copy instead of the file (`#8626`).
+///
+/// Enrichment does blocking `std::fs` reads and CPU-bound PDF text extraction
+/// (`pdf_extract`), which can stall the tokio worker for a large or complex
+/// document — so it stays on a blocking thread (refs blocking-fs-on-executor).
+async fn saved_attachment_blocks(
+    file_path: &std::path::Path,
+    media_type: &str,
+    filename: &str,
+) -> Vec<ContentBlock> {
+    let marker = ContentBlock::Text {
+        text: format!(
+            "{FILE_SAVED_BLOCK_PREFIX}{filename}] saved to {}",
+            file_path.to_string_lossy()
+        ),
+        provider_metadata: None,
+    };
+
+    let file_path = file_path.to_path_buf();
+    let media_type = media_type.to_string();
+    let filename = filename.to_string();
+    let enrichment = tokio::task::spawn_blocking(move || {
+        crate::attachment_enrich::enrich_saved_file(&file_path, &media_type, &filename)
+    })
+    .await
+    .unwrap_or_else(|e| {
+        warn!("attachment enrichment task failed to join: {e}");
+        Vec::new()
+    });
+
+    let mut blocks = Vec::with_capacity(enrichment.len() + 1);
+    blocks.push(marker);
+    blocks.extend(enrichment);
+    blocks
 }
 
 /// Auto-transcribe an inbound channel audio attachment when the kernel's
@@ -7570,28 +7865,9 @@ async fn download_file_to_blocks(
         // text-like format, surface its actual content to the LLM in
         // addition to the saved-path block. The path block is preserved
         // so tools that legitimately want raw bytes (media_transcribe,
-        // custom file readers) still work.
-        // enrich_saved_file does blocking std::fs reads and CPU-bound PDF
-        // text extraction (pdf_extract), which can stall the tokio worker for
-        // a large/complex document — offload it (refs blocking-fs-on-executor).
-        let mut blocks = {
-            let file_path = file_path.clone();
-            let media_type = media_type.clone();
-            let filename = filename.to_string();
-            tokio::task::spawn_blocking(move || {
-                crate::attachment_enrich::enrich_saved_file(&file_path, &media_type, &filename)
-            })
-            .await
-            .unwrap_or_else(|e| {
-                warn!("attachment enrichment task failed to join: {e}");
-                Vec::new()
-            })
-        };
-        blocks.push(ContentBlock::Text {
-            text: format!("{FILE_SAVED_BLOCK_PREFIX}{filename}] saved to {path_str}"),
-            provider_metadata: None,
-        });
-        blocks
+        // custom file readers) still work — and it leads the blocks, so the
+        // agent never has to read past the inlined body to find it (#8626).
+        saved_attachment_blocks(&file_path, &media_type, filename).await
     };
     DownloadedFile {
         blocks,
@@ -13309,6 +13585,53 @@ mod tests {
                 }
                 other => panic!("Expected Text block, got: {other:?}"),
             }
+        }
+
+        /// #8626: the marker has to lead the blocks, and it has to name the file.
+        /// Drive the real assembly — the function `download_file_to_blocks`
+        /// itself calls — against a real text file, so the enrichment that
+        /// buries the marker is the one under test; a synthetic body would
+        /// satisfy either order.
+        #[tokio::test]
+        async fn saved_attachment_blocks_put_the_marker_first() {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().join("export.csv");
+            tokio::fs::write(&path, "cell,cell\n".repeat(4_000))
+                .await
+                .unwrap();
+
+            let blocks = saved_attachment_blocks(&path, "text/csv", "export.csv").await;
+
+            assert!(
+                blocks.len() > 1,
+                "want the marker plus the inlined body, got {} block(s)",
+                blocks.len()
+            );
+            // Pinned in full, path included: a marker that stops at "saved to "
+            // sends the agent nowhere, and `has_file_saved_block` only looks at
+            // the prefix, so it would accept that truncated marker happily.
+            let marker = format!(
+                "{FILE_SAVED_BLOCK_PREFIX}export.csv] saved to {}",
+                path.to_string_lossy()
+            );
+            match &blocks[0] {
+                ContentBlock::Text { text, .. } => assert_eq!(
+                    text, &marker,
+                    "blocks[0] must be the whole saved-path marker, path included"
+                ),
+                other => panic!("blocks[0] must be the saved-path marker, got {other:?}"),
+            }
+            assert!(
+                blocks[1..].iter().any(|b| matches!(
+                    b,
+                    ContentBlock::Text { text, .. } if text.contains("cell,cell")
+                )),
+                "the inlined body must follow the marker"
+            );
+            assert!(
+                has_file_saved_block(&blocks),
+                "the reordered marker must still satisfy the save-success check"
+            );
         }
     }
 

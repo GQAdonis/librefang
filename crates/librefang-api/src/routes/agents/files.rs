@@ -97,6 +97,22 @@ fn list_identity_files(workspace: &std::path::Path) -> Vec<serde_json::Value> {
 mod identity_file_list_tests {
     use super::*;
 
+    /// Serializes the two tests below that hold the kernel's front-matter lock.
+    ///
+    /// Each of them holds `IDENTITY_FRONT_MATTER_LOCK` in the test thread while a spawned helper takes `IDENTITY_FILE_MUTATION_LOCK` (the `IDENTITY.md` write and delete take it *before* the front-matter lock, in production order).
+    /// Run in parallel, the two can chain into a cycle: one test's helper holds the mutation lock and waits for the front-matter lock while the other test's thread holds the front-matter lock and waits for a SOUL.md helper that needs the mutation lock.
+    /// Both then stall until their 10s timeouts.
+    /// Serializing the two tests keeps the process-global locks in one order without changing the behaviour either of them covers.
+    static FRONT_MATTER_LOCK_TESTS_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Hold for the whole test, before any lock a helper could take.
+    fn lock_front_matter_tests() -> std::sync::MutexGuard<'static, ()> {
+        // The guarded section holds no state of its own, so a panic inside it leaves nothing to repair.
+        FRONT_MATTER_LOCK_TESTS_SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn list_identity_files_prefers_current_layout_and_reports_sizes() {
         let temp = tempfile::tempdir().unwrap();
@@ -250,6 +266,8 @@ mod identity_file_list_tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
+        // The sibling delete test must not interleave its mutation-lock holder with this test's front-matter wait.
+        let _serial = lock_front_matter_tests();
         let temp = tempfile::tempdir().unwrap();
         let workspace = temp.path().to_path_buf();
         std::fs::create_dir(workspace.join(".identity")).unwrap();
@@ -300,6 +318,8 @@ mod identity_file_list_tests {
         use std::sync::mpsc;
         use std::time::Duration;
 
+        // Same reason as the write test above.
+        let _serial = lock_front_matter_tests();
         let temp = tempfile::tempdir().unwrap();
         let workspace = temp.path().to_path_buf();
         std::fs::create_dir(workspace.join(".identity")).unwrap();
@@ -549,11 +569,26 @@ fn read_identity_file(
     std::fs::read_to_string(path).map_err(IdentityFileMutationError::Io)
 }
 
+/// Serializes every identity-file write and delete made through these routes.
+///
+/// A write resolves its target with `canonicalize` and then renames a staged file onto it.
+/// On Windows, a concurrent writer's rename can replace the file while this one holds a handle to it for `canonicalize`, and the replaced file's final path is then reported under `\$Extend\$Deleted\`, outside the workspace, so the write was refused as a path traversal (403).
+/// Taken before `lock_identity_front_matter`, never after it, and the kernel never takes this one, so the two cannot deadlock.
+static IDENTITY_FILE_MUTATION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lock_identity_file_mutation() -> std::sync::MutexGuard<'static, ()> {
+    // The guarded section holds no state of its own, so a panic inside it leaves nothing to repair.
+    IDENTITY_FILE_MUTATION_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn write_identity_file(
     workspace: &std::path::Path,
     filename: &str,
     content: &str,
 ) -> Result<(), IdentityFileMutationError> {
+    let _mutation_guard = lock_identity_file_mutation();
     // The kernel edits IDENTITY.md's front matter by read-modify-rename (a rename, #8469; a personality PATCH, #8447).
     // Replacing the file while one of those is between its read and its rename would let its stale copy land on top of this write.
     let _front_matter_guard =
@@ -657,6 +692,7 @@ fn delete_identity_file(
     workspace: &std::path::Path,
     filename: &str,
 ) -> Result<(), IdentityFileMutationError> {
+    let _mutation_guard = lock_identity_file_mutation();
     // Same reason as `write_identity_file`: a front-matter edit that read the file before this delete would otherwise rename its copy back into place afterwards, undoing the delete while both requests answer success.
     let _front_matter_guard =
         (filename == "IDENTITY.md").then(librefang_kernel::kernel::lock_identity_front_matter);

@@ -123,7 +123,7 @@ url = "https://reviewer.example.com/.well-known/agent.json"
 | `enabled` | bool | `false` | Whether A2A protocol is enabled. |
 | `name` | string | `"BossFang Agent OS"` | Service-level display name shown in the well-known agent card. |
 | `description` | string | `""` | Service-level description shown in the well-known agent card. |
-| `listen_path` | string | `"/a2a"` | URL path prefix for A2A endpoints. |
+| `listen_path` | string | `"/a2a"` | URL path prefix for the A2A protocol endpoints (`<listen_path>/agents`, `<listen_path>/tasks/...`); `/.well-known/agent.json` always stays at the root. Read at startup, so a change needs a restart. A value whose first segment is already taken (`api`, `v1`, `mcp`, `hooks`, `channels`, `dashboard`, `auth`, `locales`, `.well-known`) or that contains characters other than letters, digits, `-`, `_`, `.`, `~` falls back to `/a2a` with a warning. Under a non-default prefix, `<listen_path>/agents` requires authentication. |
 | `external_agents` | list of objects | `[]` | External A2A agents to discover and interact with. |
 
 **`external_agents` entries:**
@@ -297,6 +297,7 @@ no_output_timeout_secs = 30
 | `safe_bins_skip_approval` | bool | `false` | Opt-in: in `allowlist` mode, a `shell_exec` whose every base command is a declared `safe_bin` also skips the human-approval prompt. A chained command with any non-safe base still routes through approval. |
 | `full_mode_skips_approval` | bool | `true` | Whether `mode = "full"` also waives the global `approval.require_approval` list for `shell_exec`. Set `false` for unrestricted commands that still prompt. |
 | `allowed_commands` | list of strings | `[]` | Additional commands permitted when `mode = "allowlist"`. |
+| `denied_commands` | list of strings | `[]` | Commands refused under every `mode`, outranking `safe_bins` and `allowed_commands` — `mode = "full"` with `denied_commands = ["git"]` runs anything except git. See [Configuration](/configuration#exec_policy) for how names are matched and what is not inspected. |
 | `timeout_secs` | u64 | `30` | Maximum wall-clock execution time per command in seconds. |
 | `max_output_bytes` | usize | `102400` | Maximum combined stdout+stderr output size in bytes (100 KB default). |
 | `no_output_timeout_secs` | u64 | `30` | Kill processes that produce no output for this many seconds. `0` = disabled. |

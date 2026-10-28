@@ -100,33 +100,27 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "2.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13f780597b2c88ab83d02509bcc3e86366751f86fa12114005e35c55ed691763"
+checksum = "02898d848a20eb09b8a392e85bb3a4c79dba01d369758185d102b001362a60da"
 dependencies = [
  "agent-client-protocol-derive",
  "agent-client-protocol-schema",
- "async-io",
- "async-process",
  "blocking",
  "futures",
  "futures-concurrency",
  "rustc-hash 2.1.2",
- "rustix",
- "schemars 1.2.1",
  "serde",
  "serde_json",
- "shell-words",
  "tracing",
  "uuid",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "agent-client-protocol-derive"
-version = "2.2.0"
+version = "3.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4893bfb11e0e193aa5a64611a126ee87567acb1879556519c902722899229de"
+checksum = "5d2d255cb5d3afa4760084fbcaf87c7d214d316328546cd777d8736a8af6e368"
 dependencies = [
  "quote",
  "syn 3.0.2",
@@ -134,18 +128,16 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol-schema"
-version = "1.9.1"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d595a79e1665d02c91c7dd1bedd118501e75cc0a3d5b1651b5150ec4c5c1e0d"
+checksum = "3d9a84a76a4f44721e0d8dabcd85b219893c43d6171a4a033d84844d85880823"
 dependencies = [
  "anyhow",
  "derive_more 2.1.1",
- "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
  "strum",
- "tracing",
 ]
 
 [[package]]
@@ -2769,7 +2761,6 @@ checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek 4.1.3",
  "ed25519 2.2.3",
- "rand_core 0.6.4",
  "serde",
  "sha2 0.10.9",
  "subtle",
@@ -5294,7 +5285,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-acp"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
@@ -5315,7 +5306,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-api"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -5363,6 +5354,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "percent-encoding",
  "portable-pty",
  "psl",
  "rand 0.10.3",
@@ -5400,12 +5392,12 @@ dependencies = [
  "windows-sys 0.61.2",
  "wiremock",
  "zeroize",
- "zip 8.6.0",
+ "zip 9.1.3",
 ]
 
 [[package]]
 name = "librefang-channels"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "axum",
@@ -5444,7 +5436,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-cli"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "arc-swap",
  "base64 0.23.1",
@@ -5493,7 +5485,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-desktop"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "axum",
  "clap",
@@ -5526,7 +5518,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-extensions"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "aes-gcm",
  "argon2 0.5.3",
@@ -5560,7 +5552,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-hands"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "dashmap",
@@ -5585,7 +5577,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-http"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "librefang-types",
  "reqwest 0.13.5",
@@ -5597,7 +5589,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-import"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "dirs 7.0.0",
@@ -5615,7 +5607,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5680,7 +5672,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-handle"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5693,7 +5685,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-metering"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "librefang-llm-driver",
  "librefang-memory",
@@ -5705,7 +5697,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-router"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "dirs 7.0.0",
  "librefang-hands",
@@ -5721,7 +5713,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-llm-driver"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "dashmap",
@@ -5735,7 +5727,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-llm-drivers"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5773,7 +5765,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-memory"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5801,7 +5793,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-memory-wiki"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "librefang-kernel-handle",
@@ -5817,7 +5809,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-rl-export"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -5838,7 +5830,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5846,7 +5838,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "dirs 7.0.0",
- "ed25519-dalek 2.2.0",
+ "ed25519-dalek 3.0.0",
  "encoding_rs",
  "flate2",
  "futures",
@@ -5912,7 +5904,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-audit"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "hex",
@@ -5930,7 +5922,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-mcp"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5959,7 +5951,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-media"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5980,7 +5972,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-sandbox-docker"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "dashmap",
@@ -5992,7 +5984,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-skills"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "aho-corasick",
  "base64 0.23.1",
@@ -6017,12 +6009,12 @@ dependencies = [
  "walkdir",
  "webpki-roots 1.0.9",
  "wiremock",
- "zip 8.6.0",
+ "zip 9.1.3",
 ]
 
 [[package]]
 name = "librefang-storage"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6047,7 +6039,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-subprocess"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "metrics",
  "serde_json",
@@ -6059,7 +6051,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-telemetry"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "librefang-types",
  "metrics",
@@ -6067,7 +6059,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-testing"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -6094,12 +6086,12 @@ dependencies = [
 
 [[package]]
 name = "librefang-types"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "chrono",
  "dirs 7.0.0",
- "ed25519-dalek 2.2.0",
+ "ed25519-dalek 3.0.0",
  "fluent",
  "hex",
  "librefang-storage",
@@ -6122,7 +6114,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-uar-spec"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "chrono",
  "librefang-types",
@@ -6135,13 +6127,13 @@ dependencies = [
 
 [[package]]
 name = "librefang-wire"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
  "chrono",
  "dashmap",
- "ed25519-dalek 2.2.0",
+ "ed25519-dalek 3.0.0",
  "hex",
  "hkdf 0.12.4",
  "hmac 0.12.1",
@@ -6856,9 +6848,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.31.2"
+version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d0705320c1e6ba1d912b5e37cf18071b6c2e9b7fa8215a1e8a7651966f5d3"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
 dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
@@ -8593,7 +8585,7 @@ checksum = "2e842efad9119158434d193c6682e2ebee4b44d6ad801d7b349623b3f57cdf55"
 dependencies = [
  "futures",
  "indexmap 2.14.0",
- "nix 0.31.2",
+ "nix 0.31.3",
  "tokio",
  "tracing",
  "windows 0.62.2",
@@ -8606,7 +8598,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f21b97672d2dc848e7b25701ab4535618b92f4861c13cc3f7f7bed52ad3c8da"
 dependencies = [
  "indexmap 2.14.0",
- "nix 0.31.2",
+ "nix 0.31.3",
  "windows 0.62.2",
 ]
 
@@ -9837,7 +9829,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3aec6cb630dbe85d72ffd7bcd95f07e1bd69f9f270ee8adfa1afe443a6331438"
 dependencies = [
  "log",
- "nix 0.31.2",
+ "nix 0.31.3",
  "ssh-encoding",
  "windows-sys 0.61.2",
 ]
@@ -10096,7 +10088,7 @@ dependencies = [
  "chrono",
  "dyn-clone",
  "indexmap 1.9.3",
- "schemars_derive 0.8.22",
+ "schemars_derive",
  "serde",
  "serde_json",
  "url",
@@ -10123,7 +10115,6 @@ checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
 dependencies = [
  "dyn-clone",
  "ref-cast",
- "schemars_derive 1.2.1",
  "serde",
  "serde_json",
 ]
@@ -10133,18 +10124,6 @@ name = "schemars_derive"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32e265784ad618884abaea0600a9adf15393368d840e0222d101a072f3f7534d"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde_derive_internals",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "schemars_derive"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d115b50f4aaeea07e79c1912f645c7513d81715d0420f8bc77a18c6260b307f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13390,9 +13369,9 @@ dependencies = [
 
 [[package]]
 name = "typed-path"
-version = "0.12.3"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typeid"
@@ -13675,9 +13654,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utoipa"
-version = "5.5.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bde15df68e80b16c7d16b9616e80770ad158988daa56a27dccd1e55558b0160"
+checksum = "8765fe27aeff71012a3f90fa474cf1df863a7d0dd81ed25de4e63fff2544994f"
 dependencies = [
  "indexmap 2.14.0",
  "serde",
@@ -13687,14 +13666,14 @@ dependencies = [
 
 [[package]]
 name = "utoipa-gen"
-version = "5.5.0"
+version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba0b99ee52df3028635d93840c797102da61f8a7bb3cf751032455895b52ef8"
+checksum = "d935f1c83fdf8b88f09bbe050d0cea78ea4afee6d7b0317403228c1200b2c8ab"
 dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.117",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -15538,13 +15517,12 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "x25519-dalek"
-version = "2.0.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7e468321c81fb07fa7f4c636c3972b9100f0346e5b6a9f2bd0603a52f7ed277"
+checksum = "e7e8131a03190127fb2263afc72b322ecadae46b6ff8c6f399ff5d02f5559af6"
 dependencies = [
- "curve25519-dalek 4.1.3",
- "rand_core 0.6.4",
- "serde",
+ "curve25519-dalek 5.0.0",
+ "rand_core 0.10.0",
  "zeroize",
 ]
 
@@ -15583,7 +15561,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xtask"
-version = "2026.9.19"
+version = "2026.10.16"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -15793,15 +15771,18 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "8.6.0"
+version = "9.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+checksum = "1156b39d142a34b999c2310a50455e0cb3760bf7efad0122f796d813bee26ccb"
 dependencies = [
  "crc32fast",
  "flate2",
+ "getrandom 0.4.2",
  "indexmap 2.14.0",
  "memchr",
+ "nix 0.31.3",
  "typed-path",
+ "windows-sys 0.61.2",
  "zopfli",
 ]
 

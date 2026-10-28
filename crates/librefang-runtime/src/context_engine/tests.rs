@@ -64,6 +64,7 @@ impl ContextEngine for TransformOnlyEngine {
         _driver: Arc<dyn LlmDriver>,
         _model: &str,
         _context_window_tokens: usize,
+        _reasoning_echo_policy: librefang_types::model_catalog::ReasoningEchoPolicy,
     ) -> LibreFangResult<CompactionResult> {
         Ok(CompactionResult {
             summary: String::new(),
@@ -208,6 +209,57 @@ async fn test_assemble_no_overflow() {
         .await
         .unwrap();
     assert_eq!(result.recovery, RecoveryStage::None);
+}
+
+/// A window a compaction just narrowed is small by design, so no overflow recovery fires; an orphaned ToolResult it opens with must still be repaired before the request is built (#8545).
+#[tokio::test]
+async fn test_assemble_repairs_orphaned_tool_results_without_overflow() {
+    use librefang_types::message::{ContentBlock, MessageContent, Role};
+
+    let engine = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+    let mixed_delivery = Message {
+        role: Role::User,
+        content: MessageContent::Blocks(vec![
+            ContentBlock::ToolResult {
+                tool_use_id: "call_summarised_away".to_string(),
+                tool_name: "shell_exec".to_string(),
+                content: "ok".to_string(),
+                is_error: false,
+                status: Default::default(),
+                approval_request_id: None,
+            },
+            ContentBlock::Text {
+                text: "[System: 1 tool(s) returned no output]".to_string(),
+                provider_metadata: None,
+            },
+        ]),
+        pinned: false,
+        timestamp: None,
+    };
+    let mut messages = vec![
+        Message::user("[Context compaction summary] earlier turns"),
+        mixed_delivery,
+        Message::assistant("done"),
+        Message::user("next question"),
+    ];
+    assert!(crate::session_repair::has_orphaned_tool_results(&messages));
+
+    let result = engine
+        .assemble(AgentId::new(), &mut messages, "system", &[], 200_000)
+        .await
+        .unwrap();
+
+    assert_eq!(result.recovery, RecoveryStage::None);
+    assert!(
+        !crate::session_repair::has_orphaned_tool_results(&messages),
+        "assemble must not hand an orphaned ToolResult to the request builder"
+    );
+    assert!(messages.iter().all(|m| match &m.content {
+        MessageContent::Blocks(blocks) => !blocks
+            .iter()
+            .any(|b| matches!(b, ContentBlock::ToolResult { .. })),
+        MessageContent::Text(_) => true,
+    }));
 }
 
 #[tokio::test]
@@ -816,6 +868,7 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
             _req: crate::llm_driver::CompletionRequest,
         ) -> Result<CompletionResponse, LlmError> {
             Ok(CompletionResponse {
+                text_synthesized_from_thinking: false,
                 content: vec![ContentBlock::Text {
                     text: "Summary of prior conversation".to_string(),
                     provider_metadata: None,
@@ -885,10 +938,18 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
             driver: Arc<dyn LlmDriver>,
             model: &str,
             context_window_tokens: usize,
+            reasoning_echo_policy: librefang_types::model_catalog::ReasoningEchoPolicy,
         ) -> LibreFangResult<CompactionResult> {
             self.compact_count.fetch_add(1, Ordering::SeqCst);
             self.inner
-                .compact(agent_id, messages, driver, model, context_window_tokens)
+                .compact(
+                    agent_id,
+                    messages,
+                    driver,
+                    model,
+                    context_window_tokens,
+                    reasoning_echo_policy,
+                )
                 .await
         }
         async fn after_turn(&self, agent_id: AgentId, messages: &[Message]) -> LibreFangResult<()> {
@@ -939,6 +1000,7 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
             driver.clone(),
             "test-model",
             200_000,
+            librefang_types::model_catalog::ReasoningEchoPolicy::None,
         )
         .await;
     assert_eq!(
@@ -964,6 +1026,7 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
             driver.clone(),
             "test-model",
             200_000,
+            librefang_types::model_catalog::ReasoningEchoPolicy::None,
         )
         .await;
     assert_eq!(
@@ -971,4 +1034,213 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
         2,
         "compact must be called when should_compress transitions to true"
     );
+}
+
+/// `DefaultContextEngine::compact` must forward the caller's reasoning echo policy into the compactor, so the kept tail keeps its `Thinking` blocks for an `Echo` provider (DeepSeek V4 Flash, #4842) that rejects a history without them.
+#[tokio::test]
+async fn test_default_engine_compact_honours_reasoning_echo_policy() {
+    use crate::llm_driver::{CompletionResponse, LlmError};
+    use librefang_types::message::{ContentBlock, MessageContent, Role, TokenUsage};
+    use librefang_types::model_catalog::ReasoningEchoPolicy;
+
+    struct SummaryDriver;
+
+    #[async_trait]
+    impl LlmDriver for SummaryDriver {
+        async fn complete(
+            &self,
+            _req: crate::llm_driver::CompletionRequest,
+        ) -> Result<CompletionResponse, LlmError> {
+            Ok(CompletionResponse {
+                content: vec![ContentBlock::Text {
+                    text: "Summary of prior conversation".to_string(),
+                    provider_metadata: None,
+                }],
+                stop_reason: librefang_types::message::StopReason::EndTurn,
+                tool_calls: vec![],
+                usage: TokenUsage::default(),
+                actual_provider: None,
+                actual_model: None,
+                text_synthesized_from_thinking: false,
+            })
+        }
+    }
+
+    fn assistant_with_thinking(n: usize) -> Message {
+        Message {
+            role: Role::Assistant,
+            content: MessageContent::Blocks(vec![
+                ContentBlock::Thinking {
+                    thinking: format!("reasoning {n}"),
+                    provider_metadata: None,
+                },
+                ContentBlock::Text {
+                    text: format!("answer {n}"),
+                    provider_metadata: None,
+                },
+            ]),
+            pinned: false,
+            timestamp: None,
+        }
+    }
+
+    fn has_thinking(message: &Message) -> bool {
+        matches!(&message.content, MessageContent::Blocks(blocks) if blocks.iter().any(|b| matches!(b, ContentBlock::Thinking { .. })))
+    }
+
+    let config = ContextEngineConfig {
+        compaction: Some(librefang_types::config::CompactionTomlConfig {
+            keep_recent: 4,
+            strip_reasoning_after_turns: 1,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let engine = DefaultContextEngine::new(config, make_memory(), None);
+    let mut messages = Vec::new();
+    for n in 0..4 {
+        messages.push(Message::user(format!("question {n}")));
+        messages.push(assistant_with_thinking(n));
+    }
+    let agent_id = librefang_types::agent::AgentId::new();
+
+    let echo = engine
+        .compact(
+            agent_id,
+            &messages,
+            Arc::new(SummaryDriver),
+            "deepseek-v4-flash",
+            200_000,
+            ReasoningEchoPolicy::Echo,
+        )
+        .await
+        .unwrap();
+    let echo_assistants: Vec<_> = echo
+        .kept_messages
+        .iter()
+        .filter(|m| m.role == Role::Assistant)
+        .collect();
+    assert_eq!(echo_assistants.len(), 2);
+    assert!(
+        echo_assistants.iter().all(|m| has_thinking(m)),
+        "Echo policy must keep every Thinking block in the kept tail"
+    );
+
+    let stripped = engine
+        .compact(
+            agent_id,
+            &messages,
+            Arc::new(SummaryDriver),
+            "some-model",
+            200_000,
+            ReasoningEchoPolicy::None,
+        )
+        .await
+        .unwrap();
+    let stripped_assistants: Vec<_> = stripped
+        .kept_messages
+        .iter()
+        .filter(|m| m.role == Role::Assistant)
+        .collect();
+    assert_eq!(stripped_assistants.len(), 2);
+    assert!(
+        !has_thinking(stripped_assistants[0]),
+        "older kept assistant turn must lose its reasoning without Echo"
+    );
+    assert!(
+        has_thinking(stripped_assistants[1]),
+        "newest assistant turn keeps its reasoning"
+    );
+}
+
+/// The engine is built once at boot from the global `[compaction]`, so the agent's resolved settings must reach it per call; otherwise `agent.toml [compaction] keep_recent` was ignored by every engine-driven compaction.
+#[tokio::test]
+async fn test_engine_compaction_honours_the_callers_resolved_config() {
+    use crate::llm_driver::{CompletionResponse, LlmError};
+    use librefang_types::message::{ContentBlock, TokenUsage};
+    use librefang_types::model_catalog::ReasoningEchoPolicy;
+
+    struct SummaryDriver;
+
+    #[async_trait]
+    impl LlmDriver for SummaryDriver {
+        async fn complete(
+            &self,
+            _req: crate::llm_driver::CompletionRequest,
+        ) -> Result<CompletionResponse, LlmError> {
+            Ok(CompletionResponse {
+                content: vec![ContentBlock::Text {
+                    text: "Summary of prior conversation".to_string(),
+                    provider_metadata: None,
+                }],
+                stop_reason: librefang_types::message::StopReason::EndTurn,
+                tool_calls: vec![],
+                usage: TokenUsage::default(),
+                actual_provider: None,
+                actual_model: None,
+                text_synthesized_from_thinking: false,
+            })
+        }
+    }
+
+    let global = librefang_types::config::CompactionTomlConfig {
+        keep_recent: 4,
+        ..Default::default()
+    };
+    let config = ContextEngineConfig {
+        compaction: Some(global.clone()),
+        ..Default::default()
+    };
+    let mut messages = Vec::new();
+    for n in 0..10 {
+        messages.push(Message::user(format!("question {n}")));
+        messages.push(Message::assistant(format!("answer {n}")));
+    }
+    let agent_id = librefang_types::agent::AgentId::new();
+    let per_agent = CompactionConfig::from_toml(&librefang_types::config::CompactionTomlConfig {
+        keep_recent: 8,
+        ..global
+    });
+
+    let engines: Vec<Box<dyn ContextEngine>> = vec![
+        Box::new(DefaultContextEngine::new(
+            config.clone(),
+            make_memory(),
+            None,
+        )),
+        Box::new(SummaryContextEngine::new(
+            DefaultContextEngine::new(config.clone(), make_memory(), None),
+            0.8,
+        )),
+        Box::new(StackedContextEngine::new(vec![Box::new(
+            DefaultContextEngine::new(config.clone(), make_memory(), None),
+        )])),
+    ];
+    for engine in engines {
+        let boot = engine
+            .compact(
+                agent_id,
+                &messages,
+                Arc::new(SummaryDriver),
+                "m",
+                200_000,
+                ReasoningEchoPolicy::None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(boot.kept_messages.len(), 4);
+        let resolved = engine
+            .compact_with_config(
+                agent_id,
+                &messages,
+                Arc::new(SummaryDriver),
+                "m",
+                200_000,
+                ReasoningEchoPolicy::None,
+                Some(&per_agent),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resolved.kept_messages.len(), 8);
+    }
 }
