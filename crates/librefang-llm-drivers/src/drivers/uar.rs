@@ -42,7 +42,10 @@ use crate::llm_driver::{
 
 #[path = "uar_delegated_host_context.rs"]
 mod delegated_host_context;
-pub use delegated_host_context::{configure_delegated_host_contexts, delegated_host_contexts, HostContextResolver, configure_host_context_resolver, resolve_chat_host_context};
+pub use delegated_host_context::{
+    configure_delegated_host_contexts, configure_host_context_resolver, delegated_host_contexts,
+    resolve_chat_host_context, HostContextResolver,
+};
 
 // ---------------------------------------------------------------------------
 // Driver struct
@@ -247,7 +250,11 @@ pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentia
 
 /// Read only the authenticated selected workspace, never model-supplied scope.
 pub fn selected_workspace_id() -> Option<String> {
-    binding_cell().read().unwrap_or_else(std::sync::PoisonError::into_inner).workspace_id.clone()
+    binding_cell()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .workspace_id
+        .clone()
 }
 
 /// Set the authenticated workspace attached to private connection credentials.
@@ -280,7 +287,7 @@ pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Opt
     guard.endpoint = endpoint.map(|value| value.trim_end_matches('/').to_string());
     if guard.endpoint.is_none() || bearer.is_some() {
         guard.delegated_host_contexts.clear();
-    guard.host_context_resolver = None;
+        guard.host_context_resolver = None;
     }
     if let Some(bearer) = bearer {
         guard.credentials = UarResolvedCredentials::delegated(bearer);
@@ -1174,6 +1181,7 @@ fn completion_response(
         provider_metadata: None,
     }));
     CompletionResponse {
+        text_synthesized_from_thinking: false,
         content,
         stop_reason,
         tool_calls,
@@ -1666,7 +1674,14 @@ fn build_uar_request(
             for (key, value) in extra_body {
                 if matches!(
                     key.as_str(),
-                    "model" | "message" | "messages" | "tools" | "stream" | "stream_mode" | "memory_enabled" | "run_policy"
+                    "model"
+                        | "message"
+                        | "messages"
+                        | "tools"
+                        | "stream"
+                        | "stream_mode"
+                        | "memory_enabled"
+                        | "run_policy"
                 ) {
                     tracing::warn!(key, "ignoring reserved UAR extra_body field");
                     continue;
