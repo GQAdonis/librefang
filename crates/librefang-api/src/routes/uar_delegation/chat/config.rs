@@ -200,7 +200,7 @@ pub async fn save(
     if toml::to_string_pretty(&manifest).is_err() {
         return failure("uar_target_save_failed");
     }
-    match state.kernel.update_manifest(id, manifest) {
+    match state.kernel.update_manifest(id, manifest, "api") {
         Ok(()) => Json(json!({"target":target})).into_response(),
         Err(_) => failure("uar_target_save_failed"),
     }
