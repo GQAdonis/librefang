@@ -1322,19 +1322,19 @@ async fn pending_approve_publishes_signed_skill_event() {
 
     let id = "dddddddd-0000-0000-0000-0000000000a1";
     let root = state.kernel.home_dir().join("skills");
-    // A hyphenated name: the receiver's slug pattern refuses `_`.
-    let mut candidate = fixture_candidate("11111111-1111-1111-1111-111111111111", id);
-    candidate.name = "fmt-before-commit".to_string();
-    storage::save_candidate(&root, &candidate, 20, None).unwrap();
-    // A snake_case name cannot be a receiver slug, so its approval succeeds but is not announced.
-    let skipped_id = "dddddddd-0000-0000-0000-0000000000a2";
+    // A snake_case workshop name is published as-is.
     storage::save_candidate(
         &root,
-        &fixture_candidate("11111111-1111-1111-1111-111111111111", skipped_id),
+        &fixture_candidate("11111111-1111-1111-1111-111111111111", id),
         20,
         None,
     )
     .unwrap();
+    // A name ending in `_` is a valid BossFang skill but not a receiver slug, so its approval succeeds and is not announced.
+    let skipped_id = "dddddddd-0000-0000-0000-0000000000a2";
+    let mut skipped = fixture_candidate("11111111-1111-1111-1111-111111111111", skipped_id);
+    skipped.name = "fmt_before_commit_".to_string();
+    storage::save_candidate(&root, &skipped, 20, None).unwrap();
     let resp = app
         .clone()
         .oneshot(
@@ -1391,8 +1391,8 @@ async fn pending_approve_publishes_signed_skill_event() {
             "type": "openduet.skill.published.v1",
             "timestamp": approved_at,
             "data": {
-                "slug": "fmt-before-commit",
-                "title": "fmt-before-commit",
+                "slug": "fmt_before_commit",
+                "title": "fmt_before_commit",
                 "summary": "Run cargo fmt before commit",
                 "instructions": "# Cargo fmt before commit\n\nRun `cargo fmt --all`.\n",
                 "approvedBy": "alice",

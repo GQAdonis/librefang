@@ -194,14 +194,14 @@ const SKILL_APPROVER_MAX: usize = 200;
 const SKILL_TARGET_ID_MAX: usize = 128;
 const SKILL_TARGETS_MAX: usize = 50;
 
-/// `^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$`.
+/// `^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$`: BossFang skill names are sent as-is, never rewritten.
 fn is_publishable_slug(slug: &str) -> bool {
     let b = slug.as_bytes();
     let edge = |c: &u8| c.is_ascii_lowercase() || c.is_ascii_digit();
-    (2..=40).contains(&b.len())
+    (2..=64).contains(&b.len())
         && edge(&b[0])
         && edge(&b[b.len() - 1])
-        && b.iter().all(|c| edge(c) || *c == b'-')
+        && b.iter().all(|c| edge(c) || *c == b'-' || *c == b'_')
 }
 
 /// Trimmed length is 1..=max characters.
@@ -219,7 +219,7 @@ fn check_text(field: &str, value: &str, max: usize) -> Result<(), String> {
 pub fn skill_published_body(p: &SkillPublication<'_>) -> Result<Vec<u8>, String> {
     if !is_publishable_slug(p.slug) {
         return Err(format!(
-            "slug '{}' does not match ^[a-z0-9][a-z0-9-]{{0,38}}[a-z0-9]$",
+            "slug '{}' does not match ^[a-z0-9][a-z0-9_-]{{0,62}}[a-z0-9]$",
             p.slug
         ));
     }
@@ -500,13 +500,27 @@ mod tests {
 
     #[test]
     fn skill_body_refuses_what_the_receiver_would_refuse() {
-        for slug in ["weekly_digest", "a", "-ab", "ab-", "Ab", &"a".repeat(41)] {
+        for slug in [
+            "a",
+            "-ab",
+            "_ab",
+            "ab-",
+            "ab_",
+            "Ab",
+            "a.b",
+            &"a".repeat(65),
+        ] {
             assert!(
                 skill_published_body(&publication(slug, &[])).is_err(),
                 "slug {slug:?} must not be sent"
             );
         }
-        assert!(skill_published_body(&publication("ab", &[])).is_ok());
+        for slug in ["ab", "weekly_digest", "fmt-before_commit", &"a".repeat(64)] {
+            assert!(
+                skill_published_body(&publication(slug, &[])).is_ok(),
+                "slug {slug:?} must be sent"
+            );
+        }
         let mut p = publication("ok-slug", &[]);
         p.summary = "  ";
         assert!(skill_published_body(&p).unwrap_err().contains("summary"));
