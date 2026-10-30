@@ -695,6 +695,35 @@ pub async fn run_schedule(
                 })),
             )
         }
+        librefang_types::scheduler::CronAction::SignedWebhook { .. } => {
+            // Delivery retries can run for tens of minutes, so the request only dispatches it; the outcome lands in the job's last_status like a scheduled fire.
+            let kernel = state.kernel.clone();
+            tokio::spawn(async move {
+                let outcome = kernel
+                    .fire_cron_signed_webhook(&job, chrono::Utc::now())
+                    .await;
+                match outcome {
+                    Ok(_) => kernel.cron().record_success(job.id),
+                    Err(error) => {
+                        tracing::warn!(schedule_id = %job.id, %error, "manual signed webhook run failed");
+                        kernel.cron().record_failure(job.id, &error);
+                    }
+                }
+                if let Err(e) = kernel.cron().persist() {
+                    tracing::warn!(
+                        "Failed to persist cron jobs after manual signed webhook run: {e}"
+                    );
+                }
+            });
+            (
+                StatusCode::ACCEPTED,
+                Json(serde_json::json!({
+                    "status": "accepted",
+                    "schedule_id": id,
+                    "type": "signed_webhook",
+                })),
+            )
+        }
     }
 }
 

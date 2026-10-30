@@ -1,0 +1,3 @@
+Add Standard Webhooks-signed outbound events: a `signed_webhook` cron action that POSTs a signed event to a named `[[signed_webhooks.targets]]` entry instead of running an agent turn, and a skill-workshop publish hook that announces each human approval with the skill content, its SHA-256 and the approver.
+Each event carries `webhook-id`, `webhook-timestamp` and `webhook-signature`, the id is stable per fire and reused on every retry, and transient failures are retried with backoff for about 43 minutes.
+A cron job may send only to a target owned by the job's own `owner`, and the stamped `type`, `bossTaskId` and `dueAt` body fields cannot be set by the job (@GQAdonis)

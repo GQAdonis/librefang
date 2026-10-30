@@ -42,6 +42,12 @@ const MAX_TIMEOUT_SECS: u64 = 600;
 /// Maximum webhook URL length.
 const MAX_WEBHOOK_URL_LEN: usize = 2048;
 
+/// Maximum length of a signed-webhook target name and event type.
+const MAX_SIGNED_WEBHOOK_NAME_LEN: usize = 128;
+
+/// Maximum serialized size of a signed-webhook action's `data`.
+const MAX_SIGNED_WEBHOOK_DATA_BYTES: usize = 16_384;
+
 // ---------------------------------------------------------------------------
 // CronJobId
 // ---------------------------------------------------------------------------
@@ -162,7 +168,23 @@ pub enum CronAction {
         #[serde(default)]
         timeout_secs: Option<u64>,
     },
+    /// POST a Standard Webhooks-signed event to a configured target; no agent turn runs.
+    ///
+    /// The body is `data` plus three fields the daemon stamps and a job cannot set: `type` (= `event_type`), `bossTaskId` (this job's id) and `dueAt` (the scheduled fire time, RFC 3339 UTC).
+    /// The URL and signing secret come from the `[[signed_webhooks.targets]]` entry named by `target`, which must be owned by this job's `owner`.
+    SignedWebhook {
+        /// Name of a `[[signed_webhooks.targets]]` entry in `config.toml`.
+        target: String,
+        /// Value of the body's `type` field (max 128 chars).
+        event_type: String,
+        /// Extra top-level body fields. Must not contain a reserved key ([`SIGNED_WEBHOOK_RESERVED_KEYS`]).
+        #[serde(default)]
+        data: serde_json::Map<String, serde_json::Value>,
+    },
 }
+
+/// Body keys of a [`CronAction::SignedWebhook`] event that the daemon stamps on every fire; a job's `data` may not set them.
+pub const SIGNED_WEBHOOK_RESERVED_KEYS: &[&str] = &["type", "bossTaskId", "dueAt"];
 
 // ---------------------------------------------------------------------------
 // PreScript
@@ -720,6 +742,38 @@ impl CronJob {
                     }
                 }
             }
+            CronAction::SignedWebhook {
+                target,
+                event_type,
+                data,
+            } => {
+                if target.is_empty() || target.len() > MAX_SIGNED_WEBHOOK_NAME_LEN {
+                    return Err(format!(
+                        "signed_webhook target must be 1..={MAX_SIGNED_WEBHOOK_NAME_LEN} chars"
+                    ));
+                }
+                if event_type.is_empty() || event_type.len() > MAX_SIGNED_WEBHOOK_NAME_LEN {
+                    return Err(format!(
+                        "signed_webhook event_type must be 1..={MAX_SIGNED_WEBHOOK_NAME_LEN} chars"
+                    ));
+                }
+                if let Some(key) = SIGNED_WEBHOOK_RESERVED_KEYS
+                    .iter()
+                    .find(|k| data.contains_key(**k))
+                {
+                    return Err(format!(
+                        "signed_webhook data must not set '{key}'; the daemon stamps it on every fire"
+                    ));
+                }
+                let size = serde_json::to_vec(data)
+                    .map(|v| v.len())
+                    .unwrap_or(usize::MAX);
+                if size > MAX_SIGNED_WEBHOOK_DATA_BYTES {
+                    return Err(format!(
+                        "signed_webhook data too large ({size} bytes, max {MAX_SIGNED_WEBHOOK_DATA_BYTES})"
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -1163,6 +1217,57 @@ mod tests {
     #[test]
     fn valid_job_passes() {
         assert!(valid_job().validate(0).is_ok());
+    }
+
+    // -- Signed webhook action --
+
+    fn signed_webhook_job(data: serde_json::Value) -> CronJob {
+        let mut job = valid_job();
+        job.action = CronAction::SignedWebhook {
+            target: "openduet-wake".into(),
+            event_type: "openduet.wake.v1".into(),
+            data: data.as_object().cloned().unwrap_or_default(),
+        };
+        job
+    }
+
+    #[test]
+    fn signed_webhook_action_round_trips_and_validates() {
+        let job = signed_webhook_job(serde_json::json!({"kind": "routine", "subjectId": "r1"}));
+        assert!(job.validate(0).is_ok());
+        let json = serde_json::to_value(&job.action).unwrap();
+        assert_eq!(json["kind"], "signed_webhook");
+        assert_eq!(json["data"]["subjectId"], "r1");
+        let back: CronAction = serde_json::from_value(serde_json::json!({
+            "kind": "signed_webhook",
+            "target": "t",
+            "event_type": "e"
+        }))
+        .unwrap();
+        assert!(matches!(back, CronAction::SignedWebhook { ref data, .. } if data.is_empty()));
+    }
+
+    #[test]
+    fn signed_webhook_data_cannot_set_stamped_identity_fields() {
+        for key in SIGNED_WEBHOOK_RESERVED_KEYS {
+            let job = signed_webhook_job(serde_json::json!({ *key: "forged" }));
+            let err = job.validate(0).expect_err("a reserved key must be refused");
+            assert!(err.contains(key), "{err}");
+        }
+    }
+
+    #[test]
+    fn signed_webhook_requires_target_and_event_type() {
+        let mut job = signed_webhook_job(serde_json::json!({}));
+        if let CronAction::SignedWebhook { target, .. } = &mut job.action {
+            target.clear();
+        }
+        assert!(job.validate(0).unwrap_err().contains("target"));
+        let mut job = signed_webhook_job(serde_json::json!({}));
+        if let CronAction::SignedWebhook { event_type, .. } = &mut job.action {
+            event_type.clear();
+        }
+        assert!(job.validate(0).unwrap_err().contains("event_type"));
     }
 
     // -- Name validation --

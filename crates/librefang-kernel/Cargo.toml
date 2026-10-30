@@ -65,6 +65,7 @@ totp-rs = { workspace = true }
 zeroize = { workspace = true }
 surrealdb = { workspace = true, optional = true }
 sha2 = { workspace = true }
+hmac = { workspace = true }
 # Used by the boot-time LIBREFANG_STATE_SECRET shape validator
 # (audit: state-secret-default-random) — mirrors the 32-byte base64
 # contract enforced by librefang_extensions::vault::decode_master_key

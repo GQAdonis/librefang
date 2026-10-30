@@ -63,6 +63,9 @@ regexes = [
   # A WebSocket handshake nonce is client-generated per connection and carries no authorization; it is echoed back hashed as `Sec-WebSocket-Accept` purely to prove the peer speaks the protocol.
   # Used verbatim by the raw-socket upgrade tests, which have to write the handshake by hand.
   '''^dGhlIHNhbXBsZSBub25jZQ==$''',
+  # Public Standard Webhooks reference-vector secrets (standard-webhooks/standard-webhooks `libraries/*` tests), used to pin the outbound signer and in signed-webhook integration tests.
+  '''^(whsec_)?MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw$''',
+  '''^(whsec_)?C2FVsBQIhrscChlQIMV\+b5sSYspob7oD$''',
   # Intentional fake credentials embedded in redaction / sanitization / driver
   # tests (the tests assert these get stripped) and one openfang→librefang doc
   # example. Each is a fixed literal or a tight test-only convention, so

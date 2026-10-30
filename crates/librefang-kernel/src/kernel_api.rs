@@ -50,6 +50,9 @@ use crate::cron::CronScheduler;
 use crate::error::{KernelError, KernelResult};
 use crate::event_bus::EventBus;
 use crate::inbox::InboxStatus;
+use crate::kernel::uar_harness::{
+    JobDispatchError, JobDispatchOutcome, NativeJobStream, ResolvedDispatch,
+};
 use crate::kernel_handle::KernelHandle;
 use crate::pairing::PairingManager;
 use crate::registry::AgentRegistry;
@@ -62,7 +65,6 @@ use crate::triggers::{Trigger, TriggerId, TriggerMatch, TriggerPattern};
 use crate::workflow::WorkflowEngine;
 use crate::DeliveryTracker;
 use crate::LibreFangKernel;
-use crate::kernel::uar_harness::{ResolvedDispatch, JobDispatchOutcome, JobDispatchError, NativeJobStream};
 
 use librefang_kernel_metering::MeteringEngine;
 use librefang_memory::MemorySubstrate;
@@ -510,7 +512,10 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     /// Explicit selected-job seam. Alternate kernels refuse selection unless
     /// they implement its durable authority; native implementations stay usable.
     /// Durable task-board classification; unavailable is never native authority.
-    async fn read_job_dispatch_intent(&self, _job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+    async fn read_job_dispatch_intent(
+        &self,
+        _job_id: &str,
+    ) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
         Err("job_dispatch_storage_unavailable".into())
     }
     async fn reconcile_selected_jobs(&self) -> Result<(), String> {
@@ -518,21 +523,34 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     }
 
     async fn send_job_message(
-        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
-    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError>
+    {
         match dispatch {
-            ResolvedDispatch::Native => self.send_message(agent_id, message).await
-                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Native => self
+                .send_message(agent_id, message)
+                .await
+                .map(JobDispatchOutcome::Native)
+                .map_err(JobDispatchError::Native),
             ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
         }
     }
     async fn send_job_message_streaming(
-        self: Arc<Self>, agent_id: AgentId, message: &str,
-        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+        self: Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        dispatch: ResolvedDispatch,
     ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
         match dispatch {
-            ResolvedDispatch::Native => self.send_message_streaming_with_routing(agent_id, message, kernel_handle).await
-                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Native => self
+                .send_message_streaming_with_routing(agent_id, message, kernel_handle)
+                .await
+                .map(JobDispatchOutcome::Native)
+                .map_err(JobDispatchError::Native),
             ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
         }
     }
@@ -686,6 +704,13 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         &self,
         id: &str,
     ) -> Result<librefang_skills::evolution::EvolutionResult, crate::skill_workshop::WorkshopError>;
+    /// Announce a human approval to `[signed_webhooks.skill_publish]` on a background task; a no-op when unconfigured.
+    fn publish_approved_skill(
+        &self,
+        skill_name: &str,
+        approved_by: &str,
+        target_agent_ids: Vec<String>,
+    );
     fn model_catalog_load(
         &self,
     ) -> arc_swap::Guard<Arc<librefang_runtime::model_catalog::ModelCatalog>>;
@@ -888,6 +913,12 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         delivery: &librefang_types::scheduler::CronDelivery,
         delivery_targets: &[librefang_types::scheduler::CronDeliveryTarget],
     );
+    /// Fire a `signed_webhook` cron job now (owner-checked, signed, retried); see `LibreFangKernel::fire_cron_signed_webhook`.
+    async fn fire_cron_signed_webhook(
+        &self,
+        job: &librefang_types::scheduler::CronJob,
+        due_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, String>;
     fn trigger_engine(&self) -> &crate::triggers::TriggerEngine;
     fn broadcast_ref(&self) -> &librefang_types::config::BroadcastConfig;
     fn auto_reply(&self) -> &crate::auto_reply::AutoReplyEngine;
@@ -1496,7 +1527,10 @@ impl KernelApi for LibreFangKernel {
         Self::pending_skill_and_mcp_declarations(self, agent_id).await
     }
 
-    async fn read_job_dispatch_intent(&self, job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+    async fn read_job_dispatch_intent(
+        &self,
+        job_id: &str,
+    ) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
         LibreFangKernel::read_job_dispatch_intent(self, job_id).await
     }
     async fn reconcile_selected_jobs(&self) -> Result<(), String> {
@@ -1504,15 +1538,29 @@ impl KernelApi for LibreFangKernel {
     }
 
     async fn send_job_message(
-        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
-    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError>
+    {
         LibreFangKernel::send_job_message(self, agent_id, message, dispatch).await
     }
     async fn send_job_message_streaming(
-        self: Arc<Self>, agent_id: AgentId, message: &str,
-        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+        self: Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        dispatch: ResolvedDispatch,
     ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
-        LibreFangKernel::send_job_message_streaming(&self, agent_id, message, kernel_handle, dispatch).await
+        LibreFangKernel::send_job_message_streaming(
+            &self,
+            agent_id,
+            message,
+            kernel_handle,
+            dispatch,
+        )
+        .await
     }
 
     async fn send_message(
@@ -1694,6 +1742,14 @@ impl KernelApi for LibreFangKernel {
     ) -> Result<librefang_skills::evolution::EvolutionResult, crate::skill_workshop::WorkshopError>
     {
         Self::approve_pending_skill(self, id)
+    }
+    fn publish_approved_skill(
+        &self,
+        skill_name: &str,
+        approved_by: &str,
+        target_agent_ids: Vec<String>,
+    ) {
+        Self::publish_approved_skill(self, skill_name, approved_by, target_agent_ids)
     }
     fn model_catalog_load(
         &self,
@@ -1972,6 +2028,13 @@ impl KernelApi for LibreFangKernel {
             delivery_targets,
         )
         .await;
+    }
+    async fn fire_cron_signed_webhook(
+        &self,
+        job: &librefang_types::scheduler::CronJob,
+        due_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, String> {
+        LibreFangKernel::fire_cron_signed_webhook(self, job, due_at).await
     }
     fn trigger_engine(&self) -> &crate::triggers::TriggerEngine {
         <Self as crate::WorkflowSubsystemApi>::triggers_ref(self)

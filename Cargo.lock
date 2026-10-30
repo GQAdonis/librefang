@@ -5620,6 +5620,7 @@ dependencies = [
  "dirs 7.0.0",
  "futures",
  "hex",
+ "hmac 0.12.1",
  "libc",
  "librefang-channels",
  "librefang-extensions",
