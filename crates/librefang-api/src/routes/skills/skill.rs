@@ -372,8 +372,26 @@ pub async fn show_pending_candidate(
 )]
 pub async fn approve_pending_candidate(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     axum::extract::Path(id): axum::extract::Path<String>,
+    body: Option<Json<serde_json::Value>>,
 ) -> impl IntoResponse {
+    // The approver is the authenticated caller, never a body field. `root` is the master-key / loopback / no-auth credential.
+    let approved_by = api_user
+        .as_ref()
+        .map(|u| u.0.name.clone())
+        .unwrap_or_else(|| "root".to_string());
+    // Optional `{"target_agent_ids": [...]}` is passed through to the skill-publish hook as `targetAgentIds`.
+    let target_agent_ids: Vec<String> = body
+        .as_ref()
+        .and_then(|b| b.0.get("target_agent_ids"))
+        .and_then(|v| v.as_array())
+        .map(|ids| {
+            ids.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
     // `skills_root` is still needed by the `AlreadyInstalled` phantom-vs-collision
     // disambiguation branch below, which reads the candidate + active skill body
     // directly off disk.
@@ -396,16 +414,21 @@ pub async fn approve_pending_candidate(
     // handles phantom recovery, where the kernel errored and did not
     // assign, so it re-runs the route-level best-effort assign itself.
     match state.kernel.approve_pending_skill(&id) {
-        Ok(result) => (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "status": "approved",
-                "candidate_id": id,
-                "skill_name": result.skill_name,
-                "version": result.version,
-                "message": result.message,
-            })),
-        ),
+        Ok(result) => {
+            state
+                .kernel
+                .publish_approved_skill(&result.skill_name, &approved_by, target_agent_ids);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "status": "approved",
+                    "candidate_id": id,
+                    "skill_name": result.skill_name,
+                    "version": result.version,
+                    "message": result.message,
+                })),
+            )
+        }
         Err(librefang_kernel::skill_workshop::WorkshopError::InvalidId(_)) => (
             StatusCode::BAD_REQUEST,
             Json(

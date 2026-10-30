@@ -586,6 +586,31 @@ pub(super) async fn dispatch_due_jobs(
                     }
                 });
             }
+            librefang_types::scheduler::CronAction::SignedWebhook { .. } => {
+                tracing::debug!(job = %job_name, "Cron: firing signed webhook");
+                // `due_jobs` hands out the job before advancing `next_run`, so it still holds the time this fire was scheduled for.
+                let due_at = job.next_run.unwrap_or_else(chrono::Utc::now);
+                // Spawned without a cron-lane permit: no LLM work runs, and a retry sequence can last tens of minutes.
+                let kernel_job = kernel.clone();
+                tokio::spawn(async move {
+                    match kernel_job.fire_cron_signed_webhook(&job, due_at).await {
+                        Ok(attempts) => {
+                            tracing::info!(job = %job_name, attempts, "Cron signed webhook delivered");
+                            kernel_job.workflows.cron_scheduler.record_success(job_id);
+                        }
+                        Err(err_msg) => {
+                            tracing::warn!(job = %job_name, error = %err_msg, "Cron signed webhook failed");
+                            kernel_job
+                                .workflows
+                                .cron_scheduler
+                                .record_failure(job_id, &err_msg);
+                        }
+                    }
+                    if let Err(e) = kernel_job.workflows.cron_scheduler.persist() {
+                        tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                    }
+                });
+            }
         }
     }
     if inline_state_changed {
@@ -1633,6 +1658,136 @@ mod dispatch_tests {
             "the inline fire's state must be on disk when dispatch returns"
         );
 
+        kernel.shutdown();
+    }
+
+    /// A `signed_webhook` fire reaches its target signed per Standard Webhooks only when the job's owner owns the target; another owner's job sends nothing and records why.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn signed_webhook_fire_is_signed_and_owner_enforced() {
+        use crate::signed_webhook::{
+            decode_secret, sign, HEADER_ID, HEADER_SIGNATURE, HEADER_TIMESTAMP,
+        };
+        use librefang_types::config::{SignedWebhookTargetConfig, SignedWebhooksConfig};
+        use librefang_types::principal::Principal;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let secret_var = "LIBREFANG_TEST_CRON_SIGNED_WEBHOOK_SECRET";
+        let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+        std::env::set_var(secret_var, secret);
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/wake"))
+            .respond_with(ResponseTemplate::new(202))
+            .mount(&server)
+            .await;
+
+        let dir = tempfile::tempdir().unwrap();
+        let home_dir = dir.path().to_path_buf();
+        std::fs::create_dir_all(home_dir.join("data")).unwrap();
+        let config = KernelConfig {
+            home_dir: home_dir.clone(),
+            data_dir: home_dir.join("data"),
+            signed_webhooks: SignedWebhooksConfig {
+                targets: vec![SignedWebhookTargetConfig {
+                    name: "wake".into(),
+                    url: format!("{}/wake", server.uri()),
+                    secret_env: secret_var.into(),
+                    owner: Some("user:alice".into()),
+                }],
+                skill_publish: None,
+            },
+            ..KernelConfig::default()
+        };
+        let kernel =
+            Arc::new(LibreFangKernel::boot_with_config(config).expect("Kernel should boot"));
+        let agent_id = kernel
+            .agents
+            .registry
+            .list()
+            .iter()
+            .find(|a| a.name == "assistant")
+            .expect("assistant should exist")
+            .id;
+
+        let action = CronAction::SignedWebhook {
+            target: "wake".into(),
+            event_type: "openduet.wake.v1".into(),
+            data: serde_json::json!({"kind": "routine", "subjectId": "r1"})
+                .as_object()
+                .cloned()
+                .unwrap(),
+        };
+        let scheduler = &kernel.workflows.cron_scheduler;
+        let mut owned = job(agent_id, "wake-owned", action.clone());
+        owned.owner = Some(Principal::from_spec("user:alice").unwrap());
+        let mut foreign = job(agent_id, "wake-foreign", action);
+        foreign.owner = Some(Principal::from_spec("user:bob").unwrap());
+        let owned_id = scheduler.add_job(owned, false).unwrap();
+        let foreign_id = scheduler.add_job(foreign, false).unwrap();
+
+        let due_at = chrono::DateTime::parse_from_rfc3339("2026-10-30T07:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let mut due = Vec::new();
+        for id in [owned_id, foreign_id] {
+            let mut j = scheduler.get_job(id).unwrap();
+            j.next_run = Some(due_at);
+            due.push(j);
+        }
+        dispatch_due_jobs(&kernel, due).await;
+
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let status = |id| scheduler.get_meta(id).unwrap().last_status;
+        while status(owned_id).is_none() || status(foreign_id).is_none() {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "fires never recorded an outcome"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(status(owned_id).as_deref(), Some("ok"));
+        let foreign_status = status(foreign_id).unwrap();
+        assert!(foreign_status.contains("does not own"), "{foreign_status}");
+
+        let reqs = server.received_requests().await.unwrap();
+        assert_eq!(reqs.len(), 1, "only the owner's job may reach the target");
+        let req = &reqs[0];
+        let h = |name: &str| req.headers.get(name).unwrap().to_str().unwrap().to_string();
+        let ts: i64 = h(HEADER_TIMESTAMP).parse().unwrap();
+        assert_eq!(
+            h(HEADER_SIGNATURE),
+            sign(
+                &decode_secret(secret).unwrap(),
+                &h(HEADER_ID),
+                ts,
+                &req.body
+            )
+        );
+        assert_eq!(
+            h(HEADER_ID),
+            crate::signed_webhook::cron_fire_message_id(owned_id, due_at)
+        );
+        let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "type": "openduet.wake.v1",
+                "timestamp": body["timestamp"].clone(),
+                "data": {
+                    "kind": "routine",
+                    "subjectId": "r1",
+                    "bossTaskId": owned_id.to_string(),
+                    "dueAt": "2026-10-30T07:00:00Z",
+                },
+            })
+        );
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(body["timestamp"].as_str().unwrap()).is_ok(),
+            "top-level timestamp is RFC 3339"
+        );
+
+        std::env::remove_var(secret_var);
         kernel.shutdown();
     }
 }

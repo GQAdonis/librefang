@@ -2415,6 +2415,24 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                                     None => format!("Workflow not found: {workflow_id}"),
                                 }
                             }
+                            librefang_types::scheduler::CronAction::SignedWebhook { .. } => {
+                                // Retries can run for tens of minutes; dispatch and record the outcome on the job like a scheduled fire.
+                                let kernel = self.kernel.clone();
+                                let job = j.clone();
+                                tokio::spawn(async move {
+                                    match kernel
+                                        .fire_cron_signed_webhook(&job, chrono::Utc::now())
+                                        .await
+                                    {
+                                        Ok(_) => kernel.cron().record_success(job.id),
+                                        Err(e) => kernel.cron().record_failure(job.id, &e),
+                                    }
+                                    if let Err(e) = kernel.cron().persist() {
+                                        tracing::warn!("Failed to persist cron jobs after signed webhook run: {e}");
+                                    }
+                                });
+                                format!("Job [{id_short}] signed webhook dispatched; see the job's last status for the outcome.")
+                            }
                         }
                     }
                     n => format!("{n} jobs match '{prefix}'. Be more specific."),

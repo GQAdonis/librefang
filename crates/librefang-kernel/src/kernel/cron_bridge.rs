@@ -36,6 +36,103 @@ impl LibreFangKernel {
             cron_fan_out_targets(self, job_name, output, delivery_targets).await;
         }
     }
+
+    /// Fire one [`CronAction::SignedWebhook`](librefang_types::scheduler::CronAction::SignedWebhook) job: resolve its target from the live config, refuse unless the job's `owner` owns the target, then POST the signed event with retries.
+    ///
+    /// `due_at` is the scheduled fire time; it is stamped into the body as `dueAt` and, with the job id, makes the `webhook-id` that every retry reuses.
+    /// Returns the number of attempts on success.
+    pub async fn fire_cron_signed_webhook(
+        &self,
+        job: &librefang_types::scheduler::CronJob,
+        due_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, String> {
+        use crate::signed_webhook;
+        let librefang_types::scheduler::CronAction::SignedWebhook {
+            target,
+            event_type,
+            data,
+        } = &job.action
+        else {
+            return Err("cron job action is not signed_webhook".to_string());
+        };
+        let resolved = signed_webhook::resolve_target(&self.config_ref().signed_webhooks, target)?;
+        signed_webhook::check_job_owner(&resolved, job.owner)?;
+        let body =
+            signed_webhook::cron_fire_body(event_type, data, job.id, due_at, chrono::Utc::now())?;
+        let msg_id = signed_webhook::cron_fire_message_id(job.id, due_at);
+        let http = shared_fan_out_http_client()?;
+        signed_webhook::deliver(
+            &http,
+            &resolved,
+            &msg_id,
+            &body,
+            signed_webhook::RETRY_DELAYS,
+        )
+        .await
+    }
+
+    /// Announce a human approval of a skill-workshop candidate to `[signed_webhooks.skill_publish]`, if configured.
+    ///
+    /// Loads the promoted skill from disk so `content` is exactly what agents will see, builds the body once and delivers it on a background task with the shared retry policy.
+    /// A missing configuration is a no-op; any other failure is logged, because the approval itself has already succeeded.
+    pub fn publish_approved_skill(
+        &self,
+        skill_name: &str,
+        approved_by: &str,
+        target_agent_ids: Vec<String>,
+    ) {
+        use crate::signed_webhook;
+        let cfg = self.config_ref();
+        let Some(hook) = cfg.signed_webhooks.skill_publish.clone() else {
+            return;
+        };
+        let prepared = (|| {
+            let target = signed_webhook::resolve_target(&cfg.signed_webhooks, &hook.target)?;
+            let skill = librefang_skills::evolution::load_installed_skill_from_disk(
+                &self.home_dir_boot.join("skills"),
+                skill_name,
+            )
+            .map_err(|e| format!("approved skill '{skill_name}' could not be loaded: {e}"))?;
+            let instructions = skill.manifest.prompt_context.as_deref().unwrap_or_default();
+            let body = signed_webhook::skill_published_body(&signed_webhook::SkillPublication {
+                event_type: &hook.event_type,
+                slug: &skill.manifest.skill.name,
+                title: &skill.manifest.skill.name,
+                summary: &skill.manifest.skill.description,
+                instructions,
+                approved_by,
+                approved_at: chrono::Utc::now(),
+                target_agent_ids: &target_agent_ids,
+            })?;
+            let http = shared_fan_out_http_client()?;
+            Ok::<_, String>((target, body, http))
+        })();
+        let (target, body, http) = match prepared {
+            Ok(p) => p,
+            Err(error) => {
+                tracing::warn!(skill = skill_name, %error, "skill publish hook not sent");
+                return;
+            }
+        };
+        let msg_id = format!("msg_skill_{}", uuid::Uuid::new_v4().simple());
+        let skill = skill_name.to_string();
+        tokio::spawn(async move {
+            match signed_webhook::deliver(
+                &http,
+                &target,
+                &msg_id,
+                &body,
+                signed_webhook::RETRY_DELAYS,
+            )
+            .await
+            {
+                Ok(attempts) => {
+                    tracing::info!(%skill, %msg_id, attempts, "skill publish hook delivered")
+                }
+                Err(error) => tracing::warn!(%skill, %error, "skill publish hook failed"),
+            }
+        });
+    }
 }
 
 /// Webhook HTTP timeout used for the fan-out client. Mirrors

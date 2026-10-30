@@ -622,6 +622,17 @@ pub fn build_reload_plan_with_caps(
         );
     }
 
+    // `[signed_webhooks]`. Read live from the current config snapshot at every
+    // signed-webhook cron fire and every skill-publish, so a change is in effect
+    // for the next one; declared so the edit is stored rather than discarded.
+    if field_changed(&old.signed_webhooks, &new.signed_webhooks) {
+        plan.noop_changes.push(
+            "signed_webhooks changed (effective immediately — targets are resolved at each \
+             fire and each skill publish)"
+                .to_string(),
+        );
+    }
+
     if field_changed(&old.proactive_memory, &new.proactive_memory) {
         plan.hot_actions.push(HotAction::UpdateProactiveMemory);
     }
@@ -1227,6 +1238,7 @@ pub fn classified_reload_fields() -> std::collections::BTreeMap<&'static str, &'
         ("users", "H"),
         ("groups", "N"),
         ("default_owner", "N"),
+        ("signed_webhooks", "N"),
         ("proactive_memory", "H"),
         ("queue", "H/N"),
         ("usage", "N"),

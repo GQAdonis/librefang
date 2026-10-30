@@ -830,6 +830,9 @@ fn cron_job_to_schedule_json(job: &librefang_types::scheduler::CronJob) -> serde
             .clone()
             .unwrap_or_else(|| format!("workflow:{workflow_id}")),
         librefang_types::scheduler::CronAction::SystemEvent { text } => text.clone(),
+        librefang_types::scheduler::CronAction::SignedWebhook {
+            target, event_type, ..
+        } => format!("signed_webhook:{target}:{event_type}"),
     };
     let workflow_id = match &job.action {
         librefang_types::scheduler::CronAction::Workflow { workflow_id, .. } => workflow_id.clone(),

@@ -4278,6 +4278,53 @@ impl ProvidersConfig {
     }
 }
 
+/// `[signed_webhooks]` — named outbound targets that receive Standard Webhooks-signed POSTs.
+///
+/// A target is operator configuration: the URL and the signing secret live here (the secret by environment-variable name, never inline), so neither an agent nor a cron job body can choose where a signed request goes or what key signs it.
+/// A cron job names a target (`CronAction::SignedWebhook.target`) and may use it only when the job's recorded `owner` equals the target's `owner`.
+/// Read live at every fire and every publish; see `crates/librefang-kernel/src/signed_webhook.rs` for the wire contract.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SignedWebhooksConfig {
+    /// Named targets (`[[signed_webhooks.targets]]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<SignedWebhookTargetConfig>,
+    /// Where a human-approved skill-workshop candidate is announced (`[signed_webhooks.skill_publish]`).
+    /// `None` (the default) publishes nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_publish: Option<SkillPublishHookConfig>,
+}
+
+impl SignedWebhooksConfig {
+    /// True when nothing is configured, so the section is omitted on save.
+    pub fn is_empty(&self) -> bool {
+        self.targets.is_empty() && self.skill_publish.is_none()
+    }
+}
+
+/// One `[[signed_webhooks.targets]]` entry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SignedWebhookTargetConfig {
+    /// Name a cron job or the skill-publish hook refers to. Unique across targets.
+    pub name: String,
+    /// Destination URL (`http://` or `https://`). Redirects are never followed.
+    pub url: String,
+    /// Name of the environment variable holding the Standard Webhooks secret: `whsec_` followed by the base64 key (the bare base64 form is also accepted).
+    pub secret_env: String,
+    /// Principal spec (`user:<name>` / `group:<name>`) that owns this target.
+    /// A cron job may send to the target only when its own `owner` is exactly this principal; a target without an owner accepts no cron job.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+}
+
+/// `[signed_webhooks.skill_publish]` — announce each human approval of a skill-workshop candidate.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SkillPublishHookConfig {
+    /// Name of a `[[signed_webhooks.targets]]` entry.
+    pub target: String,
+    /// Value of the body's `type` field, e.g. `openduet.skill.published.v1`.
+    pub event_type: String,
+}
+
 /// Top-level kernel configuration.
 #[derive(Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -4580,6 +4627,10 @@ pub struct KernelConfig {
     /// The first artifact created with no principal resolvable logs one `WARN` per daemon naming this key ([`crate::principal::warn_once_unowned`]), so the gap is visible without being fatal or noisy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_owner: Option<String>,
+    /// Outbound Standard Webhooks targets for `signed_webhook` cron actions and the skill-workshop publish hook.
+    /// See [`SignedWebhooksConfig`].
+    #[serde(default, skip_serializing_if = "SignedWebhooksConfig::is_empty")]
+    pub signed_webhooks: SignedWebhooksConfig,
     /// Maps platform-native channel roles (Telegram admin, Discord guild
     /// roles, Slack workspace roles) to LibreFang `UserRole`. Used by
     /// `AuthManager::resolve_role_for_sender` after explicit `UserConfig.role`
@@ -7769,6 +7820,7 @@ impl Default for KernelConfig {
             users: Vec::new(),
             groups: Vec::new(),
             default_owner: None,
+            signed_webhooks: SignedWebhooksConfig::default(),
             channel_role_mapping: ChannelRoleMapping::default(),
             mcp_servers: Vec::new(),
             mcp_runtime_store: McpRuntimeStore::default(),

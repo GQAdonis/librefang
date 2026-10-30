@@ -1261,3 +1261,145 @@ async fn pending_list_non_uuid_agent_filter_returns_400() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
     assert!(body["error"].as_str().unwrap_or("").contains("UUID"));
 }
+
+// ---------------------------------------------------------------------------
+// Skill-publish hook ([signed_webhooks.skill_publish])
+// ---------------------------------------------------------------------------
+
+/// A human approval through `POST /api/skills/pending/{id}/approve` announces the promoted skill to the configured target as a Standard Webhooks-signed event naming the authenticated approver.
+#[tokio::test(flavor = "multi_thread")]
+async fn pending_approve_publishes_signed_skill_event() {
+    use librefang_kernel::signed_webhook::{
+        decode_secret, sign, HEADER_ID, HEADER_SIGNATURE, HEADER_TIMESTAMP,
+    };
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let secret_var = "LIBREFANG_TEST_SKILL_PUBLISH_SECRET";
+    let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+    std::env::set_var(secret_var, secret);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/skills"))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&server)
+        .await;
+    let url = format!("{}/skills", server.uri());
+
+    let test = TestAppState::with_builder(MockKernelBuilder::new().with_config(move |cfg| {
+        cfg.default_model = librefang_types::config::DefaultModelConfig {
+            provider: "ollama".to_string(),
+            model: "test-model".to_string(),
+            api_key_env: "OLLAMA_API_KEY".to_string(),
+            base_url: None,
+            message_timeout_secs: 300,
+            extra_params: std::collections::BTreeMap::new(),
+            cli_profile_dirs: Vec::new(),
+        };
+        cfg.signed_webhooks = librefang_types::config::SignedWebhooksConfig {
+            targets: vec![librefang_types::config::SignedWebhookTargetConfig {
+                name: "skills".into(),
+                url: url.clone(),
+                secret_env: secret_var.into(),
+                owner: None,
+            }],
+            skill_publish: Some(librefang_types::config::SkillPublishHookConfig {
+                target: "skills".into(),
+                event_type: "openduet.skill.published.v1".into(),
+            }),
+        };
+    }));
+    let state = test.state.clone();
+    let approver = librefang_api::middleware::AuthenticatedApiUser {
+        name: "alice".to_string(),
+        role: librefang_api::middleware::UserRole::Admin,
+        user_id: librefang_types::agent::UserId::new(),
+    };
+    let app = Router::new()
+        .nest("/api", routes::skills::router())
+        .layer(axum::Extension(approver))
+        .with_state(state.clone());
+
+    let id = "dddddddd-0000-0000-0000-0000000000a1";
+    let root = state.kernel.home_dir().join("skills");
+    // A snake_case workshop name is published as-is.
+    storage::save_candidate(
+        &root,
+        &fixture_candidate("11111111-1111-1111-1111-111111111111", id),
+        20,
+        None,
+    )
+    .unwrap();
+    // A name ending in `_` is a valid BossFang skill but not a receiver slug, so its approval succeeds and is not announced.
+    let skipped_id = "dddddddd-0000-0000-0000-0000000000a2";
+    let mut skipped = fixture_candidate("11111111-1111-1111-1111-111111111111", skipped_id);
+    skipped.name = "fmt_before_commit_".to_string();
+    storage::save_candidate(&root, &skipped, 20, None).unwrap();
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!("/api/skills/pending/{skipped_id}/approve"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(format!("/api/skills/pending/{id}/approve"))
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"target_agent_ids":["bot-1"]}"#))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let reqs = loop {
+        let reqs = server.received_requests().await.unwrap();
+        if !reqs.is_empty() {
+            break reqs;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "publish hook never fired"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    };
+    assert_eq!(reqs.len(), 1);
+    let req = &reqs[0];
+    let h = |name: &str| req.headers.get(name).unwrap().to_str().unwrap().to_string();
+    let ts: i64 = h(HEADER_TIMESTAMP).parse().unwrap();
+    assert_eq!(
+        h(HEADER_SIGNATURE),
+        sign(
+            &decode_secret(secret).unwrap(),
+            &h(HEADER_ID),
+            ts,
+            &req.body
+        )
+    );
+    let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+    let approved_at = body["data"]["approvedAt"].clone();
+    assert!(approved_at.as_str().unwrap().ends_with('Z'));
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "type": "openduet.skill.published.v1",
+            "timestamp": approved_at,
+            "data": {
+                "slug": "fmt_before_commit",
+                "title": "fmt_before_commit",
+                "summary": "Run cargo fmt before commit",
+                "instructions": "# Cargo fmt before commit\n\nRun `cargo fmt --all`.\n",
+                "approvedBy": "alice",
+                "approvedAt": approved_at,
+                "targetAgentIds": ["bot-1"],
+            },
+        })
+    );
+    std::env::remove_var(secret_var);
+}
