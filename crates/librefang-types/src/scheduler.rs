@@ -170,21 +170,21 @@ pub enum CronAction {
     },
     /// POST a Standard Webhooks-signed event to a configured target; no agent turn runs.
     ///
-    /// The body is `data` plus three fields the daemon stamps and a job cannot set: `type` (= `event_type`), `bossTaskId` (this job's id) and `dueAt` (the scheduled fire time, RFC 3339 UTC).
+    /// The body is `{"type": event_type, "timestamp": <fire time>, "data": {..data.., "bossTaskId": <this job's id>, "dueAt": <scheduled fire time, RFC 3339 UTC>}}`; a job cannot set the two stamped `data` fields.
     /// The URL and signing secret come from the `[[signed_webhooks.targets]]` entry named by `target`, which must be owned by this job's `owner`.
     SignedWebhook {
         /// Name of a `[[signed_webhooks.targets]]` entry in `config.toml`.
         target: String,
-        /// Value of the body's `type` field (max 128 chars).
+        /// Value of the body's top-level `type` field (max 128 chars).
         event_type: String,
-        /// Extra top-level body fields. Must not contain a reserved key ([`SIGNED_WEBHOOK_RESERVED_KEYS`]).
+        /// Fields of the body's `data` object. Must not contain a reserved key ([`SIGNED_WEBHOOK_RESERVED_KEYS`]).
         #[serde(default)]
         data: serde_json::Map<String, serde_json::Value>,
     },
 }
 
-/// Body keys of a [`CronAction::SignedWebhook`] event that the daemon stamps on every fire; a job's `data` may not set them.
-pub const SIGNED_WEBHOOK_RESERVED_KEYS: &[&str] = &["type", "bossTaskId", "dueAt"];
+/// `data` keys of a [`CronAction::SignedWebhook`] event that the daemon stamps on every fire; a job's `data` may not set them.
+pub const SIGNED_WEBHOOK_RESERVED_KEYS: &[&str] = &["bossTaskId", "dueAt"];
 
 // ---------------------------------------------------------------------------
 // PreScript

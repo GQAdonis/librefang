@@ -57,7 +57,8 @@ impl LibreFangKernel {
         };
         let resolved = signed_webhook::resolve_target(&self.config_ref().signed_webhooks, target)?;
         signed_webhook::check_job_owner(&resolved, job.owner)?;
-        let body = signed_webhook::cron_fire_body(event_type, data, job.id, due_at)?;
+        let body =
+            signed_webhook::cron_fire_body(event_type, data, job.id, due_at, chrono::Utc::now())?;
         let msg_id = signed_webhook::cron_fire_message_id(job.id, due_at);
         let http = shared_fan_out_http_client()?;
         signed_webhook::deliver(
@@ -92,12 +93,13 @@ impl LibreFangKernel {
                 skill_name,
             )
             .map_err(|e| format!("approved skill '{skill_name}' could not be loaded: {e}"))?;
+            let instructions = skill.manifest.prompt_context.as_deref().unwrap_or_default();
             let body = signed_webhook::skill_published_body(&signed_webhook::SkillPublication {
                 event_type: &hook.event_type,
                 slug: &skill.manifest.skill.name,
-                version: Some(skill.manifest.skill.version.as_str()),
+                title: &skill.manifest.skill.name,
                 summary: &skill.manifest.skill.description,
-                content: skill.manifest.prompt_context.as_deref().unwrap_or_default(),
+                instructions,
                 approved_by,
                 approved_at: chrono::Utc::now(),
                 target_agent_ids: &target_agent_ids,

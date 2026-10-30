@@ -1322,13 +1322,31 @@ async fn pending_approve_publishes_signed_skill_event() {
 
     let id = "dddddddd-0000-0000-0000-0000000000a1";
     let root = state.kernel.home_dir().join("skills");
+    // A hyphenated name: the receiver's slug pattern refuses `_`.
+    let mut candidate = fixture_candidate("11111111-1111-1111-1111-111111111111", id);
+    candidate.name = "fmt-before-commit".to_string();
+    storage::save_candidate(&root, &candidate, 20, None).unwrap();
+    // A snake_case name cannot be a receiver slug, so its approval succeeds but is not announced.
+    let skipped_id = "dddddddd-0000-0000-0000-0000000000a2";
     storage::save_candidate(
         &root,
-        &fixture_candidate("11111111-1111-1111-1111-111111111111", id),
+        &fixture_candidate("11111111-1111-1111-1111-111111111111", skipped_id),
         20,
         None,
     )
     .unwrap();
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(format!("/api/skills/pending/{skipped_id}/approve"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let req = Request::builder()
         .method(Method::POST)
@@ -1365,17 +1383,23 @@ async fn pending_approve_publishes_signed_skill_event() {
         )
     );
     let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
-    let content = "# Cargo fmt before commit\n\nRun `cargo fmt --all`.\n";
-    assert_eq!(body["type"], "openduet.skill.published.v1");
-    assert_eq!(body["slug"], "fmt_before_commit");
-    assert_eq!(body["content"], content);
-    use sha2::Digest as _;
+    let approved_at = body["data"]["approvedAt"].clone();
+    assert!(approved_at.as_str().unwrap().ends_with('Z'));
     assert_eq!(
-        body["contentSha256"],
-        hex::encode(sha2::Sha256::digest(content.as_bytes()))
+        body,
+        serde_json::json!({
+            "type": "openduet.skill.published.v1",
+            "timestamp": approved_at,
+            "data": {
+                "slug": "fmt-before-commit",
+                "title": "fmt-before-commit",
+                "summary": "Run cargo fmt before commit",
+                "instructions": "# Cargo fmt before commit\n\nRun `cargo fmt --all`.\n",
+                "approvedBy": "alice",
+                "approvedAt": approved_at,
+                "targetAgentIds": ["bot-1"],
+            },
+        })
     );
-    assert_eq!(body["approvedBy"], "alice");
-    assert!(body["approvedAt"].as_str().unwrap().ends_with('Z'));
-    assert_eq!(body["targetAgentIds"], serde_json::json!(["bot-1"]));
     std::env::remove_var(secret_var);
 }

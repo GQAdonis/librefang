@@ -1773,11 +1773,18 @@ mod dispatch_tests {
             body,
             serde_json::json!({
                 "type": "openduet.wake.v1",
-                "kind": "routine",
-                "subjectId": "r1",
-                "bossTaskId": owned_id.to_string(),
-                "dueAt": "2026-10-30T07:00:00Z",
+                "timestamp": body["timestamp"].clone(),
+                "data": {
+                    "kind": "routine",
+                    "subjectId": "r1",
+                    "bossTaskId": owned_id.to_string(),
+                    "dueAt": "2026-10-30T07:00:00Z",
+                },
             })
+        );
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(body["timestamp"].as_str().unwrap()).is_ok(),
+            "top-level timestamp is RFC 3339"
         );
 
         std::env::remove_var(secret_var);

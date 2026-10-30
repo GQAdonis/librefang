@@ -21,7 +21,7 @@ use hmac::{Hmac, Mac};
 use librefang_types::config::SignedWebhooksConfig;
 use librefang_types::principal::Principal;
 use librefang_types::scheduler::{CronJobId, SIGNED_WEBHOOK_RESERVED_KEYS};
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use tracing::warn;
 
 /// Header carrying the event id, constant across retries.
@@ -145,56 +145,114 @@ pub fn cron_fire_message_id(job_id: CronJobId, due_at: DateTime<Utc>) -> String 
     format!("msg_{}_{}", job_id.0.simple(), due_at.timestamp())
 }
 
-/// Body of one cron fire: the job's `data` plus the stamped `type`, `bossTaskId` and `dueAt`.
-/// The stamped fields are written last, so they win even over a `data` that bypassed validation.
+/// Body of one cron fire, in the Standard Webhooks envelope shape:
+/// `{"type": event_type, "timestamp": fired_at, "data": {..job data.., "bossTaskId": job id, "dueAt": due time}}`.
+/// Nothing else is added at either level. The stamped `data` fields are written last, so they win even over a `data` that bypassed validation.
+/// `fired_at` is fixed when the body is built, so every retry sends identical bytes.
 pub fn cron_fire_body(
     event_type: &str,
     data: &serde_json::Map<String, serde_json::Value>,
     job_id: CronJobId,
     due_at: DateTime<Utc>,
+    fired_at: DateTime<Utc>,
 ) -> Result<Vec<u8>, String> {
-    let mut body = data.clone();
+    let mut inner = data.clone();
     for key in SIGNED_WEBHOOK_RESERVED_KEYS {
-        body.remove(*key);
+        inner.remove(*key);
     }
-    body.insert("type".into(), event_type.into());
-    body.insert("bossTaskId".into(), job_id.to_string().into());
-    body.insert(
-        "dueAt".into(),
-        due_at.to_rfc3339_opts(SecondsFormat::Secs, true).into(),
-    );
-    serde_json::to_vec(&serde_json::Value::Object(body))
-        .map_err(|e| format!("signed webhook body did not serialize: {e}"))
+    inner.insert("bossTaskId".into(), job_id.to_string().into());
+    inner.insert("dueAt".into(), rfc3339(due_at).into());
+    let body = serde_json::json!({
+        "type": event_type,
+        "timestamp": rfc3339(fired_at),
+        "data": inner,
+    });
+    serde_json::to_vec(&body).map_err(|e| format!("signed webhook body did not serialize: {e}"))
+}
+
+fn rfc3339(t: DateTime<Utc>) -> String {
+    t.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 /// The approved skill announced by the skill-workshop publish hook.
 pub struct SkillPublication<'a> {
     pub event_type: &'a str,
     pub slug: &'a str,
-    pub version: Option<&'a str>,
+    pub title: &'a str,
     pub summary: &'a str,
-    pub content: &'a str,
+    pub instructions: &'a str,
     pub approved_by: &'a str,
     pub approved_at: DateTime<Utc>,
     pub target_agent_ids: &'a [String],
 }
 
-/// Body of a skill-publish event. `contentSha256` is the lowercase hex SHA-256 of `content`'s UTF-8 bytes.
+/// Receiver limits for a published skill (`openduet.skill.published.v1`): a body outside them would be refused, so it is not sent.
+const SKILL_TITLE_MAX: usize = 160;
+const SKILL_SUMMARY_MAX: usize = 300;
+const SKILL_INSTRUCTIONS_MAX: usize = 20_000;
+const SKILL_APPROVER_MAX: usize = 200;
+const SKILL_TARGET_ID_MAX: usize = 128;
+const SKILL_TARGETS_MAX: usize = 50;
+
+/// `^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$`.
+fn is_publishable_slug(slug: &str) -> bool {
+    let b = slug.as_bytes();
+    let edge = |c: &u8| c.is_ascii_lowercase() || c.is_ascii_digit();
+    (2..=40).contains(&b.len())
+        && edge(&b[0])
+        && edge(&b[b.len() - 1])
+        && b.iter().all(|c| edge(c) || *c == b'-')
+}
+
+/// Trimmed length is 1..=max characters.
+fn check_text(field: &str, value: &str, max: usize) -> Result<(), String> {
+    let n = value.trim().chars().count();
+    if n == 0 || n > max {
+        return Err(format!("{field} must be 1..={max} characters, got {n}"));
+    }
+    Ok(())
+}
+
+/// Body of a skill-publish event, in the Standard Webhooks envelope shape:
+/// `{"type", "timestamp", "data": {"slug", "title", "summary", "instructions", "approvedBy", "approvedAt", "targetAgentIds"?}}`.
+/// Returns `Err` with the reason when a field falls outside the receiver's limits; the caller then skips the publish rather than send a body that would be refused.
 pub fn skill_published_body(p: &SkillPublication<'_>) -> Result<Vec<u8>, String> {
-    let digest = hex::encode(Sha256::digest(p.content.as_bytes()));
-    let mut body = serde_json::json!({
-        "type": p.event_type,
+    if !is_publishable_slug(p.slug) {
+        return Err(format!(
+            "slug '{}' does not match ^[a-z0-9][a-z0-9-]{{0,38}}[a-z0-9]$",
+            p.slug
+        ));
+    }
+    check_text("title", p.title, SKILL_TITLE_MAX)?;
+    check_text("summary", p.summary, SKILL_SUMMARY_MAX)?;
+    check_text("instructions", p.instructions, SKILL_INSTRUCTIONS_MAX)?;
+    check_text("approvedBy", p.approved_by, SKILL_APPROVER_MAX)?;
+    if p.target_agent_ids.len() > SKILL_TARGETS_MAX {
+        return Err(format!(
+            "targetAgentIds has {} entries, max {SKILL_TARGETS_MAX}",
+            p.target_agent_ids.len()
+        ));
+    }
+    for id in p.target_agent_ids {
+        check_text("targetAgentIds entry", id, SKILL_TARGET_ID_MAX)?;
+    }
+    let approved_at = rfc3339(p.approved_at);
+    let mut data = serde_json::json!({
         "slug": p.slug,
-        "version": p.version,
+        "title": p.title,
         "summary": p.summary,
-        "content": p.content,
-        "contentSha256": digest,
+        "instructions": p.instructions,
         "approvedBy": p.approved_by,
-        "approvedAt": p.approved_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+        "approvedAt": approved_at,
     });
     if !p.target_agent_ids.is_empty() {
-        body["targetAgentIds"] = serde_json::json!(p.target_agent_ids);
+        data["targetAgentIds"] = serde_json::json!(p.target_agent_ids);
     }
+    let body = serde_json::json!({
+        "type": p.event_type,
+        "timestamp": approved_at,
+        "data": data,
+    });
     serde_json::to_vec(&body).map_err(|e| format!("skill publish body did not serialize: {e}"))
 }
 
@@ -357,24 +415,36 @@ mod tests {
     }
 
     #[test]
-    fn cron_body_stamps_identity_fields_over_data() {
+    fn cron_body_is_the_wake_envelope() {
         let job_id = CronJobId::new();
         let due = DateTime::parse_from_rfc3339("2026-10-30T07:00:00Z")
             .unwrap()
             .with_timezone(&Utc);
+        let fired = DateTime::parse_from_rfc3339("2026-10-30T07:00:12Z")
+            .unwrap()
+            .with_timezone(&Utc);
         let data =
             serde_json::json!({"kind": "routine", "subjectId": "r1", "bossTaskId": "forged"});
-        let body =
-            cron_fire_body("openduet.wake.v1", data.as_object().unwrap(), job_id, due).unwrap();
+        let body = cron_fire_body(
+            "openduet.wake.v1",
+            data.as_object().unwrap(),
+            job_id,
+            due,
+            fired,
+        )
+        .unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             v,
             serde_json::json!({
                 "type": "openduet.wake.v1",
-                "kind": "routine",
-                "subjectId": "r1",
-                "bossTaskId": job_id.to_string(),
-                "dueAt": "2026-10-30T07:00:00Z",
+                "timestamp": "2026-10-30T07:00:12Z",
+                "data": {
+                    "kind": "routine",
+                    "subjectId": "r1",
+                    "bossTaskId": job_id.to_string(),
+                    "dueAt": "2026-10-30T07:00:00Z",
+                },
             })
         );
         assert_eq!(
@@ -384,33 +454,64 @@ mod tests {
         );
     }
 
-    #[test]
-    fn skill_body_carries_digest_and_approval() {
-        let at = DateTime::parse_from_rfc3339("2026-10-30T08:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let ids = vec!["bot-1".to_string()];
-        let body = skill_published_body(&SkillPublication {
+    fn publication<'a>(slug: &'a str, ids: &'a [String]) -> SkillPublication<'a> {
+        SkillPublication {
             event_type: "openduet.skill.published.v1",
-            slug: "weekly_digest",
-            version: Some("0.1.0"),
+            slug,
+            title: "weekly-digest",
             summary: "Summarise the week",
-            content: "abc",
+            instructions: "abc",
             approved_by: "alice",
-            approved_at: at,
-            target_agent_ids: &ids,
-        })
-        .unwrap();
+            approved_at: DateTime::parse_from_rfc3339("2026-10-30T08:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            target_agent_ids: ids,
+        }
+    }
+
+    #[test]
+    fn skill_body_is_the_published_envelope() {
+        let ids = vec!["bot-1".to_string()];
+        let body = skill_published_body(&publication("weekly-digest", &ids)).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(v["type"], "openduet.skill.published.v1");
-        assert_eq!(v["slug"], "weekly_digest");
         assert_eq!(
-            v["contentSha256"],
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+            v,
+            serde_json::json!({
+                "type": "openduet.skill.published.v1",
+                "timestamp": "2026-10-30T08:00:00Z",
+                "data": {
+                    "slug": "weekly-digest",
+                    "title": "weekly-digest",
+                    "summary": "Summarise the week",
+                    "instructions": "abc",
+                    "approvedBy": "alice",
+                    "approvedAt": "2026-10-30T08:00:00Z",
+                    "targetAgentIds": ["bot-1"],
+                },
+            })
         );
-        assert_eq!(v["approvedBy"], "alice");
-        assert_eq!(v["approvedAt"], "2026-10-30T08:00:00Z");
-        assert_eq!(v["targetAgentIds"], serde_json::json!(["bot-1"]));
+        let body = skill_published_body(&publication("weekly-digest", &[])).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            v["data"].get("targetAgentIds").is_none(),
+            "empty optional omitted"
+        );
+    }
+
+    #[test]
+    fn skill_body_refuses_what_the_receiver_would_refuse() {
+        for slug in ["weekly_digest", "a", "-ab", "ab-", "Ab", &"a".repeat(41)] {
+            assert!(
+                skill_published_body(&publication(slug, &[])).is_err(),
+                "slug {slug:?} must not be sent"
+            );
+        }
+        assert!(skill_published_body(&publication("ab", &[])).is_ok());
+        let mut p = publication("ok-slug", &[]);
+        p.summary = "  ";
+        assert!(skill_published_body(&p).unwrap_err().contains("summary"));
+        let too_many: Vec<String> = (0..51).map(|i| format!("b{i}")).collect();
+        assert!(skill_published_body(&publication("ok-slug", &too_many)).is_err());
     }
 
     fn header<'a>(req: &'a wiremock::Request, name: &str) -> &'a str {
