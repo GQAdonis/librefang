@@ -87,13 +87,17 @@ fn server_body(oauth: Option<serde_json::Value>, timeout_secs: u64) -> serde_jso
     body
 }
 
+/// BossFang persists MCP writes through the SurrealDB config store and republishes the result into the kernel's live config (`apply_mcp_mutation`), so the kernel's effective server list is the readback.
 fn stored_oauth(state: &Arc<AppState>) -> Option<librefang_types::config::McpOAuthConfig> {
-    let store = librefang_memory::McpConfigStore::new(state.kernel.memory_substrate().pool());
-    store
-        .get(NAME)
-        .expect("store read")
+    state
+        .kernel
+        .config_ref()
+        .mcp_servers
+        .iter()
+        .find(|s| s.name == NAME)
         .expect("entry persisted")
         .oauth
+        .clone()
 }
 
 async fn add_with_oauth(h: &Harness) {
