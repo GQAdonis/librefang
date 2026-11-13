@@ -19,6 +19,7 @@ Local remotes were checked for BossFang, UAR, KnowMe and Know Decision; connecte
 Sources: [platform design v0.2.1](https://drive.google.com/file/d/1hMUCKJ8oiw6n4SLkRa7hHWhWACfOA9PB/view), [voice addendum VC01–VC17](https://drive.google.com/file/d/1NSZwAcsBF-1_BTXaORezJzQZ_CpCIQHn/view), [BossFang #156](https://github.com/GQAdonis/librefang/issues/156), [UAR #382](https://github.com/Prometheus-AGS/universal-agent-runtime/issues/382) (closed 2026-10-30 with a per-item disposition), [Poppy #14](https://github.com/Know-Me-Tools/know-me-system/issues/14). The Poppy IPFS page was unavailable through the audit fetch; #14 supplies accessible summary context. Neither source establishes a shipped product.
 
 **UAR re-audit (2026-11-13):** every UAR claim in this file and in [agent-definitions.md](agent-definitions.md) and [backlog.md](backlog.md) was rechecked against UAR `713466935` (`1.4.0-rc.4`), 200 commits after the earlier pin.
+Method: UAR code and docs were read with `git show` / `git ls-tree` at that SHA, not from a working checkout; the checkout-state note above describes only the 2026-10-16 audit.
 No UAR build or test was run for this re-audit, and issue states were read from GitHub on that date.
 The other pinned repositories were not re-audited.
 
