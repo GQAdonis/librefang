@@ -25,13 +25,22 @@ if [ ! -x "$script" ] && [ ! -f "$script" ]; then
   exit 1
 fi
 
+# The interpreter on PATH may be a shim that refuses to run script files, and the safety test needs PyYAML, so prefer uv (2026-11-13 sync).
+run_py() {
+  if command -v uv >/dev/null 2>&1; then
+    uv run --quiet --with pyyaml python "$@"
+  else
+    python3 "$@"
+  fi
+}
+
 echo "[brand-enforce] step 1: applying token replacements (idempotent)..."
-python3 "$script"
+run_py "$script"
 step1_status=$?
 
 echo
 echo "[brand-enforce] step 2: read-only audit for surviving upstream tokens..."
-python3 "$script" --check
+run_py "$script" --check
 audit_status=$?
 
 echo

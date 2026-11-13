@@ -648,10 +648,7 @@ pub async fn a2a_get_task(
     )
     .await
     {
-        Ok(Some(task)) => (
-            StatusCode::OK,
-            Json(task),
-        ),
+        Ok(Some(task)) => (StatusCode::OK, Json(task)),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
@@ -668,7 +665,9 @@ pub async fn a2a_get_task(
         ("id" = String, Path, description = "Id"),
     ),
     responses(
-        (status = 200, description = "Cancel a tracked A2A task", body = crate::types::JsonObject)
+        (status = 200, description = "Cancel a tracked A2A task", body = crate::types::JsonObject),
+        (status = 404, description = "No task with this id"),
+        (status = 409, description = "Task already completed, failed or cancelled (A2A TaskNotCancelable)")
     )
 )]
 pub async fn a2a_cancel_task(
@@ -681,21 +680,32 @@ pub async fn a2a_cancel_task(
         &state,
         &task_id,
         api_user.as_ref().map(|user| &user.0),
-        body.as_ref().and_then(|Json(value)| value.get("expectedRevision")).and_then(serde_json::Value::as_u64),
+        body.as_ref()
+            .and_then(|Json(value)| value.get("expectedRevision"))
+            .and_then(serde_json::Value::as_u64),
     )
     .await
     {
-        Ok(Some(task)) => (
-            StatusCode::OK,
-            Json(task),
-        ),
+        Ok(Some(task)) => (StatusCode::OK, Json(task)),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
-        Err(error) if error == "selected_expected_revision_required" =>
-            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": error}))),
-        Err(error) if error == "selected_revision_conflict" =>
-            (StatusCode::CONFLICT, Json(serde_json::json!({"error": error}))),
+        Err(error) if error == "selected_expected_revision_required" => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": error})),
+        ),
+        Err(error) if error == "selected_revision_conflict" => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": error})),
+        ),
+        // A finished task keeps its status, so answering 200 with it would read as a successful cancel; A2A names this case `TaskNotCancelable`.
+        Err(error) if error == super::uar::delegated_tasks::TASK_NOT_CANCELABLE => {
+            ApiErrorResponse::conflict(format!(
+            "Task '{task_id}' is already completed, failed or cancelled and cannot be cancelled"
+        ))
+            .with_code("task_not_cancelable")
+            .into_json_tuple()
+        }
         Err(error) => ApiErrorResponse::internal(error).into_json_tuple(),
     }
 }
@@ -1499,14 +1509,23 @@ pub async fn mcp_http(
     Json(request): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(error) = crate::mcp_attribution::requested_authority_error(&headers) {
-        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
-            "mcp", error, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+        state.kernel.audit().record_with_context(
+            "system",
+            librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp",
+            error,
+            api_user.as_ref().map(|user| user.0.user_id),
+            Some("mcp".into()),
+        );
         return mcp_identity_error(&request, error);
     }
     let Some(axum::Extension(attribution)) = attribution else {
         return mcp_identity_error(&request, "mcp_authenticated_attribution_required");
     };
-    if api_user.as_ref().is_none_or(|user| user.0.role < crate::middleware::UserRole::Admin) {
+    if api_user
+        .as_ref()
+        .is_none_or(|user| user.0.role < crate::middleware::UserRole::Admin)
+    {
         return mcp_identity_error(&request, "mcp_role_not_authorized");
     }
     let mut attribution = attribution.0;
@@ -1583,8 +1602,14 @@ pub async fn mcp_http(
 
     attribution.authorized_agent_id = caller_entry.as_ref().map(|entry| entry.id.to_string());
     if let Ok(record) = serde_json::to_string(&attribution) {
-        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
-            "mcp", record, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+        state.kernel.audit().record_with_context(
+            "system",
+            librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp",
+            record,
+            api_user.as_ref().map(|user| user.0.user_id),
+            Some("mcp".into()),
+        );
     }
 
     // #6117: inbound peer scope of the turn that spawned the subprocess driver,
@@ -1769,7 +1794,8 @@ pub async fn mcp_http(
         }
         None => tools,
     };
-    let mut response = librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
+    let mut response =
+        librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
     crate::mcp_attribution::attach(&mut response, &attribution);
     Json(response)
 }
@@ -2133,6 +2159,21 @@ pub async fn comms_events(
     })
 }
 
+/// Every audit entry recorded after `cursor`, in seq order.
+///
+/// The stream used to poll a fixed `recent(50)` window and skip what it had already seen, so a burst of more than 50 audit rows between two polls (parallel turns, workflow fan-out) silently dropped the oldest ones.
+/// A seq cursor delivers every row however many arrived, the same fix `/api/logs/stream` received.
+fn audit_entries_after(
+    audit: &librefang_kernel::audit::AuditLog,
+    cursor: Option<u64>,
+) -> Vec<librefang_kernel::audit::AuditEntry> {
+    match cursor {
+        Some(seq) => audit.since_seq(seq),
+        // The log was empty when the cursor was taken, so everything in it now is new.
+        None => audit.recent(usize::MAX),
+    }
+}
+
 /// GET /api/comms/events/stream — SSE stream of inter-agent communication events.
 ///
 /// Polls the audit log every 500ms for new inter-agent events.
@@ -2173,10 +2214,8 @@ pub async fn comms_events_stream(State(state): State<Arc<AppState>>) -> axum::re
 
     tokio::spawn(async move {
         let _stream_permit = stream_permit;
-        let mut last_seq: u64 = {
-            let entries = state.kernel.audit().recent(1);
-            entries.last().map(|e| e.seq).unwrap_or(0)
-        };
+        // Cursor over the audit log: the highest seq already considered, or `None` when the log was empty at connect (seqs start at 0, so a numeric 0 would wrongly skip the first entry).
+        let mut last_seq: Option<u64> = state.kernel.audit().recent(1).last().map(|e| e.seq);
 
         loop {
             tokio::select! {
@@ -2193,12 +2232,9 @@ pub async fn comms_events_stream(State(state): State<Arc<AppState>>) -> axum::re
             }
 
             let agents = state.kernel.agent_registry().list();
-            let entries = state.kernel.audit().recent(50);
+            let entries = audit_entries_after(state.kernel.audit(), last_seq);
 
             for entry in &entries {
-                if entry.seq <= last_seq {
-                    continue;
-                }
                 if let Some(comms_event) = audit_to_comms_event(entry, &agents) {
                     let data = serde_json::to_string(&comms_event).unwrap_or_default();
                     if tx.send(Ok(Event::default().data(data))).await.is_err() {
@@ -2208,7 +2244,7 @@ pub async fn comms_events_stream(State(state): State<Arc<AppState>>) -> axum::re
             }
 
             if let Some(last) = entries.last() {
-                last_seq = last.seq;
+                last_seq = Some(last.seq);
             }
         }
     });
@@ -2479,14 +2515,43 @@ pub(crate) fn remove_toml_section(content: &str, section: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        authenticated_a2a_caller, canonical_ip, find_external_agent_by_identity,
-        hostname_matches_glob_suffix, is_cloud_metadata_ip, is_private_ip, is_url_safe_for_ssrf,
-        try_acquire_comms_stream_permit,
+        audit_entries_after, audit_to_comms_event, authenticated_a2a_caller, canonical_ip,
+        find_external_agent_by_identity, hostname_matches_glob_suffix, is_cloud_metadata_ip,
+        is_private_ip, is_url_safe_for_ssrf, try_acquire_comms_stream_permit,
     };
     use librefang_kernel::MemorySubsystemApi;
     use librefang_kernel::MeshSubsystemApi;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Arc;
+
+    /// A burst larger than the old fixed `recent(50)` poll window must reach the comms stream in full.
+    #[test]
+    fn comms_stream_cursor_delivers_every_entry_of_a_large_burst() {
+        use librefang_kernel::audit::{AuditAction, AuditLog};
+        let audit = AuditLog::new();
+        audit.record("agent-a", AuditAction::AgentMessage, "before connect", "ok");
+        let cursor = audit.recent(1).last().map(|e| e.seq);
+        for i in 0..80 {
+            audit.record(
+                "agent-a",
+                AuditAction::AgentMessage,
+                format!("burst {i}"),
+                "ok",
+            );
+        }
+        let entries = audit_entries_after(&audit, cursor);
+        let events: Vec<_> = entries
+            .iter()
+            .filter_map(|e| audit_to_comms_event(e, &[]))
+            .collect();
+        assert_eq!(events.len(), 80, "every burst entry must be emitted");
+        assert!(events[0].detail.contains("burst 0"), "{:?}", events[0]);
+
+        // An empty log at connect must not skip the first entry (seq 0).
+        let fresh = AuditLog::new();
+        fresh.record("agent-a", AuditAction::AgentMessage, "first", "ok");
+        assert_eq!(audit_entries_after(&fresh, None).len(), 1);
+    }
 
     // The A2A SSRF gate resolves hostnames with `tokio::net::lookup_host` so it never blocks a runtime worker; these pin that the policy is unchanged by the async move.
     #[tokio::test]

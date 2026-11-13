@@ -216,7 +216,12 @@ async fn test_assemble_no_overflow() {
 async fn test_assemble_repairs_orphaned_tool_results_without_overflow() {
     use librefang_types::message::{ContentBlock, MessageContent, Role};
 
-    let engine = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), make_semantic(), None);
+    let engine = DefaultContextEngine::new(
+        ContextEngineConfig::default(),
+        make_memory(),
+        make_semantic(),
+        None,
+    );
     let mixed_delivery = Message {
         role: Role::User,
         content: MessageContent::Blocks(vec![
@@ -985,7 +990,7 @@ async fn test_summary_engine_compact_called_once_on_threshold_cross() {
         context_window_tokens: 0,
         label: None,
         model_override: None,
-
+        reasoning_effort: None,
         messages_generation: 0,
         last_repaired_generation: None,
         peer_id: None,

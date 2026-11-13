@@ -34,6 +34,7 @@ fn session(agent_id: AgentId, messages: Vec<Message>, parent: Option<SessionId>)
         label: Some("round-trip".to_string()),
         parent_session_id: parent,
         model_override: None,
+        reasoning_effort: None,
         messages_generation: 0,
         last_repaired_generation: None,
         peer_id: None,
@@ -122,6 +123,48 @@ async fn exercise_backend(store: &SurrealSession) {
     );
     assert_eq!(as_json(&loaded_child.messages), as_json(&child.messages));
 
+    // The reasoning-effort pin (#8591, migration v51) is written only by its setter and survives history saves.
+    assert_eq!(loaded.reasoning_effort, None, "a fresh session inherits");
+    backend
+        .set_session_reasoning_effort(parent.id, Some("high"))
+        .expect("pin reasoning effort");
+    let pinned = backend
+        .get_session(parent.id)
+        .expect("get pinned parent")
+        .expect("parent exists");
+    assert_eq!(pinned.reasoning_effort.as_deref(), Some("high"));
+    // A save from a copy loaded before the pin must not clear it, and a save carrying a different in-memory value must not overwrite it.
+    let mut stale = loaded.clone();
+    stale.reasoning_effort = Some("low".to_string());
+    backend.save_session(&stale).expect("save stale copy");
+    let after_save = backend
+        .get_session(parent.id)
+        .expect("get parent after save")
+        .expect("parent exists");
+    assert_eq!(after_save.reasoning_effort.as_deref(), Some("high"));
+    backend
+        .set_session_reasoning_effort(parent.id, None)
+        .expect("clear reasoning effort");
+    let cleared: Option<JsonValue> = store
+        .client()
+        .select(("sessions", parent.id.to_string().as_str()))
+        .await
+        .expect("select cleared parent");
+    let cleared = cleared.expect("parent exists after clear");
+    assert!(
+        cleared.get("reasoning_effort").is_none(),
+        "clearing stores NONE, not NULL: {cleared}"
+    );
+    // The setter does not create a session that does not exist, as upstream's UPDATE does not.
+    let ghost = SessionId(uuid::Uuid::new_v4());
+    backend
+        .set_session_reasoning_effort(ghost, Some("high"))
+        .expect("pin on a missing session is a no-op");
+    assert!(backend.get_session(ghost).expect("get ghost").is_none());
+    backend
+        .set_session_reasoning_effort(parent.id, Some("medium"))
+        .expect("re-pin before the history save below");
+
     // Re-saving keeps created_at and replaces the history.
     let mut updated = loaded;
     updated.messages.push(Message::user("again"));
@@ -131,6 +174,7 @@ async fn exercise_backend(store: &SurrealSession) {
         .expect("get parent again")
         .expect("parent still exists");
     assert_eq!(reloaded.messages.len(), 4);
+    assert_eq!(reloaded.reasoning_effort.as_deref(), Some("medium"));
 
     // The v43 index serves the parent -> children lookup.
     let children: Vec<JsonValue> = store

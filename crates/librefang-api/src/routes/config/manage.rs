@@ -700,7 +700,7 @@ fn redacted_config_json(
                 // `Debug`, so the dashboard receives one of the values its
                 // dropdown offers — see
                 // `enum_valued_fields_use_the_serde_encoding_not_debug`.
-                "reasoning_mode": t.reasoning_mode,
+                "reasoning_effort": t.reasoning_effort,
             }),
             None => serde_json::json!(null),
         },
@@ -1704,250 +1704,253 @@ pub async fn config_set(
 
     #[cfg(not(feature = "surreal-backend"))]
     {
-    // Read existing config — use toml_edit to preserve comments and formatting.
-    // A read failure on an existing file (permission denied, hardware fault,
-    // …) MUST abort — falling back to "" would silently drop every other
-    // section in `config.toml` (agents, providers, taint rules, …) on the
-    // next write. Same protection as `users::persist_users` (#3368).
-    let raw_content = match tokio::fs::read_to_string(&config_path).await {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            // Scrub the io error (audit: rusqlite-errors-leak) —
-            // path / permission detail stays in the log.
-            tracing::error!(%error, "could not read existing config.toml");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "status": "error",
-                    "error": "Internal server error"
-                })),
-            );
-        }
-    };
-    // Parse failure means the on-disk file is already corrupt — refuse to
-    // write rather than overwriting with an empty document, which would
-    // clobber every other section the operator is hand-editing (#3368).
-    let mut doc: toml_edit::DocumentMut = match raw_content.parse() {
-        Ok(d) => d,
-        Err(e) => {
-            return (
-                StatusCode::CONFLICT,
-                Json(serde_json::json!({
-                    "status": "error",
-                    "error": format!(
-                        "config.toml has a syntax error and cannot be safely edited \
-                         from the dashboard. Fix the file manually first: {e}"
-                    )
-                })),
-            );
-        }
-    };
-
-    // null → remove key instead of writing empty string
-    let is_remove = value.is_null();
-
-    // Parse "section.key" path and set/remove value
-    let parts: Vec<&str> = path.split('.').collect();
-    match parts.len() {
-        1 => {
-            if is_remove {
-                // A single-segment path names a top-level `KernelConfig` field,
-                // and removing the key would erase the document's statement
-                // about it: the reload overlay (#8459/#8460) reads an absent
-                // top-level key as "keep the live value", so the delete would
-                // no-op and the handler would still answer success. State the
-                // compiled default explicitly — see
-                // `config_default_top_level_item`. Remove-then-insert so an
-                // existing table header's formatting decor cannot leak into
-                // the rendered key.
-                match config_default_top_level_item(parts[0]) {
-                    Some(default_item) => {
-                        doc.remove(parts[0]);
-                        doc.insert(parts[0], default_item);
-                    }
-                    None => {
-                        doc.remove(parts[0]);
-                    }
-                }
-            } else {
-                doc[parts[0]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
-            }
-        }
-        2 => {
-            if is_remove {
-                // `as_table_like_mut` rather than `as_table_mut`: a section an
-                // operator hand-wrote as an inline table (`media = { … }`) is
-                // `Item::Value(InlineTable)`, not `Item::Table`, and the
-                // narrower accessor returns `None` — so the removal silently
-                // did nothing while the handler still answered success.
-                if let Some(t) = doc[parts[0]].as_table_like_mut() {
-                    t.remove(parts[1]);
-                }
-            } else {
-                ensure_table_like(&mut doc[parts[0]]);
-                doc[parts[0]][parts[1]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
-            }
-        }
-        3 => {
-            if is_remove {
-                if let Some(t) = doc[parts[0]].as_table_like_mut() {
-                    if let Some(t2) = t.get_mut(parts[1]).and_then(|i| i.as_table_like_mut()) {
-                        t2.remove(parts[2]);
-                    }
-                }
-            } else {
-                ensure_table_like(&mut doc[parts[0]]);
-                if let Some(section) = doc[parts[0]].as_table_like_mut() {
-                    if !section.get(parts[1]).is_some_and(|i| i.is_table_like()) {
-                        section.insert(parts[1], toml_edit::Item::Table(toml_edit::Table::new()));
-                    }
-                }
-                doc[parts[0]][parts[1]][parts[2]] =
-                    toml_edit::Item::Value(json_to_toml_edit_value(&value));
-            }
-        }
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(
-                    serde_json::json!({"status": "error", "error": "path too deep (max 3 levels)"}),
-                ),
-            );
-        }
-    }
-
-    // Validate by parsing the result as KernelConfig before writing.
-    // This is the *schema* check (types deserialize cleanly), not the
-    // *business* check (e.g. cross-field invariants).
-    let new_toml_str = doc.to_string();
-    let mut parsed_config =
-        match toml::from_str::<librefang_types::config::KernelConfig>(&new_toml_str) {
-            Ok(cfg) => cfg,
-            Err(e) => {
+        // Read existing config — use toml_edit to preserve comments and formatting.
+        // A read failure on an existing file (permission denied, hardware fault,
+        // …) MUST abort — falling back to "" would silently drop every other
+        // section in `config.toml` (agents, providers, taint rules, …) on the
+        // next write. Same protection as `users::persist_users` (#3368).
+        let raw_content = match tokio::fs::read_to_string(&config_path).await {
+            Ok(content) => content,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                // Scrub the io error (audit: rusqlite-errors-leak) —
+                // path / permission detail stays in the log.
+                tracing::error!(%error, "could not read existing config.toml");
                 return (
-                    StatusCode::BAD_REQUEST,
+                    StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({
                         "status": "error",
-                        "error": format!("invalid config after edit: {e}")
+                        "error": "Internal server error"
+                    })),
+                );
+            }
+        };
+        // Parse failure means the on-disk file is already corrupt — refuse to
+        // write rather than overwriting with an empty document, which would
+        // clobber every other section the operator is hand-editing (#3368).
+        let mut doc: toml_edit::DocumentMut = match raw_content.parse() {
+            Ok(d) => d,
+            Err(e) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({
+                        "status": "error",
+                        "error": format!(
+                            "config.toml has a syntax error and cannot be safely edited \
+                             from the dashboard. Fix the file manually first: {e}"
+                        )
                     })),
                 );
             }
         };
 
-    // Business-level validation BEFORE writing to disk. Without this
-    // check, edits like `network_enabled = true` (without setting
-    // `shared_secret`) would persist a definitely-broken config to disk
-    // and only fail at the post-write reload step, leaving the user
-    // with a `saved_reload_failed` status and a TOML file that will
-    // also fail the next daemon startup. Apply clamp_bounds first to
-    // mirror the reload-side preprocessing — otherwise a user-set
-    // out-of-range value would be flagged here even though reload
-    // would silently fix it.
-    parsed_config.clamp_bounds();
-    if let Err(errors) = validate_config_for_reload(&parsed_config) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "status": "error",
-                "error": format!("invalid config: {}", errors.join("; "))
-            })),
-        );
-    }
+        // null → remove key instead of writing empty string
+        let is_remove = value.is_null();
 
-    // Backup under backups/ before write (single rolling copy).
-    if let Some(home_dir) = config_path.parent() {
-        let backups_dir = home_dir.join("backups");
-        if tokio::fs::create_dir_all(&backups_dir).await.is_ok() {
-            match tokio::fs::copy(&config_path, backups_dir.join("config.toml.prev")).await {
-                Ok(_) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => tracing::warn!(%error, "failed to back up config.toml"),
-            }
-        }
-    }
-
-    // Write back — preserves comments, whitespace, and key ordering
-    let write_path = config_path.clone();
-    let write_bytes = new_toml_str.into_bytes();
-    let write_result =
-        tokio::task::spawn_blocking(move || crate::atomic_write(&write_path, &write_bytes)).await;
-    match write_result {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => {
-            // Scrub the io error (audit: rusqlite-errors-leak).
-            tracing::error!(%error, "failed to write config.toml");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
-            );
-        }
-        Err(error) => {
-            tracing::error!(%error, "config write task failed");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
-            );
-        }
-    }
-
-    // Trigger reload
-    let mut side_effect_warnings: Vec<String> = Vec::new();
-    let (reload_status, reload_error): (&'static str, Option<String>) =
-        match state.kernel.reload_config().await {
-            Ok(plan) => {
-                // Same API-side follow-ups `POST /api/config/reload` and the file watcher run: auth tables, and the channel bridge rebuild on `ReloadChannels`.
-                side_effect_warnings = apply_reload_side_effects(&state, &plan).await;
-                // A plan with no changes is not "applied": the write landed on
-                // disk, but nothing in the live config moved. The single-segment
-                // remove path lands here when the field's default is not
-                // TOML-representable (`config_default_top_level_item`), so the
-                // reload overlay reads the dropped key as "keep the live value"
-                // — and any other write whose value already equals the live one
-                // lands here too. Reporting success there is the
-                // misleading-success shape this response exists to avoid.
-                let s = if !plan.has_changes() {
-                    "no_changes"
-                } else if plan.restart_required || !side_effect_warnings.is_empty() {
-                    "applied_partial"
+        // Parse "section.key" path and set/remove value
+        let parts: Vec<&str> = path.split('.').collect();
+        match parts.len() {
+            1 => {
+                if is_remove {
+                    // A single-segment path names a top-level `KernelConfig` field,
+                    // and removing the key would erase the document's statement
+                    // about it: the reload overlay (#8459/#8460) reads an absent
+                    // top-level key as "keep the live value", so the delete would
+                    // no-op and the handler would still answer success. State the
+                    // compiled default explicitly — see
+                    // `config_default_top_level_item`. Remove-then-insert so an
+                    // existing table header's formatting decor cannot leak into
+                    // the rendered key.
+                    match config_default_top_level_item(parts[0]) {
+                        Some(default_item) => {
+                            doc.remove(parts[0]);
+                            doc.insert(parts[0], default_item);
+                        }
+                        None => {
+                            doc.remove(parts[0]);
+                        }
+                    }
                 } else {
-                    "applied"
-                };
-                (s, None)
+                    doc[parts[0]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
+                }
             }
-            Err(e) => {
-                // Surface the actual reload failure reason so the dashboard
-                // can show users what's wrong (e.g. "validation failed:
-                // network_enabled is true but shared_secret is empty"
-                // instead of an opaque "saved but reload failed"). The TOML
-                // file has already been written at this point, so leaving
-                // the user without a reason is doubly bad — they can't
-                // distinguish "transient kernel hiccup, restart will pick
-                // it up" from "permanently invalid config that breaks
-                // restart too".
-                tracing::warn!(error = %e, %path, "config reload failed after write");
-                ("saved_reload_failed", Some(e))
+            2 => {
+                if is_remove {
+                    // `as_table_like_mut` rather than `as_table_mut`: a section an
+                    // operator hand-wrote as an inline table (`media = { … }`) is
+                    // `Item::Value(InlineTable)`, not `Item::Table`, and the
+                    // narrower accessor returns `None` — so the removal silently
+                    // did nothing while the handler still answered success.
+                    if let Some(t) = doc[parts[0]].as_table_like_mut() {
+                        t.remove(parts[1]);
+                    }
+                } else {
+                    ensure_table_like(&mut doc[parts[0]]);
+                    doc[parts[0]][parts[1]] =
+                        toml_edit::Item::Value(json_to_toml_edit_value(&value));
+                }
             }
-        };
+            3 => {
+                if is_remove {
+                    if let Some(t) = doc[parts[0]].as_table_like_mut() {
+                        if let Some(t2) = t.get_mut(parts[1]).and_then(|i| i.as_table_like_mut()) {
+                            t2.remove(parts[2]);
+                        }
+                    }
+                } else {
+                    ensure_table_like(&mut doc[parts[0]]);
+                    if let Some(section) = doc[parts[0]].as_table_like_mut() {
+                        if !section.get(parts[1]).is_some_and(|i| i.is_table_like()) {
+                            section
+                                .insert(parts[1], toml_edit::Item::Table(toml_edit::Table::new()));
+                        }
+                    }
+                    doc[parts[0]][parts[1]][parts[2]] =
+                        toml_edit::Item::Value(json_to_toml_edit_value(&value));
+                }
+            }
+            _ => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(
+                        serde_json::json!({"status": "error", "error": "path too deep (max 3 levels)"}),
+                    ),
+                );
+            }
+        }
 
-    let user_id = api_user.as_ref().map(|u| u.0.user_id);
-    state.kernel.audit().record_with_context(
-        "system",
-        librefang_kernel::audit::AuditAction::ConfigChange,
-        format!("config set: {path}"),
-        reload_status,
-        user_id,
-        Some("api".to_string()),
-    );
+        // Validate by parsing the result as KernelConfig before writing.
+        // This is the *schema* check (types deserialize cleanly), not the
+        // *business* check (e.g. cross-field invariants).
+        let new_toml_str = doc.to_string();
+        let mut parsed_config =
+            match toml::from_str::<librefang_types::config::KernelConfig>(&new_toml_str) {
+                Ok(cfg) => cfg,
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "status": "error",
+                            "error": format!("invalid config after edit: {e}")
+                        })),
+                    );
+                }
+            };
 
-    let mut body = serde_json::json!({"status": reload_status, "path": path});
-    if let Some(err) = reload_error {
-        body["reload_error"] = serde_json::Value::String(err);
-    }
-    if !side_effect_warnings.is_empty() {
-        body["warnings"] = serde_json::json!(side_effect_warnings);
-    }
-    (StatusCode::OK, Json(body))
+        // Business-level validation BEFORE writing to disk. Without this
+        // check, edits like `network_enabled = true` (without setting
+        // `shared_secret`) would persist a definitely-broken config to disk
+        // and only fail at the post-write reload step, leaving the user
+        // with a `saved_reload_failed` status and a TOML file that will
+        // also fail the next daemon startup. Apply clamp_bounds first to
+        // mirror the reload-side preprocessing — otherwise a user-set
+        // out-of-range value would be flagged here even though reload
+        // would silently fix it.
+        parsed_config.clamp_bounds();
+        if let Err(errors) = validate_config_for_reload(&parsed_config) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "error": format!("invalid config: {}", errors.join("; "))
+                })),
+            );
+        }
+
+        // Backup under backups/ before write (single rolling copy).
+        if let Some(home_dir) = config_path.parent() {
+            let backups_dir = home_dir.join("backups");
+            if tokio::fs::create_dir_all(&backups_dir).await.is_ok() {
+                match tokio::fs::copy(&config_path, backups_dir.join("config.toml.prev")).await {
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => tracing::warn!(%error, "failed to back up config.toml"),
+                }
+            }
+        }
+
+        // Write back — preserves comments, whitespace, and key ordering
+        let write_path = config_path.clone();
+        let write_bytes = new_toml_str.into_bytes();
+        let write_result =
+            tokio::task::spawn_blocking(move || crate::atomic_write(&write_path, &write_bytes))
+                .await;
+        match write_result {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                // Scrub the io error (audit: rusqlite-errors-leak).
+                tracing::error!(%error, "failed to write config.toml");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
+                );
+            }
+            Err(error) => {
+                tracing::error!(%error, "config write task failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
+                );
+            }
+        }
+
+        // Trigger reload
+        let mut side_effect_warnings: Vec<String> = Vec::new();
+        let (reload_status, reload_error): (&'static str, Option<String>) =
+            match state.kernel.reload_config().await {
+                Ok(plan) => {
+                    // Same API-side follow-ups `POST /api/config/reload` and the file watcher run: auth tables, and the channel bridge rebuild on `ReloadChannels`.
+                    side_effect_warnings = apply_reload_side_effects(&state, &plan).await;
+                    // A plan with no changes is not "applied": the write landed on
+                    // disk, but nothing in the live config moved. The single-segment
+                    // remove path lands here when the field's default is not
+                    // TOML-representable (`config_default_top_level_item`), so the
+                    // reload overlay reads the dropped key as "keep the live value"
+                    // — and any other write whose value already equals the live one
+                    // lands here too. Reporting success there is the
+                    // misleading-success shape this response exists to avoid.
+                    let s = if !plan.has_changes() {
+                        "no_changes"
+                    } else if plan.restart_required || !side_effect_warnings.is_empty() {
+                        "applied_partial"
+                    } else {
+                        "applied"
+                    };
+                    (s, None)
+                }
+                Err(e) => {
+                    // Surface the actual reload failure reason so the dashboard
+                    // can show users what's wrong (e.g. "validation failed:
+                    // network_enabled is true but shared_secret is empty"
+                    // instead of an opaque "saved but reload failed"). The TOML
+                    // file has already been written at this point, so leaving
+                    // the user without a reason is doubly bad — they can't
+                    // distinguish "transient kernel hiccup, restart will pick
+                    // it up" from "permanently invalid config that breaks
+                    // restart too".
+                    tracing::warn!(error = %e, %path, "config reload failed after write");
+                    ("saved_reload_failed", Some(e))
+                }
+            };
+
+        let user_id = api_user.as_ref().map(|u| u.0.user_id);
+        state.kernel.audit().record_with_context(
+            "system",
+            librefang_kernel::audit::AuditAction::ConfigChange,
+            format!("config set: {path}"),
+            reload_status,
+            user_id,
+            Some("api".to_string()),
+        );
+
+        let mut body = serde_json::json!({"status": reload_status, "path": path});
+        if let Some(err) = reload_error {
+            body["reload_error"] = serde_json::Value::String(err);
+        }
+        if !side_effect_warnings.is_empty() {
+            body["warnings"] = serde_json::json!(side_effect_warnings);
+        }
+        (StatusCode::OK, Json(body))
     }
 }
 
@@ -1993,7 +1996,9 @@ async fn config_set_surreal(
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"status":"error","error":format!("invalid config after edit: {e}")})),
+                Json(
+                    serde_json::json!({"status":"error","error":format!("invalid config after edit: {e}")}),
+                ),
             );
         }
     };
@@ -2001,7 +2006,9 @@ async fn config_set_surreal(
     if let Err(errors) = validate_config_for_reload(&merged) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"status":"error","error":format!("invalid config: {}", errors.join("; "))})),
+            Json(
+                serde_json::json!({"status":"error","error":format!("invalid config: {}", errors.join("; "))}),
+            ),
         );
     }
     if let Err(e) = write_config_overrides(&storage, &overrides).await {

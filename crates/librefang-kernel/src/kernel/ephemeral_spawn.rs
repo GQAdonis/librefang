@@ -101,6 +101,7 @@ fn new_ephemeral_session(agent_id: AgentId, label: String) -> librefang_memory::
         context_window_tokens: 0,
         label: Some(label),
         model_override: None,
+        reasoning_effort: None,
         messages_generation: 0,
         last_repaired_generation: None,
         peer_id: None,
@@ -116,7 +117,8 @@ impl LibreFangKernel {
         dispatch: uar_harness::ResolvedDispatch,
     ) -> Result<EphemeralSpawnResult, uar_harness::JobDispatchError> {
         dispatch.require_native_ephemeral()?;
-        self.spawn_ephemeral_worker(request).await
+        self.spawn_ephemeral_worker(request)
+            .await
             .map_err(uar_harness::JobDispatchError::Native)
     }
 

@@ -44,6 +44,8 @@ jobs:
   enforce-branding:
     name: enforce-branding (--check)
     runs-on: ubuntu-latest
+    # A read-only token scan that finishes in seconds; the cap only stops a hung runner, as scripts/check-workflow-timeouts.py requires of every job.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Audit for upstream branding tokens

@@ -335,7 +335,10 @@ pub async fn list_models(
     // Every other provider used to be served from the checked-in catalogue alone, which has nothing to show for a self-hosted OpenAI-compatible gateway: the model ids there are the operator's own, so no snapshot can ship them (#7775).
     // The probe below is the same `/models` listing the periodic loop and `GET /api/providers` already query — this handler previously only *read* `provider_probe_cache` for the #3191 filter and never filled it, so a `/api/models` call that arrived before either of those had run reported the gateway as having no models at all.
     refresh_discovered_models(&state, provider_filter.as_deref()).await;
-    let uar_catalog = if provider_filter.as_deref().is_none_or(|provider| provider == "uar") {
+    let uar_catalog = if provider_filter
+        .as_deref()
+        .is_none_or(|provider| provider == "uar")
+    {
         Some(super::uar_model_catalog::selected_models().await)
     } else {
         None
@@ -399,7 +402,9 @@ pub async fn list_models(
         .iter()
         .filter(|m| {
             // UAR models belong to the connected runtime, not our static catalog.
-            if m.provider.eq_ignore_ascii_case("uar") { return false; }
+            if m.provider.eq_ignore_ascii_case("uar") {
+                return false;
+            }
             if let Some(ref p) = provider_filter {
                 if m.provider.to_lowercase() != *p {
                     return false;
@@ -438,6 +443,9 @@ pub async fn list_models(
                 .unwrap_or(m.tier == librefang_types::model_catalog::ModelTier::Custom);
             // Effective `supports_*` reflects user overrides; `capabilities_catalog` ships the raw default for revert-target UIs. Refs #4745.
             let eff = catalog.effective_capabilities(m);
+            // Effective reasoning-effort policy (#8591): the declared set plus
+            // the off flags, resolved through any operator override.
+            let reasoning = catalog.effective_reasoning_policy(m);
             // Same shape for the capacity limits: `context_window` /
             // `max_output_tokens` carry the effective value and `limits_catalog`
             // the raw registry-or-probe one, so the dashboard can render both
@@ -476,6 +484,14 @@ pub async fn list_models(
                     "context_window": m.context_window,
                     "max_output_tokens": m.max_output_tokens,
                 },
+                // The reasoning-effort policy in force (#8591). `offered` is
+                // what a selection surface should render: the graded set plus
+                // `none` when the model allows it.
+                "supported_efforts": reasoning.supported_efforts,
+                "default_effort": reasoning.default_effort,
+                "off_allowed": reasoning.off_allowed,
+                "mandatory": reasoning.mandatory,
+                "offered_efforts": reasoning.offered(),
                 "aliases": m.aliases,
                 "available": available,
             })
@@ -522,8 +538,18 @@ pub async fn list_models(
         status
     });
     // Preserve existing global catalog counts while replacing stale UAR entries.
-    let total = catalog.list_models().iter().filter(|model| model.provider != "uar").count() + live_uar_count;
-    let available_count = catalog.available_models().iter().filter(|model| model.provider != "uar").count() + live_uar_count;
+    let total = catalog
+        .list_models()
+        .iter()
+        .filter(|model| model.provider != "uar")
+        .count()
+        + live_uar_count;
+    let available_count = catalog
+        .available_models()
+        .iter()
+        .filter(|model| model.provider != "uar")
+        .count()
+        + live_uar_count;
 
     (
         StatusCode::OK,
@@ -694,6 +720,9 @@ pub async fn get_model(
             let overrides = catalog.get_overrides(&override_key);
             // Effective `supports_*` reflects user overrides; `capabilities_catalog` ships the raw default for revert-target UIs. Refs #4745.
             let eff = catalog.effective_capabilities(m);
+            // Effective reasoning-effort policy (#8591), so the GET view and
+            // the list view report the same declared set.
+            let reasoning = catalog.effective_reasoning_policy(m);
             // Effective capacity limits, with the raw catalog values under
             // `limits_catalog`. Refs #7774.
             let lim = catalog.effective_limits(m);
@@ -732,6 +761,12 @@ pub async fn get_model(
                         "context_window": m.context_window,
                         "max_output_tokens": m.max_output_tokens,
                     },
+                    // The reasoning-effort policy in force (#8591).
+                    "supported_efforts": reasoning.supported_efforts,
+                    "default_effort": reasoning.default_effort,
+                    "off_allowed": reasoning.off_allowed,
+                    "mandatory": reasoning.mandatory,
+                    "offered_efforts": reasoning.offered(),
                     "aliases": m.aliases,
                     "available": available,
                     "overrides": overrides,
@@ -1595,6 +1630,32 @@ pub async fn add_custom_model(
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         reasoning_echo_policy: librefang_types::model_catalog::ReasoningEchoPolicy::default(),
+        // Optional open-vocabulary declaration (#8591). Absent means "the
+        // operator declared nothing": the canonical set is advertised, and
+        // the drivers keep the legacy `max` spelling until a list says
+        // otherwise.
+        supported_efforts: body
+            .get("supported_efforts")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        default_effort: body
+            .get("default_effort")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        // `off_allowed` defaults to true; an explicitly sent value wins.
+        off_allowed: body
+            .get("off_allowed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
+        mandatory: body
+            .get("mandatory")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         aliases: vec![],
     };
 

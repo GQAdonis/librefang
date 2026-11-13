@@ -88,6 +88,8 @@ impl SurrealSessionBackend {
         let context_window_tokens = row["context_window_tokens"].as_u64().unwrap_or(0);
         let label = row["label"].as_str().map(str::to_string);
         let model_override = row["model_override"].as_str().map(str::to_string);
+        // Migration v51 (`051_sessions_reasoning_effort.surql`), mirroring upstream SQLite v65 (#8591); NONE inherits.
+        let reasoning_effort = row["reasoning_effort"].as_str().map(str::to_string);
         // Migration v43 (`043_sessions_parent_session_id.surql`), mirroring upstream SQLite v61.
         // A malformed value is dropped rather than failing the load, as the SQLite path does.
         let parent_session_id = row["parent_session_id"]
@@ -101,12 +103,47 @@ impl SurrealSessionBackend {
             context_window_tokens,
             label,
             model_override,
+            reasoning_effort,
             parent_session_id,
             // Generation counter starts at 0 on cold-load; the repair pass
             // will set last_repaired_generation once it runs.
             messages_generation: 0,
             last_repaired_generation: None,
             peer_id: None,
+        })
+    }
+}
+
+impl SurrealSessionBackend {
+    /// Set (or clear, with `None`) the per-session reasoning-effort pin (#8591).
+    ///
+    /// Mirrors upstream's SQLite `UPDATE sessions SET reasoning_effort = ?`: it touches only the pin and `updated_at`, and a session that does not exist yet is left absent rather than created.
+    /// Clearing writes NONE, because the field is `option<string>` and rejects NULL.
+    pub fn set_session_reasoning_effort(
+        &self,
+        session_id: SessionId,
+        reasoning_effort: Option<&str>,
+    ) -> LibreFangResult<()> {
+        let id = session_id.to_string();
+        let effort = reasoning_effort.map(str::to_string);
+        let now = chrono::Utc::now().to_rfc3339();
+        let db = self.db.clone();
+        self.block_on(async move {
+            let sql = if effort.is_some() {
+                "UPDATE type::record('sessions', $id) SET reasoning_effort = $effort, updated_at = $now"
+            } else {
+                "UPDATE type::record('sessions', $id) SET reasoning_effort = NONE, updated_at = $now"
+            };
+            let mut query = db.query(sql).bind(("id", id)).bind(("now", now));
+            if let Some(effort) = effort {
+                query = query.bind(("effort", effort));
+            }
+            query
+                .await
+                .map_err(|e| LibreFangError::memory_msg(e.to_string()))?
+                .check()
+                .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
+            Ok(())
         })
     }
 }
@@ -146,6 +183,12 @@ impl SessionBackend for SurrealSessionBackend {
                 .and_then(|v| v["created_at"].as_str())
                 .unwrap_or(&now)
                 .to_string();
+            // The reasoning-effort pin (#8591) is owned by `set_session_reasoning_effort`, never by a history save, as in upstream's SQLite `save_session`.
+            // `.content()` replaces the whole record, so carry the stored pin forward: dropping it would clear the pin, and writing the caller's copy could restore a pin cleared since that copy was loaded.
+            let reasoning_effort = existing
+                .as_ref()
+                .and_then(|v| v["reasoning_effort"].as_str())
+                .map(str::to_string);
 
             let mut payload = serde_json::json!({
                 "agent_id": agent_id,
@@ -160,6 +203,7 @@ impl SessionBackend for SurrealSessionBackend {
             for (key, value) in [
                 ("label", label),
                 ("model_override", model_override),
+                ("reasoning_effort", reasoning_effort),
                 ("parent_session_id", parent_session_id),
             ] {
                 if let Some(value) = value {
