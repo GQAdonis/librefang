@@ -9,6 +9,7 @@
 //! ## Scope
 //!
 //! The operational tables that have a SurrealDB backend are copied; [`IMPORTED_TABLES`] is the authoritative list, and the dry-run planner counts exactly the same tables.
+//! Tables that have a SurrealDB schema but no SurrealDB backend yet (workflow runs, goal runs, channel bindings and the other SQLite-only stores) are not copied, because no backend defines the record ids and field shapes a copy would have to match; `docs/bossfang/surreal-sqlite-parity.md` lists each one.
 //!
 //! Rich semantic memory (the `memories` / `entities` / `relations`
 //! tables in `librefang-memory`) lives in surreal-memory's own schema
@@ -73,6 +74,8 @@ pub const IMPORTED_TABLES: &[&str] = &[
     "paired_devices",
     "prompt_versions",
     "prompt_experiments",
+    "experiment_variants",
+    "experiment_metrics",
 ];
 
 /// Decodes the opaque BLOB columns of the legacy SQLite store into the JSON shapes the SurrealDB backends read.
