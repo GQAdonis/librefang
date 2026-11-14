@@ -128,8 +128,15 @@ fn parse_experiment(row: &serde_json::Value) -> Option<PromptExperiment> {
             .to_string(),
         agent_id,
         status,
-        traffic_split: Default::default(),
-        success_criteria: Default::default(),
+        // Migration v52 types `traffic_split` as the `Vec<u8>` percentages SQLite stores; an older `{}` placeholder reads as the default, as before.
+        traffic_split: row
+            .get("traffic_split")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default(),
+        success_criteria: row
+            .get("success_criteria")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default(),
         started_at: row
             .get("started_at")
             .and_then(|v| v.as_str())
@@ -169,6 +176,52 @@ impl SurrealPromptStore {
     /// Wrap an existing connected SurrealDB instance.
     pub fn new(db: Arc<Surreal<Any>>) -> Self {
         Self { db }
+    }
+
+    /// The variants of one experiment, as `load_variants_for_experiment` reads them on the SQLite path.
+    async fn load_variants(
+        &self,
+        experiment_id: &str,
+    ) -> LibreFangResult<Vec<librefang_types::agent::ExperimentVariant>> {
+        let rows: Vec<serde_json::Value> = self
+            .db
+            .query("SELECT * FROM experiment_variants WHERE experiment_id = $experiment_id")
+            .bind(("experiment_id", experiment_id.to_string()))
+            .await
+            .map_err(|e| LibreFangError::memory_msg(format!("SurrealDB load variants: {e}")))?
+            .take(0)
+            .map_err(|e| LibreFangError::memory_msg(format!("SurrealDB load variants: {e}")))?;
+        let mut variants = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = row
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| super::record_key(s, "experiment_variants").to_string())
+                .unwrap_or_default();
+            let parse = |field: &str, raw: &str| {
+                raw.parse::<Uuid>().map_err(|e| {
+                    LibreFangError::memory_msg(format!("experiment variant {field} {raw}: {e}"))
+                })
+            };
+            let prompt_version_id = row
+                .get("prompt_version_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            variants.push(librefang_types::agent::ExperimentVariant {
+                id: parse("id", &id)?,
+                name: row
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                prompt_version_id: parse("prompt_version_id", prompt_version_id)?,
+                description: row
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string),
+            });
+        }
+        Ok(variants)
     }
 }
 
@@ -403,12 +456,14 @@ impl PromptBackend for SurrealPromptStore {
             .unwrap_or_else(|_| "\"draft\"".to_string())
             .trim_matches('"')
             .to_string();
+        let success_criteria = serde_json::to_value(&experiment.success_criteria)
+            .map_err(|e| LibreFangError::memory_msg(format!("serialise success_criteria: {e}")))?;
         let row = serde_json::json!({
             "name": experiment.name,
             "agent_id": experiment.agent_id.to_string(),
             "status": status_str,
-            "traffic_split": serde_json::json!({}),
-            "success_criteria": serde_json::json!({}),
+            "traffic_split": experiment.traffic_split,
+            "success_criteria": success_criteria,
             "started_at": experiment.started_at.map(|t| t.to_rfc3339()),
             "ended_at": experiment.ended_at.map(|t| t.to_rfc3339()),
             "created_at": experiment.created_at.to_rfc3339(),
@@ -416,11 +471,73 @@ impl PromptBackend for SurrealPromptStore {
         // `started_at` / `ended_at` are `option<string>`; leave them out while unset.
         let row = super::omit_nulls(row);
         let id = experiment.id.to_string();
+        let now = Utc::now().to_rfc3339();
+        // One variant row plus a zeroed metrics row per variant, as `PromptStore::create_experiment` writes; the metrics key is the one `record_request` updates.
+        let variants: Vec<serde_json::Value> = experiment
+            .variants
+            .iter()
+            .map(|v| {
+                let variant_id = v.id.to_string();
+                serde_json::json!({
+                    "key": variant_id,
+                    "metrics_key": format!("{id}_{variant_id}"),
+                    "row": super::omit_nulls(serde_json::json!({
+                        "experiment_id": id,
+                        "name": v.name,
+                        "prompt_version_id": v.prompt_version_id.to_string(),
+                        "description": v.description,
+                    })),
+                    "metrics": {
+                        "experiment_id": id,
+                        "variant_id": variant_id,
+                        "total_requests": 0,
+                        "successful_requests": 0,
+                        "failed_requests": 0,
+                        "total_latency_ms": 0,
+                        "total_cost_usd": 0.0,
+                        "last_updated": now,
+                    },
+                })
+            })
+            .collect();
+        let version_ids: Vec<String> = experiment
+            .variants
+            .iter()
+            .map(|v| v.prompt_version_id.to_string())
+            .collect();
         block_on(async {
+            // A mistyped prompt version surfaces as a typed not-found, as on the SQLite path.
+            for version_id in version_ids {
+                let found: Option<serde_json::Value> = self
+                    .db
+                    .select(("prompt_versions", version_id.as_str()))
+                    .await
+                    .map_err(|e| {
+                        LibreFangError::memory_msg(format!("SurrealDB create_experiment: {e}"))
+                    })?;
+                if found.is_none() {
+                    return Err(LibreFangError::ResourceNotFound {
+                        kind: "prompt_version".to_string(),
+                        id: version_id,
+                    });
+                }
+            }
+            // The experiment, its variants and their metrics rows are one unit: a failure on any of them leaves none behind.
             self.db
-                .create::<Option<serde_json::Value>>(("prompt_experiments", id))
-                .content(row)
+                .query(
+                    "BEGIN TRANSACTION; \
+                     CREATE type::record('prompt_experiments', $id) CONTENT $row; \
+                     FOR $v IN $variants { \
+                         CREATE type::record('experiment_variants', $v.key) CONTENT $v.row; \
+                         CREATE type::record('experiment_metrics', $v.metrics_key) CONTENT $v.metrics; \
+                     }; \
+                     COMMIT TRANSACTION;",
+                )
+                .bind(("id", id))
+                .bind(("row", row))
+                .bind(("variants", variants))
                 .await
+                .and_then(|res| res.check())
                 .map_err(|e| {
                     LibreFangError::memory_msg(format!("SurrealDB create_experiment: {e}"))
                 })?;
@@ -442,7 +559,12 @@ impl PromptBackend for SurrealPromptStore {
             let rows: Vec<serde_json::Value> = res.take(0).map_err(|e| {
                 LibreFangError::memory_msg(format!("SurrealDB list_experiments: {e}"))
             })?;
-            Ok(rows.iter().filter_map(parse_experiment).collect())
+            let mut experiments = Vec::new();
+            for mut exp in rows.iter().filter_map(parse_experiment) {
+                exp.variants = self.load_variants(&exp.id.to_string()).await?;
+                experiments.push(exp);
+            }
+            Ok(experiments)
         })
     }
 
@@ -455,7 +577,11 @@ impl PromptBackend for SurrealPromptStore {
                 .map_err(|e| {
                     LibreFangError::memory_msg(format!("SurrealDB get_experiment: {e}"))
                 })?;
-            Ok(row.as_ref().and_then(parse_experiment))
+            let Some(mut exp) = row.as_ref().and_then(parse_experiment) else {
+                return Ok(None);
+            };
+            exp.variants = self.load_variants(&exp.id.to_string()).await?;
+            Ok(Some(exp))
         })
     }
 
@@ -579,7 +705,7 @@ impl PromptBackend for SurrealPromptStore {
             let mut res = self
                 .db
                 .query(
-                    "SELECT * FROM experiment_metrics \
+                    "SELECT *, type::record('experiment_variants', variant_id).name AS variant_name FROM experiment_metrics \
                      WHERE variant_id = $variant_id LIMIT 1",
                 )
                 .bind(("variant_id", var_id))
@@ -654,7 +780,7 @@ impl PromptBackend for SurrealPromptStore {
             let mut res = self
                 .db
                 .query(
-                    "SELECT * FROM experiment_metrics \
+                    "SELECT *, type::record('experiment_variants', variant_id).name AS variant_name FROM experiment_metrics \
                      WHERE experiment_id = $experiment_id",
                 )
                 .bind(("experiment_id", exp_id))

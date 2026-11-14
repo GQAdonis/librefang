@@ -70,6 +70,44 @@ fn usage(store: &SurrealSession) {
         ..Default::default()
     };
     assert!(usage.check_quota_and_record(&over, 4.0, 0.0, 0.0).is_err());
+
+    // A worker's spend carries the spawner it bills to (upstream SQLite v49, migration v52); the SCHEMAFULL table must keep it.
+    let worker = AgentId::new();
+    usage
+        .record(&UsageRecord {
+            agent_id: worker,
+            billed_agent_id: Some(agent),
+            model: "m".to_string(),
+            cost_usd: 0.25,
+            ..Default::default()
+        })
+        .expect("record billed usage");
+    let billed: Vec<serde_json::Value> = block_on_query(
+        store,
+        "SELECT billed_agent_id FROM usage_events WHERE agent_id = $worker",
+        ("worker", worker.0.to_string()),
+    );
+    assert_eq!(billed.len(), 1, "{billed:?}");
+    assert_eq!(billed[0]["billed_agent_id"], agent.0.to_string());
+}
+
+/// Run one bound query on the current multi-thread runtime from a sync helper.
+fn block_on_query(
+    store: &SurrealSession,
+    sql: &'static str,
+    bind: (&'static str, String),
+) -> Vec<serde_json::Value> {
+    let db = store.client().clone();
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(async move {
+            db.query(sql)
+                .bind(bind)
+                .await
+                .expect("query")
+                .take(0)
+                .expect("rows")
+        })
+    })
 }
 
 fn devices(store: &SurrealSession) {
@@ -154,6 +192,65 @@ fn prompts(store: &SurrealSession) {
             .map(|e| e.id),
         Some(experiment.id)
     );
+
+    // Variants, the traffic split and the success criteria round-trip as on the SQLite path (migration v52 types `traffic_split` as an int array).
+    let control = librefang_types::agent::ExperimentVariant {
+        id: Uuid::new_v4(),
+        name: "control".to_string(),
+        prompt_version_id: version.id,
+        description: Some("baseline".to_string()),
+    };
+    let with_variants = PromptExperiment {
+        id: Uuid::new_v4(),
+        name: "ab".to_string(),
+        traffic_split: vec![70, 30],
+        success_criteria: librefang_types::agent::SuccessCriteria {
+            require_user_helpful: false,
+            custom_min_score: Some(4),
+            ..Default::default()
+        },
+        variants: vec![control.clone()],
+        ..experiment.clone()
+    };
+    prompts
+        .create_experiment(with_variants.clone())
+        .expect("create experiment with a variant");
+    let got = prompts
+        .get_experiment(with_variants.id)
+        .expect("get experiment with variants")
+        .expect("experiment exists");
+    assert_eq!(got.traffic_split, vec![70, 30]);
+    assert!(!got.success_criteria.require_user_helpful);
+    assert_eq!(got.success_criteria.custom_min_score, Some(4));
+    assert_eq!(got.variants.len(), 1);
+    assert_eq!(got.variants[0].id, control.id);
+    assert_eq!(got.variants[0].prompt_version_id, version.id);
+    assert_eq!(got.variants[0].description.as_deref(), Some("baseline"));
+    let listed = prompts.list_experiments(agent).expect("list experiments");
+    assert_eq!(listed.len(), 2);
+    let zeroed = prompts
+        .get_experiment_metrics(with_variants.id)
+        .expect("metrics of a new experiment");
+    assert_eq!(zeroed.len(), 1, "one zeroed metrics row per variant");
+    assert_eq!(zeroed[0].total_requests, 0);
+    assert_eq!(
+        zeroed[0].variant_name, "control",
+        "the name joins in from the variant row"
+    );
+    // A variant pointing at a missing prompt version is refused and leaves nothing behind.
+    let orphan = PromptExperiment {
+        id: Uuid::new_v4(),
+        variants: vec![librefang_types::agent::ExperimentVariant {
+            prompt_version_id: Uuid::new_v4(),
+            ..control.clone()
+        }],
+        ..with_variants.clone()
+    };
+    assert!(prompts.create_experiment(orphan.clone()).is_err());
+    assert!(prompts
+        .get_experiment(orphan.id)
+        .expect("get orphan")
+        .is_none());
 
     let variant = Uuid::new_v4();
     prompts

@@ -95,6 +95,11 @@ impl SurrealSessionBackend {
         let parent_session_id = row["parent_session_id"]
             .as_str()
             .and_then(|s| s.parse::<SessionId>().ok());
+        // `messages_generation` (023, upstream SQLite v40 / #5138) survives a reload so the repair-skip optimisation holds, as `SessionStore::get_session` does.
+        // `last_repaired_generation` stays `None` on a cold load, matching the SQLite path.
+        let messages_generation = row["messages_generation"].as_u64().unwrap_or(0);
+        // `peer_id` (052, upstream SQLite v16 / #2015) scopes a channel session to one contact.
+        let peer_id = row["peer_id"].as_str().map(str::to_string);
 
         Ok(Session {
             id: session_id,
@@ -105,11 +110,9 @@ impl SurrealSessionBackend {
             model_override,
             reasoning_effort,
             parent_session_id,
-            // Generation counter starts at 0 on cold-load; the repair pass
-            // will set last_repaired_generation once it runs.
-            messages_generation: 0,
+            messages_generation,
             last_repaired_generation: None,
-            peer_id: None,
+            peer_id,
         })
     }
 }
@@ -170,6 +173,9 @@ impl SessionBackend for SurrealSessionBackend {
         let parent_session_id = session.parent_session_id.map(|p| p.to_string());
         let context_window_tokens = session.context_window_tokens;
         let message_count = session.messages.len() as i64;
+        // Saturate rather than wrap: the field is a SurrealDB `int` (i64).
+        let messages_generation = i64::try_from(session.messages_generation).unwrap_or(i64::MAX);
+        let peer_id = session.peer_id.clone();
         let now = chrono::Utc::now().to_rfc3339();
         let db = self.db.clone();
 
@@ -195,6 +201,7 @@ impl SessionBackend for SurrealSessionBackend {
                 "messages": messages,
                 "context_window_tokens": context_window_tokens,
                 "message_count": message_count,
+                "messages_generation": messages_generation,
                 "created_at": created_at,
                 "updated_at": now,
             });
@@ -205,6 +212,7 @@ impl SessionBackend for SurrealSessionBackend {
                 ("model_override", model_override),
                 ("reasoning_effort", reasoning_effort),
                 ("parent_session_id", parent_session_id),
+                ("peer_id", peer_id),
             ] {
                 if let Some(value) = value {
                     payload[key] = JsonValue::String(value);
