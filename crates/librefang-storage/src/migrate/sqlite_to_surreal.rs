@@ -83,6 +83,8 @@ pub(super) fn run(
             "paired_devices" => copy_paired_devices(&mut ctx),
             "prompt_versions" => copy_prompt_versions(&mut ctx),
             "prompt_experiments" => copy_prompt_experiments(&mut ctx),
+            "experiment_variants" => copy_experiment_variants(&mut ctx),
+            "experiment_metrics" => copy_experiment_metrics(&mut ctx),
             other => {
                 warn!(table = other, "no migrator registered; skipping");
                 Ok(0)
@@ -249,27 +251,25 @@ fn copy_hook_traces(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
     }
     let mut stmt = ctx
         .conn
-        .prepare(
-            "SELECT id, trace_id, correlation_id, plugin, hook, started_at, elapsed_ms, \
-                    success, error, input_preview, output_preview \
-             FROM hook_traces ORDER BY id ASC",
-        )
+        .prepare("SELECT * FROM hook_traces ORDER BY id ASC")
         .map_err(map_sql)?;
     let rows = stmt
         .query_map([], |row| {
-            let success: i64 = row.get(7)?;
+            let success: i64 = row.get("success")?;
             Ok(SqliteHookRow {
-                id: row.get(0)?,
-                trace_id: row.get(1)?,
-                correlation_id: row.get(2)?,
-                plugin: row.get(3)?,
-                hook: row.get(4)?,
-                started_at: row.get(5)?,
-                elapsed_ms: row.get::<_, i64>(6)?,
+                id: row.get("id")?,
+                trace_id: row.get("trace_id")?,
+                correlation_id: row.get("correlation_id")?,
+                plugin: row.get("plugin")?,
+                hook: row.get("hook")?,
+                started_at: row.get("started_at")?,
+                elapsed_ms: row.get::<_, i64>("elapsed_ms")?,
                 success: success != 0,
-                error: row.get(8)?,
-                input_preview: row.get(9)?,
-                output_preview: row.get(10)?,
+                error: row.get("error")?,
+                input_preview: row.get("input_preview")?,
+                output_preview: row.get("output_preview")?,
+                // Added in place by `TraceStore::open`; absent on older trace databases.
+                annotations: opt(row, "annotations"),
             })
         })
         .map_err(map_sql)?
@@ -291,6 +291,7 @@ fn copy_hook_traces(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
         body.insert("error".into(), json_opt(row.error));
         body.insert("input_preview".into(), json_opt(row.input_preview));
         body.insert("output_preview".into(), json_opt(row.output_preview));
+        body.insert("annotations".into(), json_opt(row.annotations));
         let id = trace_record_id(&row.trace_id, started_at_ms, row.id);
         ctx.upsert("hook_traces", &id, body)?;
         count += 1;
@@ -310,6 +311,7 @@ struct SqliteHookRow {
     error: Option<String>,
     input_preview: Option<String>,
     output_preview: Option<String>,
+    annotations: Option<String>,
 }
 
 fn trace_record_id(trace_id: &str, started_at_ms: i64, fallback_id: i64) -> String {
@@ -538,6 +540,7 @@ fn copy_sessions(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
             "model_override",
             "reasoning_effort",
             "parent_session_id",
+            "peer_id",
         ] {
             body.insert(col.into(), json_opt(opt::<String>(row, col)));
         }
@@ -706,14 +709,25 @@ fn copy_task_queue(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
             "priority".into(),
             opt::<i64>(row, "priority").unwrap_or(0).into(),
         );
+        // `title` .. `result` arrived with v2, `claimed_at` with v20; older boards lack them and `opt` reads NONE.
         for col in [
             "scheduled_at",
             "completed_at",
             "delegated_by",
             "assigned_to",
+            "title",
+            "description",
+            "created_by",
+            "result",
+            "claimed_at",
         ] {
             body.insert(col.into(), json_opt(opt::<String>(row, col)));
         }
+        // v21; SQLite's own default for a board that predates it.
+        body.insert(
+            "retry_count".into(),
+            opt::<i64>(row, "retry_count").unwrap_or(0).into(),
+        );
         body.insert(
             "finished_at".into(),
             json_opt(opt::<i64>(row, "finished_at")),
@@ -789,7 +803,7 @@ fn copy_usage_events(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
             "cost_usd".into(),
             opt::<f64>(row, "cost_usd").unwrap_or(0.0).into(),
         );
-        for col in ["user_id", "channel", "session_id"] {
+        for col in ["user_id", "channel", "session_id", "billed_agent_id"] {
             body.insert(col.into(), json_opt(opt::<String>(row, col)));
         }
         pending.push((id, body));
@@ -981,6 +995,8 @@ fn copy_prompt_experiments(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
         let mut body = Map::new();
         body.insert("name".into(), name.into());
         body.insert("agent_id".into(), agent_id.into());
+        // `PromptStore` writes `serde_json::to_string(&status)`, a quoted JSON string ("\"running\""); `SurrealPromptStore` stores and reads the bare word.
+        let status = serde_json::from_str::<String>(&status).unwrap_or(status);
         body.insert("status".into(), status.into());
         body.insert("traffic_split".into(), traffic_split);
         body.insert("success_criteria".into(), success_criteria);
@@ -988,6 +1004,100 @@ fn copy_prompt_experiments(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
         body.insert("ended_at".into(), json_opt(ended_at));
         body.insert("created_at".into(), created_at.into());
         ctx.upsert("prompt_experiments", &id, body)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── experiment_variants ───────────────────────────────────────────────
+
+fn copy_experiment_variants(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
+    if !ctx.has_table("experiment_variants")? {
+        return Ok(0);
+    }
+    let mut stmt = ctx
+        .conn
+        .prepare(
+            "SELECT id, experiment_id, name, prompt_version_id, description \
+             FROM experiment_variants",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })
+        .map_err(map_sql)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for (id, experiment_id, name, prompt_version_id, description) in rows {
+        let mut body = Map::new();
+        body.insert("experiment_id".into(), experiment_id.into());
+        body.insert("name".into(), name.into());
+        body.insert("prompt_version_id".into(), prompt_version_id.into());
+        body.insert("description".into(), json_opt(description));
+        // Same record id as `SurrealPromptStore::create_experiment`: the variant id.
+        ctx.upsert("experiment_variants", &id, body)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── experiment_metrics ────────────────────────────────────────────────
+
+fn copy_experiment_metrics(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
+    if !ctx.has_table("experiment_metrics")? {
+        return Ok(0);
+    }
+    let mut stmt = ctx
+        .conn
+        .prepare(
+            "SELECT experiment_id, variant_id, total_requests, successful_requests, \
+                    failed_requests, total_latency_ms, total_cost_usd, last_updated \
+             FROM experiment_metrics",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                [
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ],
+                row.get::<_, f64>(6)?,
+                row.get::<_, String>(7)?,
+            ))
+        })
+        .map_err(map_sql)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for (experiment_id, variant_id, counters, total_cost_usd, last_updated) in rows {
+        let [total, successful, failed, latency] = counters;
+        let id = format!("{experiment_id}_{variant_id}");
+        let mut body = Map::new();
+        body.insert("experiment_id".into(), experiment_id.into());
+        body.insert("variant_id".into(), variant_id.into());
+        body.insert("total_requests".into(), total.into());
+        body.insert("successful_requests".into(), successful.into());
+        body.insert("failed_requests".into(), failed.into());
+        body.insert("total_latency_ms".into(), latency.into());
+        body.insert("total_cost_usd".into(), total_cost_usd.into());
+        body.insert("last_updated".into(), last_updated.into());
+        // SQLite keys the row by a random uuid but updates it by (experiment, variant); `SurrealPromptStore::record_request` keys it by that pair.
+        ctx.upsert("experiment_metrics", &id, body)?;
         count += 1;
     }
     Ok(count)
@@ -1157,7 +1267,7 @@ mod tests {
                 input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
                 cost_usd REAL NOT NULL DEFAULT 0.0, tool_calls INTEGER NOT NULL DEFAULT 0,
                 latency_ms INTEGER NOT NULL DEFAULT 0, user_id TEXT, channel TEXT, session_id TEXT,
-                provider TEXT NOT NULL DEFAULT ''
+                provider TEXT NOT NULL DEFAULT '', billed_agent_id TEXT DEFAULT NULL
             );
             CREATE TABLE paired_devices (
                 device_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, platform TEXT NOT NULL,
@@ -1174,11 +1284,24 @@ mod tests {
                 traffic_split TEXT NOT NULL, success_criteria TEXT NOT NULL, started_at TEXT, ended_at TEXT,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE experiment_variants (
+                id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, name TEXT NOT NULL,
+                prompt_version_id TEXT NOT NULL, description TEXT
+            );
+            CREATE TABLE experiment_metrics (
+                id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL, variant_id TEXT NOT NULL,
+                total_requests INTEGER NOT NULL DEFAULT 0, successful_requests INTEGER NOT NULL DEFAULT 0,
+                failed_requests INTEGER NOT NULL DEFAULT 0, total_latency_ms INTEGER NOT NULL DEFAULT 0,
+                total_cost_usd REAL NOT NULL DEFAULT 0, last_updated TEXT NOT NULL
+            );
+            ALTER TABLE hook_traces ADD COLUMN annotations TEXT;
             CREATE TABLE task_queue (
                 id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_type TEXT NOT NULL, payload BLOB NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending', priority INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
                 created_at TEXT NOT NULL, completed_at TEXT, assigned_to TEXT, finished_at INTEGER DEFAULT NULL,
-                timeout_secs INTEGER DEFAULT NULL
+                timeout_secs INTEGER DEFAULT NULL, title TEXT DEFAULT '', description TEXT DEFAULT '',
+                created_by TEXT DEFAULT '', result TEXT DEFAULT '', claimed_at TEXT DEFAULT NULL,
+                retry_count INTEGER NOT NULL DEFAULT 0
             );",
         )
         .unwrap();
@@ -1202,8 +1325,8 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO sessions (id, agent_id, messages, created_at, updated_at, label, model_override, reasoning_effort) \
-             VALUES (?1, ?2, x'90', '2026-04-21T00:00:00+00:00', '2026-04-21T00:00:00+00:00', 'empty', 'p/m', 'high')",
+            "INSERT INTO sessions (id, agent_id, messages, created_at, updated_at, label, model_override, reasoning_effort, peer_id, messages_generation) \
+             VALUES (?1, ?2, x'90', '2026-04-21T00:00:00+00:00', '2026-04-21T00:00:00+00:00', 'empty', 'p/m', 'high', 'tg:chat-1', 5)",
             params![EMPTY_SESSION, AGENT],
         )
         .unwrap();
@@ -1237,8 +1360,8 @@ mod tests {
         }
 
         conn.execute(
-            "INSERT INTO usage_events (id, agent_id, timestamp, model, input_tokens, output_tokens, cost_usd, tool_calls, user_id, channel) \
-             VALUES ('u-1', ?1, '2026-04-21T00:00:00+00:00', 'm', 10, 20, 0.5, 1, NULL, NULL)",
+            "INSERT INTO usage_events (id, agent_id, timestamp, model, input_tokens, output_tokens, cost_usd, tool_calls, user_id, channel, billed_agent_id) \
+             VALUES ('u-1', ?1, '2026-04-21T00:00:00+00:00', 'm', 10, 20, 0.5, 1, NULL, NULL, 'spawner-1')",
             params![AGENT],
         )
         .unwrap();
@@ -1256,14 +1379,35 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO prompt_experiments (id, name, agent_id, status, traffic_split, success_criteria, started_at, ended_at, created_at) \
-             VALUES ('pe-1', 'exp', ?1, 'draft', '{}', '{}', NULL, NULL, '2026-04-21')",
+             VALUES ('pe-1', 'exp', ?1, '\"running\"', '[70,30]', '{\"require_user_helpful\":false,\"require_no_tool_errors\":true,\"require_non_empty\":true,\"custom_min_score\":4}', NULL, NULL, '2026-04-21')",
             params![AGENT],
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, assigned_to, timeout_secs) \
-             VALUES ('t-1', ?1, 'task', x'', 'pending', 0, '2026-04-21', 'helper', 300)",
+            "INSERT INTO task_queue (id, agent_id, task_type, payload, status, priority, created_at, assigned_to, timeout_secs, \
+                                     title, description, created_by, result, claimed_at, retry_count) \
+             VALUES ('t-1', ?1, 'task', x'', 'in_progress', 0, '2026-04-21', 'helper', 300, \
+                     'Title', 'Desc', 'boss', '', '2026-04-21T00:00:05+00:00', 2)",
             params![AGENT],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO experiment_variants (id, experiment_id, name, prompt_version_id, description) \
+             VALUES ('ev-1', 'pe-1', 'control', 'pv-1', NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO experiment_metrics (id, experiment_id, variant_id, total_requests, successful_requests, \
+                                             failed_requests, total_latency_ms, total_cost_usd, last_updated) \
+             VALUES ('random-uuid', 'pe-1', 'ev-1', 3, 2, 1, 90, 0.75, '2026-04-21')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO hook_traces (trace_id, correlation_id, plugin, hook, started_at, elapsed_ms, success, annotations) \
+             VALUES ('trace-2', 'corr-2', 'plugin', 'ingest', '2026-04-21T00:00:03Z', 4, 1, '{\"tag\":\"x\"}')",
+            [],
         )
         .unwrap();
     }
@@ -1400,9 +1544,12 @@ mod tests {
             "prompt_versions",
             "prompt_experiments",
             "task_queue",
+            "experiment_variants",
+            "experiment_metrics",
         ] {
             assert_eq!(receipt.copied.get(table), Some(&1), "{table}");
         }
+        assert_eq!(receipt.copied.get("hook_traces"), Some(&2));
         assert_eq!(receipt.copied.get("kv_store"), Some(&4));
 
         // Sessions: the MessagePack history arrives as the message objects the runtime serialises, with NONE for unset optionals.
@@ -1418,6 +1565,8 @@ mod tests {
         assert_eq!(empty["label"], "empty");
         assert_eq!(empty["model_override"], "p/m");
         assert_eq!(empty["reasoning_effort"], "high");
+        assert_eq!(empty["peer_id"], "tg:chat-1", "v16 peer scope survives");
+        assert_eq!(empty["messages_generation"], 5);
         let bad: Option<Value> = session
             .client()
             .select(("sessions", BAD_SESSION))
@@ -1459,6 +1608,10 @@ mod tests {
         let usage = select_one(session, "usage_events", "u-1").await;
         assert!(usage.get("user_id").is_none());
         assert_eq!(usage["cost_usd"], 0.5);
+        assert_eq!(
+            usage["billed_agent_id"], "spawner-1",
+            "v49 spend rollup survives"
+        );
         let device = select_one(session, "paired_devices", "ios_dev_1").await;
         assert_eq!(device["api_key_hash"], "hash");
         assert!(device.get("push_token").is_none());
@@ -1467,6 +1620,18 @@ mod tests {
         assert_eq!(prompt["variables"], json!([]));
         let experiment = select_one(session, "prompt_experiments", "pe-1").await;
         assert!(experiment.get("started_at").is_none());
+        assert_eq!(
+            experiment["status"], "running",
+            "the quoted SQLite status is unwrapped"
+        );
+        assert_eq!(experiment["traffic_split"], json!([70, 30]));
+        assert_eq!(experiment["success_criteria"]["custom_min_score"], 4);
+        let variant = select_one(session, "experiment_variants", "ev-1").await;
+        assert_eq!(variant["experiment_id"], "pe-1");
+        assert!(variant.get("description").is_none());
+        let metrics = select_one(session, "experiment_metrics", "pe-1_ev-1").await;
+        assert_eq!(metrics["total_requests"], 3);
+        assert_eq!(metrics["total_cost_usd"], 0.75);
         let task = select_one(session, "task_queue", "t-1").await;
         assert_eq!(task["assigned_to"], "helper");
         assert_eq!(
@@ -1474,6 +1639,19 @@ mod tests {
             "a per-task claim TTL must survive the import"
         );
         assert!(task.get("payload").is_none());
+        assert_eq!(task["title"], "Title");
+        assert_eq!(task["created_by"], "boss");
+        assert_eq!(task["claimed_at"], "2026-04-21T00:00:05+00:00");
+        assert_eq!(task["retry_count"], 2);
+        let annotated: Vec<Value> = session
+            .client()
+            .query("SELECT annotations FROM hook_traces WHERE trace_id = 'trace-2'")
+            .await
+            .unwrap()
+            .take(0)
+            .unwrap();
+        assert_eq!(annotated.len(), 1, "{annotated:?}");
+        assert_eq!(annotated[0]["annotations"], "{\"tag\":\"x\"}");
 
         // Idempotent: a second run converges on the same rows.
         let second = run(sqlite_path, session, &opts, &GenericBlobDecoder).expect("re-import");

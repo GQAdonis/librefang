@@ -94,6 +94,9 @@ async fn exercise_backend(store: &SurrealSession) {
     let mut child = session(agent, vec![Message::user("sub-task")], Some(parent.id));
     child.label = None;
     child.model_override = Some("provider/model".to_string());
+    // Upstream SQLite persists both (v16 `peer_id`, v40 `messages_generation`); migrations v52 and v23 declare them on SurrealDB.
+    child.peer_id = Some("telegram:chat-42".to_string());
+    child.messages_generation = 7;
     backend.save_session(&child).expect("save child");
 
     let loaded = backend
@@ -122,6 +125,20 @@ async fn exercise_backend(store: &SurrealSession) {
         Some("provider/model")
     );
     assert_eq!(as_json(&loaded_child.messages), as_json(&child.messages));
+    assert_eq!(loaded_child.peer_id.as_deref(), Some("telegram:chat-42"));
+    assert_eq!(loaded_child.messages_generation, 7);
+    assert_eq!(loaded.peer_id, None, "an unscoped session stays unscoped");
+    // The v52 `idx_sessions_peer` index serves the per-contact lookup.
+    let by_peer: Vec<JsonValue> = store
+        .client()
+        .query("SELECT id FROM sessions WHERE agent_id = $agent AND peer_id = $peer")
+        .bind(("agent", agent.to_string()))
+        .bind(("peer", "telegram:chat-42".to_string()))
+        .await
+        .expect("peer query")
+        .take(0)
+        .expect("peer rows");
+    assert_eq!(by_peer.len(), 1, "exactly one scoped session: {by_peer:?}");
 
     // The reasoning-effort pin (#8591, migration v51) is written only by its setter and survives history saves.
     assert_eq!(loaded.reasoning_effort, None, "a fresh session inherits");

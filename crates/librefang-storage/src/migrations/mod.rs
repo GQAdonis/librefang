@@ -283,6 +283,11 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "sessions_reasoning_effort_v1",
         sql: include_str!("sql/051_sessions_reasoning_effort.surql"),
     },
+    Migration {
+        version: 52,
+        name: "upstream_sqlite_column_parity_v1",
+        sql: include_str!("sql/052_upstream_sqlite_column_parity.surql"),
+    },
 ];
 
 /// Helpers shared by the tests that run against a remote SurrealDB.

@@ -69,8 +69,10 @@ impl SurrealUsageStore {
             "user_id": record.user_id.as_ref().map(|u| u.to_string()),
             "channel": record.channel.clone(),
             "session_id": record.session_id.map(|s| s.to_string()),
+            // Upstream SQLite v49 (#7714): the agent whose budget line the spend rolls up to (a worker bills its spawner).
+            "billed_agent_id": record.billed_agent_id.map(|a| a.0.to_string()),
         });
-        // `user_id` / `channel` / `session_id` are `option<string>`, which rejects JSON `null`; leave unset ones out so they are stored as NONE.
+        // `user_id` / `channel` / `session_id` / `billed_agent_id` are `option<string>`, which rejects JSON `null`; leave unset ones out so they are stored as NONE.
         let row = super::omit_nulls(row);
         self.db
             .create::<Option<serde_json::Value>>(("usage_events", Uuid::new_v4().to_string()))

@@ -11,10 +11,12 @@
 use std::path::Path;
 
 use librefang_memory::migration::TypedLegacyBlobDecoder;
+use librefang_memory::prompt::PromptStore;
 use librefang_memory::session::Session;
+use librefang_memory::usage::UsageRecord;
 use librefang_memory::{
-    KvBackend, MemoryBackend, MemorySubstrate, SessionBackend, SurrealKvBackend,
-    SurrealMemoryBackend, SurrealSessionBackend,
+    KvBackend, MemoryBackend, MemorySubstrate, PromptBackend, SessionBackend, SurrealKvBackend,
+    SurrealMemoryBackend, SurrealPromptStore, SurrealSessionBackend,
 };
 use librefang_storage::config::{RemoteSurrealConfig, StorageBackendKind, StorageConfig};
 use librefang_storage::migrate::{
@@ -22,12 +24,17 @@ use librefang_storage::migrate::{
 };
 use librefang_storage::migrations::{apply_pending, OPERATIONAL_MIGRATIONS};
 use librefang_storage::{SurrealConnectionPool, SurrealSession};
-use librefang_types::agent::{AgentEntry, AgentId, AgentManifest, AgentState, SessionId};
+use librefang_types::agent::{
+    AgentEntry, AgentId, AgentManifest, AgentState, ExperimentStatus, ExperimentVariant,
+    PromptExperiment, PromptVersion, SessionId,
+};
 use librefang_types::message::{ContentBlock, Message, MessageContent, Role};
 use serde_json::{json, Value};
 
 struct Fixture {
     agent: AgentId,
+    worker: AgentId,
+    experiment: PromptExperiment,
     session: Session,
     canonical: Vec<Message>,
 }
@@ -85,9 +92,10 @@ fn seed_sqlite(path: &Path) -> Fixture {
         parent_session_id: None,
         model_override: Some("provider/model".to_string()),
         reasoning_effort: None,
-        messages_generation: 0,
+        // Both are written by `save_session` on the SQLite path (v40, v16); the import must carry them.
+        messages_generation: 3,
         last_repaired_generation: None,
-        peer_id: None,
+        peer_id: Some("telegram:chat-9".to_string()),
     };
     substrate.save_session(&session).expect("save session");
     // `save_session` does not write the override column; the kernel sets it separately.
@@ -111,8 +119,70 @@ fn seed_sqlite(path: &Path) -> Fixture {
         .structured_set(agent, "config", json!({"nested": {"k": [1, 2]}}))
         .expect("kv object");
 
+    // A worker's spend rolls up to its spawner (v49 `billed_agent_id`).
+    let worker = AgentId::new();
+    substrate
+        .usage()
+        .record(&UsageRecord {
+            agent_id: worker,
+            billed_agent_id: Some(agent),
+            provider: "p".to_string(),
+            model: "m".to_string(),
+            cost_usd: 0.5,
+            ..Default::default()
+        })
+        .expect("record billed usage");
+
+    // An experiment with a variant and recorded traffic, written by the SQLite `PromptStore` against the same file.
+    let prompts = PromptStore::new_with_path(path, 1).expect("sqlite prompt store");
+    let version = PromptVersion {
+        id: uuid::Uuid::new_v4(),
+        agent_id: agent,
+        version: 1,
+        content_hash: "h".to_string(),
+        system_prompt: "sys".to_string(),
+        tools: vec!["search".to_string()],
+        variables: vec![],
+        created_at: chrono::Utc::now(),
+        created_by: "test".to_string(),
+        is_active: true,
+        description: None,
+    };
+    prompts
+        .create_version(version.clone())
+        .expect("create version");
+    let experiment = PromptExperiment {
+        id: uuid::Uuid::new_v4(),
+        name: "ab".to_string(),
+        agent_id: agent,
+        status: ExperimentStatus::Draft,
+        traffic_split: vec![60, 40],
+        success_criteria: Default::default(),
+        // `PromptStore::update_experiment_status` reads `started_at` as a non-null String, so starting an experiment whose `started_at` is NULL fails on the SQLite path (prompt.rs:547); give it a start time.
+        started_at: Some(chrono::Utc::now()),
+        ended_at: None,
+        created_at: chrono::Utc::now(),
+        variants: vec![ExperimentVariant {
+            id: uuid::Uuid::new_v4(),
+            name: "control".to_string(),
+            prompt_version_id: version.id,
+            description: Some("baseline".to_string()),
+        }],
+    };
+    prompts
+        .create_experiment(experiment.clone())
+        .expect("create experiment");
+    prompts
+        .update_experiment_status(experiment.id, ExperimentStatus::Running)
+        .expect("start experiment");
+    prompts
+        .record_request(experiment.id, experiment.variants[0].id, 40, 0.25, true)
+        .expect("record request");
+
     Fixture {
         agent,
+        worker,
+        experiment,
         session,
         canonical,
     }
@@ -162,6 +232,8 @@ async fn import_and_verify(store: &SurrealSession, sqlite_path: &Path, fx: &Fixt
     assert_eq!(loaded.label, None);
     assert_eq!(loaded.model_override.as_deref(), Some("provider/model"));
     assert_eq!(loaded.reasoning_effort.as_deref(), Some("high"));
+    assert_eq!(loaded.peer_id.as_deref(), Some("telegram:chat-9"));
+    assert_eq!(loaded.messages_generation, 3);
     assert_eq!(
         sessions.get_agent_session_ids(fx.agent).expect("list"),
         vec![fx.session.id]
@@ -200,6 +272,51 @@ async fn import_and_verify(store: &SurrealSession, sqlite_path: &Path, fx: &Fixt
         kv.structured_get(fx.agent, "config").expect("kv get"),
         Some(json!({"nested": {"k": [1, 2]}}))
     );
+
+    // Usage: the spend rollup column survives.
+    let billed: Vec<Value> = store
+        .client()
+        .query("SELECT billed_agent_id FROM usage_events WHERE agent_id = $worker")
+        .bind(("worker", fx.worker.to_string()))
+        .await
+        .expect("usage query")
+        .take(0)
+        .expect("usage rows");
+    assert_eq!(billed.len(), 1, "{billed:?}");
+    assert_eq!(billed[0]["billed_agent_id"], fx.agent.to_string());
+
+    // Prompt experiments: status, split, variants and metrics read back through the SurrealDB prompt backend.
+    let prompts = SurrealPromptStore::open(store);
+    let exp = prompts
+        .get_experiment(fx.experiment.id)
+        .expect("get imported experiment")
+        .expect("imported experiment exists");
+    assert_eq!(exp.status, ExperimentStatus::Running);
+    assert_eq!(exp.traffic_split, vec![60, 40]);
+    assert_eq!(exp.variants.len(), 1);
+    assert_eq!(exp.variants[0].id, fx.experiment.variants[0].id);
+    assert_eq!(exp.variants[0].description.as_deref(), Some("baseline"));
+    let metrics = prompts
+        .get_variant_metrics(fx.experiment.variants[0].id)
+        .expect("variant metrics")
+        .expect("metrics imported");
+    assert_eq!(metrics.total_requests, 1);
+    assert_eq!(metrics.successful_requests, 1);
+    // The imported metrics row is the one the SurrealDB backend keeps counting into.
+    prompts
+        .record_request(
+            fx.experiment.id,
+            fx.experiment.variants[0].id,
+            10,
+            0.25,
+            false,
+        )
+        .expect("record after import");
+    let metrics = prompts
+        .get_variant_metrics(fx.experiment.variants[0].id)
+        .expect("variant metrics")
+        .expect("metrics row");
+    assert_eq!(metrics.total_requests, 2);
 
     // Idempotent: importing again converges on the same rows.
     let again = migrate_sqlite_to_surreal_with_decoder(
