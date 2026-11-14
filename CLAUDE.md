@@ -397,12 +397,15 @@ and functional after every upstream merge.
 
 ### 1. SurrealDB as the Default Storage Backend
 
-Upstream LibreFang uses SQLite exclusively. BossFang replaces this with SurrealDB 3.x
+Upstream LibreFang uses SQLite exclusively. BossFang replaces this with SurrealDB 4.0.0 or later
 as the default persistent storage, with SQLite retained only as a legacy opt-in feature.
 
 **Crate**: `librefang-storage` (`crates/librefang-storage/`)
 **Migration files**: `crates/librefang-storage/src/migrations/sql/*.surql` (24+ migrations)
 **Feature flags**: `surreal-backend` (default), `sqlite-backend` (opt-in legacy)
+**Minimum version**: BossFang requires SurrealDB **4.0.0 or later**, for the embedded engine, the remote server and the client crates alike.
+Never pin, document or deploy a 3.x SurrealDB, and never re-enable the removed `kv-rocksdb` engine.
+Embedded SurrealKV (`kv-surrealkv`) is the default backend and the one to use for local work and tests; remote ws/http is for deployments.
 **Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=4.0.0`, in workspace `Cargo.toml` — the three lines move together.
   `=` on `surrealdb` does NOT transitively constrain `surrealdb-core` or `surrealdb-types`, so `librefang-storage` lists both as direct optional deps to make the pins load-bearing.
   Coordinate with surreal-memory before changing.
@@ -492,6 +495,7 @@ paper over a missing feature declaration — declare the feature and forward it.
 ### Shared SurrealDB Version Pin
 
 librefang-storage and surreal-memory link the same in-process surrealdb client.
+The floor is SurrealDB 4.0.0: a bump may move the exact pin to a newer 4.x or later release, never below 4.0.0.
 The workspace `Cargo.toml` pins:
 ```toml
 surrealdb = { version = "=4.0.0", default-features = false, features = ["kv-surrealkv", "protocol-ws", "protocol-http"] }

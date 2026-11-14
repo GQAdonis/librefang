@@ -8,7 +8,7 @@ It manages AI agents (LLM-backed), their tools, memory, messaging channels, and 
 - Language: Rust, edition 2021, MSRV 1.95.0
 - Async: tokio
 - Web: axum 0.8 (HTTP + WebSocket)
-- DB: SurrealDB via `librefang-storage` (embedded RocksDB or remote ws/http); SQLite via bundled rusqlite remains the upstream-compatible fallback
+- DB: SurrealDB 4.0.0 or later via `librefang-storage` (embedded SurrealKV by default, or remote ws/http); SQLite via bundled rusqlite remains the upstream-compatible fallback
 - Config: TOML at `~/.librefang/config.toml`
 - API: `http://127.0.0.1:4545` (default)
 
@@ -279,6 +279,9 @@ migration files in `crates/librefang-storage/src/migrations/sql/`. Feature: `sur
 (default). After upstream merge, map any new upstream SQLite schema changes to new `.surql`
 migration files and register them in `src/migrations/mod.rs`.
 
+**Minimum version**: BossFang requires SurrealDB **4.0.0 or later**, for the embedded engine, the remote server and the client crates alike.
+Never pin, document or deploy a 3.x SurrealDB, and never re-enable the removed `kv-rocksdb` engine.
+Embedded SurrealKV (`kv-surrealkv`) is the default backend and the one to use for local work and tests; remote ws/http is for deployments.
 **Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=4.0.0`, in workspace `Cargo.toml` — the three move together, since `=` on the client does not constrain the other two.
 Do NOT upgrade without moving the `surreal-memory` rev in step (currently `c220263`, which pins `=4.0.0` itself) — version drift breaks the build.
 UAR is an independently owned remote service; its storage dependencies are not linked into BossFang.
