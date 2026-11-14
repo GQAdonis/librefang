@@ -237,19 +237,44 @@ fn prompts(store: &SurrealSession) {
         zeroed[0].variant_name, "control",
         "the name joins in from the variant row"
     );
-    // A variant pointing at a missing prompt version is refused and leaves nothing behind.
+    // A variant pointing at a missing prompt version is refused with the typed not-found the SQLite path returns, and the transaction leaves nothing behind: not the experiment, and not the valid sibling variant or its metrics row.
+    let missing_version = Uuid::new_v4();
+    let sibling = librefang_types::agent::ExperimentVariant {
+        id: Uuid::new_v4(),
+        ..control.clone()
+    };
     let orphan = PromptExperiment {
         id: Uuid::new_v4(),
-        variants: vec![librefang_types::agent::ExperimentVariant {
-            prompt_version_id: Uuid::new_v4(),
-            ..control.clone()
-        }],
+        variants: vec![
+            sibling.clone(),
+            librefang_types::agent::ExperimentVariant {
+                id: Uuid::new_v4(),
+                prompt_version_id: missing_version,
+                ..control.clone()
+            },
+        ],
         ..with_variants.clone()
     };
-    assert!(prompts.create_experiment(orphan.clone()).is_err());
+    match prompts.create_experiment(orphan.clone()) {
+        Err(librefang_types::error::LibreFangError::ResourceNotFound { kind, id }) => {
+            assert_eq!(kind, "prompt_version");
+            assert_eq!(id, missing_version.to_string());
+        }
+        other => panic!("expected ResourceNotFound, got {other:?}"),
+    }
     assert!(prompts
         .get_experiment(orphan.id)
         .expect("get orphan")
+        .is_none());
+    let leftovers = block_on_query(
+        store,
+        "SELECT * FROM experiment_variants WHERE experiment_id = $exp",
+        ("exp", orphan.id.to_string()),
+    );
+    assert!(leftovers.is_empty(), "rolled back: {leftovers:?}");
+    assert!(prompts
+        .get_variant_metrics(sibling.id)
+        .expect("sibling metrics")
         .is_none());
 
     let variant = Uuid::new_v4();
