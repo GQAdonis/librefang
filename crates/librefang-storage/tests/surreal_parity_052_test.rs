@@ -57,6 +57,10 @@ async fn exercise(session: &SurrealSession) {
         "CREATE group_roster:legacy CONTENT { channel_type: 'tg', chat_id: 'old', user_id: 'u', display_name: 'U' }",
         "CREATE workflow_runs:legacy CONTENT { workflow_id: 'w', state: 'failed', started_at: '2026-01-01', \
          created_at: '2026-01-01' }",
+        "CREATE workflow_runs:done CONTENT { workflow_id: 'w', state: 'completed', started_at: '2026-01-01', \
+         created_at: '2026-01-01' }",
+        "CREATE workflow_runs:live CONTENT { workflow_id: 'w', state: 'running', started_at: '2026-01-01', \
+         created_at: '2026-01-01' }",
     ] {
         assert!(accepts(session, seed).await, "v51 seed: {seed}");
     }
@@ -85,6 +89,25 @@ async fn exercise(session: &SurrealSession) {
     assert_eq!(task[0]["retry_count"], 0, "{task:?}");
     let roster = rows(session, "SELECT * FROM group_roster:legacy").await;
     assert_eq!(roster[0]["source"], "observed", "{roster:?}");
+    // The `state` migration is the identity: every stored state passes the widened ASSERT unchanged, and the restored index still finds them.
+    for (record, state) in [
+        ("legacy", "failed"),
+        ("done", "completed"),
+        ("live", "running"),
+    ] {
+        let run = rows(
+            session,
+            &format!("SELECT state FROM workflow_runs:{record}"),
+        )
+        .await;
+        assert_eq!(run[0]["state"], state, "{record}: {run:?}");
+        let by_state = rows(
+            session,
+            &format!("SELECT VALUE id FROM workflow_runs WHERE state = '{state}'"),
+        )
+        .await;
+        assert_eq!(by_state.len(), 1, "{state}: {by_state:?}");
+    }
     for update in [
         "UPDATE task_queue:legacy SET status = 'in_progress', claimed_at = '2026-01-02T00:00:00Z'",
         "UPDATE group_roster:legacy SET display_name = 'V'",
@@ -202,6 +225,7 @@ async fn exercise(session: &SurrealSession) {
         ("audit_entries", "idx_audit_timestamp"),
         ("audit_entries", "idx_audit_action"),
         ("audit_entries", "idx_audit_channel"),
+        ("workflow_runs", "idx_workflow_runs_state"),
     ] {
         let info: Option<Value> = db
             .query(format!("INFO FOR TABLE {table}"))
