@@ -625,8 +625,11 @@ fn user_role_allows_request(role: UserRole, method: &axum::http::Method, path: &
     // User role: only specific POST endpoints are allowed.
     if *method == axum::http::Method::POST {
         let agent_message = path.starts_with("/api/agents/")
-            && (path.ends_with("/message") || path.ends_with("/message/stream")
-                || path.ends_with("/uar-chat/turns") || path.ends_with("/uar-chat/cancel") || path.ends_with("/uar-chat/resume"));
+            && (path.ends_with("/message")
+                || path.ends_with("/message/stream")
+                || path.ends_with("/uar-chat/turns")
+                || path.ends_with("/uar-chat/cancel")
+                || path.ends_with("/uar-chat/resume"));
         let agent_clone = path.starts_with("/api/agents/") && path.ends_with("/clone");
         // Anchor the approval suffixes to the `/api/approvals/` prefix. These
         // suffixes are meant only for tool-call approval actions; left
@@ -732,11 +735,21 @@ fn apply_oidc_grant(
         role = %grant.role,
         "admitting request on an OIDC role claim mapped by external_auth.role_map"
     );
-    if let Some(provenance) = request.extensions().get::<crate::oauth::VerifiedOidcAuthentication>().cloned() {
+    if let Some(provenance) = request
+        .extensions()
+        .get::<crate::oauth::VerifiedOidcAuthentication>()
+        .cloned()
+    {
         // Preserve the actual configured provider and token subject, without
         // claiming tenant/actor or issuer validation not supplied by this verifier.
-        crate::mcp_attribution::establish(request, crate::mcp_attribution::McpAuthnSource::Oidc,
-            Some(format!("oidc:{}:{}", provenance.provider_id, provenance.subject)));
+        crate::mcp_attribution::establish(
+            request,
+            crate::mcp_attribution::McpAuthnSource::Oidc,
+            Some(format!(
+                "oidc:{}:{}",
+                provenance.provider_id, provenance.subject
+            )),
+        );
     }
     request.extensions_mut().insert(AuthenticatedApiUser {
         name: grant.name,
@@ -2084,7 +2097,11 @@ pub async fn auth(
             .map(|ci| ci.0.ip().is_loopback())
             .unwrap_or(false);
         let local_mcp = crate::mcp_attribution::trusted_local(&request);
-        if if path == "/mcp" { local_mcp } else { is_loopback || auth_state.allow_no_auth } {
+        if if path == "/mcp" {
+            local_mcp
+        } else {
+            is_loopback || auth_state.allow_no_auth
+        } {
             // No auth configured + trusted origin (loopback, or explicit
             // LIBREFANG_ALLOW_NO_AUTH opt-in) means a fully-trusted local
             // operator — the same trust level as the root master credential.
@@ -2101,8 +2118,11 @@ pub async fn auth(
                 user_id: UserId(ROOT_API_KEY_USER_ID),
             });
             request.extensions_mut().insert(TrustedNoAuthCaller);
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::LocalTransport, None);
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::LocalTransport,
+                None,
+            );
             return next.run(request).await;
         }
         // A deployment whose only configured credential is `[external_auth]`
@@ -2118,9 +2138,12 @@ pub async fn auth(
             OidcOutcome::NoGrant => {}
         }
         if path == "/mcp" {
-            return Response::builder().status(StatusCode::UNAUTHORIZED)
-                .header("www-authenticate", "Bearer").header("content-type", "application/json")
-                .body(Body::from("{\"error\":\"mcp_authentication_required\"}")).unwrap_or_default();
+            return Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .header("www-authenticate", "Bearer")
+                .header("content-type", "application/json")
+                .body(Body::from("{\"error\":\"mcp_authentication_required\"}"))
+                .unwrap_or_default();
         }
         return Response::builder()
             .status(StatusCode::UNAUTHORIZED)
@@ -2200,7 +2223,9 @@ pub async fn auth(
     // the actual plaintext/hash master match establishes MasterApiKey source.
     let mut master_authenticated = if let Some(token) = api_token {
         auth_state.master_key.is_master_plaintext(token).await
-    } else { false };
+    } else {
+        false
+    };
 
     // Master-key hash (#6613). Only reached when the constant-time comparison
     // above missed, so a plaintext-configured deployment does no hash work.
@@ -2269,8 +2294,11 @@ pub async fn auth(
             }
         }
         if master_authenticated {
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::MasterApiKey, Some("service:master-api-key".into()));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::MasterApiKey,
+                Some("service:master-api-key".into()),
+            );
         } else {
             crate::mcp_attribution::establish_legacy_dashboard(&mut request);
         }
@@ -2341,8 +2369,11 @@ pub async fn auth(
                     .unwrap_or(i18n::DEFAULT_LANGUAGE);
                 return rbac_denied_response(&auth_state, &method, path, role, user_id, lang);
             }
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::DashboardSession, Some(format!("user:{user_id}")));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::DashboardSession,
+                Some(format!("user:{user_id}")),
+            );
             if let Some(name) = session.user_name {
                 request.extensions_mut().insert(AuthenticatedApiUser {
                     name,
@@ -2380,8 +2411,11 @@ pub async fn auth(
                 );
             }
 
-            crate::mcp_attribution::establish(&mut request,
-                crate::mcp_attribution::McpAuthnSource::UserApiKey, Some(format!("user:{}", user.user_id)));
+            crate::mcp_attribution::establish(
+                &mut request,
+                crate::mcp_attribution::McpAuthnSource::UserApiKey,
+                Some(format!("user:{}", user.user_id)),
+            );
             request.extensions_mut().insert(AuthenticatedApiUser {
                 name: user.name,
                 role: user.role,
@@ -2469,10 +2503,14 @@ pub async fn security_headers(request: Request<Body>, next: Next) -> Response<Bo
         "referrer-policy",
         "strict-origin-when-cross-origin".parse().unwrap(),
     );
-    headers.insert(
-        "cache-control",
-        "no-store, no-cache, must-revalidate".parse().unwrap(),
-    );
+    // `no-store` is the default for responses whose handler chose no caching policy (every JSON API handler).
+    // A handler that did set one — content-hashed dashboard chunks marked `immutable`, locale bundles, the avatar routes that pair `no-cache` with an ETag and a 304 path — keeps it; overwriting it would make the browser re-download every asset on each load and leave the 304 branches unreachable.
+    if !headers.contains_key(axum::http::header::CACHE_CONTROL) {
+        headers.insert(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate".parse().unwrap(),
+        );
+    }
     headers.insert(
         "strict-transport-security",
         "max-age=63072000; includeSubDomains".parse().unwrap(),
@@ -5436,6 +5474,68 @@ mod tests {
             .find(|directive| directive.trim_start().starts_with("script-src "))
             .map(|directive| directive.split_ascii_whitespace().collect())
             .unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn security_headers_keeps_handler_cache_control_and_defaults_to_no_store() {
+        let app = Router::new()
+            .route(
+                "/dashboard/assets/app.js",
+                get(|| async {
+                    (
+                        [(
+                            axum::http::header::CACHE_CONTROL,
+                            "public, max-age=86400, immutable",
+                        )],
+                        "chunk",
+                    )
+                }),
+            )
+            .route("/api/health", get(|| async { "{}" }))
+            .layer(axum::middleware::from_fn(security_headers));
+
+        let asset = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/dashboard/assets/app.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            asset
+                .headers()
+                .get(axum::http::header::CACHE_CONTROL)
+                .unwrap(),
+            "public, max-age=86400, immutable",
+            "a handler-chosen cache policy must survive the security headers layer"
+        );
+
+        let api = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            api.headers()
+                .get(axum::http::header::CACHE_CONTROL)
+                .unwrap(),
+            "no-store, no-cache, must-revalidate",
+            "a response without its own cache policy must default to no-store"
+        );
+        assert_eq!(
+            api.headers()
+                .get_all(axum::http::header::CACHE_CONTROL)
+                .iter()
+                .count(),
+            1
+        );
     }
 
     /// Both pages the dashboard serves carry an inline script: the login form's submit handler and

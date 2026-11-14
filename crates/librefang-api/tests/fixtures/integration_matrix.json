@@ -1639,6 +1639,12 @@
       "owner": "integration-coverage-matrix"
     },
     {
+      "path": "/api/sessions/{id}/reasoning",
+      "status": "covered",
+      "scenario": "patch_session_reasoning_http",
+      "proof": "crates/librefang-api/tests/system_tools_sessions_test.rs"
+    },
+    {
       "path": "/api/shutdown",
       "status": "exempt",
       "reason": "deferred-product-surface",

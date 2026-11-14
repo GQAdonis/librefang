@@ -532,7 +532,13 @@ fn copy_sessions(ctx: &mut Ctx<'_>) -> StorageResult<u64> {
             "updated_at".into(),
             row.get::<_, String>("updated_at").map_err(map_sql)?.into(),
         );
-        for col in ["label", "model_override", "parent_session_id"] {
+        // `reasoning_effort` arrived with upstream SQLite v65 (#8591); a store from before it has no such column and `opt` reads NONE.
+        for col in [
+            "label",
+            "model_override",
+            "reasoning_effort",
+            "parent_session_id",
+        ] {
             body.insert(col.into(), json_opt(opt::<String>(row, col)));
         }
         for col in ["messages_generation", "last_repaired_generation"] {
@@ -1135,6 +1141,7 @@ mod tests {
                 context_window_tokens INTEGER DEFAULT 0, message_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL, label TEXT, peer_id TEXT DEFAULT NULL,
                 parent_session_id TEXT DEFAULT NULL, model_override TEXT DEFAULT NULL,
+                reasoning_effort TEXT DEFAULT NULL,
                 messages_generation INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE canonical_sessions (
@@ -1195,8 +1202,8 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO sessions (id, agent_id, messages, created_at, updated_at, label, model_override) \
-             VALUES (?1, ?2, x'90', '2026-04-21T00:00:00+00:00', '2026-04-21T00:00:00+00:00', 'empty', 'p/m')",
+            "INSERT INTO sessions (id, agent_id, messages, created_at, updated_at, label, model_override, reasoning_effort) \
+             VALUES (?1, ?2, x'90', '2026-04-21T00:00:00+00:00', '2026-04-21T00:00:00+00:00', 'empty', 'p/m', 'high')",
             params![EMPTY_SESSION, AGENT],
         )
         .unwrap();
@@ -1405,10 +1412,12 @@ mod tests {
         assert_eq!(session_row["context_window_tokens"], 1234);
         assert!(session_row.get("label").is_none(), "{session_row}");
         assert!(session_row.get("parent_session_id").is_none());
+        assert!(session_row.get("reasoning_effort").is_none());
         let empty = select_one(session, "sessions", EMPTY_SESSION).await;
         assert_eq!(empty["messages"], json!([]));
         assert_eq!(empty["label"], "empty");
         assert_eq!(empty["model_override"], "p/m");
+        assert_eq!(empty["reasoning_effort"], "high");
         let bad: Option<Value> = session
             .client()
             .select(("sessions", BAD_SESSION))
@@ -1460,7 +1469,10 @@ mod tests {
         assert!(experiment.get("started_at").is_none());
         let task = select_one(session, "task_queue", "t-1").await;
         assert_eq!(task["assigned_to"], "helper");
-        assert_eq!(task["timeout_secs"], 300, "a per-task claim TTL must survive the import");
+        assert_eq!(
+            task["timeout_secs"], 300,
+            "a per-task claim TTL must survive the import"
+        );
         assert!(task.get("payload").is_none());
 
         // Idempotent: a second run converges on the same rows.

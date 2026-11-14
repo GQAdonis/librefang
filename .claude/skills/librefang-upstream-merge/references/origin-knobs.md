@@ -37,9 +37,13 @@ new code.
 
 ## 2. Dashboard release tarball
 
-**File**: `crates/librefang-api/src/webchat.rs:378`
+**File**: `crates/librefang-api/src/webchat.rs`, function `dashboard_release_url(version)`, plus its test `dashboard_sync_url_is_pinned_to_running_version`
 
-**Default URL** (hardcoded, not a config knob): `https://github.com/GQAdonis/librefang/releases/latest/download/dashboard-dist.tar.gz`
+**Default URL** (hardcoded, not a config knob): `https://github.com/GQAdonis/librefang/releases/download/v{version}/dashboard-dist.tar.gz`
+
+Upstream #8588 (2026-11 sync) pinned the download to the running daemon's own release tag instead of `releases/latest`.
+The fork takes the version pin and keeps only the host flipped; the test's expected URL is flipped with it.
+The fork currently publishes no `v{version}` dashboard release (its GitHub releases are `bossfang-sidecar-*`), so a sync 404s and the embedded build stays, which is also the embedded-only default.
 
 **Why no config knob**: the BossFang fork defaults to
 `LIBREFANG_DASHBOARD_EMBEDDED_ONLY=true`, which short-circuits
@@ -49,7 +53,7 @@ for a code path that's dead in the default flow was deemed
 over-engineering during PR #1's planning.
 
 **Audit signal**: an upstream merge that changes this URL must be
-re-flipped to the GQAdonis form. Grep `webchat.rs` for
+re-flipped to the GQAdonis form, in both the function and its test. Grep `webchat.rs` for
 `librefang/librefang/releases`.
 
 ## 3. Skills marketplace org — `[skills.marketplace] github_org`

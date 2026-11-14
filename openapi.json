@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "2026.10.16"
+    "version": "2026.11.11"
   },
   "paths": {
     "/.well-known/agent.json": {
@@ -132,6 +132,13 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Cancel a tracked A2A task",
@@ -142,6 +149,12 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "No task with this id"
+          },
+          "409": {
+            "description": "Task already completed, failed or cancelled (A2A TaskNotCancelable)"
           }
         }
       }
@@ -2885,6 +2898,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "materialize",
+            "in": "query",
+            "description": "Create the empty canonical row when absent (default false)",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -3196,6 +3218,12 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Malformed export, unsupported export version, export from another agent, or no messages"
+          },
+          "404": {
+            "description": "Agent not found"
           }
         }
       }
@@ -13026,7 +13054,10 @@
             }
           },
           "400": {
-            "description": "Missing query parameter"
+            "description": "Missing query parameter or malformed agent_id"
+          },
+          "404": {
+            "description": "agent_id filter names an agent the caller may not access"
           }
         }
       }
@@ -13181,6 +13212,55 @@
           },
           "400": {
             "description": "Invalid session ID or model override format"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
+    },
+    "/api/sessions/{id}/reasoning": {
+      "patch": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "PATCH /api/sessions/:id/reasoning — Set or clear a per-session\nreasoning-effort override (#8591).",
+        "description": "Body: `{\"reasoning_effort\": \"xhigh\"}` to pin, `{\"reasoning_effort\": null}`\nto clear and restore the agent/global default. `reasoning_mode` is accepted\nas a deprecated alias key (#8591 naming); `reasoning_effort` wins if both\nare present.\n\nThe token is validated with [`librefang_types::config::ReasoningMode::new`]\n— structural validation only (non-empty, bounded, no whitespace), because\nthe vocabulary is per-model catalog data and an open token like `minimal`\nor a gateway-declared one must be settable. Whether the *effective* model\naccepts it is enforced where the model is known: the catalog's declared\npolicy coerces an out-of-set token to the nearest supported rung with a\nwarning. The resolution order per turn is\nframe > session > agent > global > compiled default.",
+        "operationId": "patch_session_reasoning",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reasoning override updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid session ID or reasoning effort"
           },
           "404": {
             "description": "Session not found"
@@ -13387,6 +13467,13 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Candidate promoted to active skill",
@@ -14878,6 +14965,114 @@
         }
       }
     },
+    "/api/uar/connect": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Selected UAR connected and compatibility admitted; optional body instance uses native snake_case config, bearer is private, workspaceId scopes it"
+          },
+          "503": {
+            "description": "Selected UAR connection or migration failed"
+          }
+        }
+      }
+    },
+    "/api/uar/connections": {
+      "get": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "connections",
+        "responses": {
+          "200": {
+            "description": "Secret-free active original run bindings and private credential presence"
+          }
+        }
+      }
+    },
+    "/api/uar/connections/refresh": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "refresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Original connection credential replaced after exact identity, epoch and owned receipt validation"
+          },
+          "410": {
+            "description": "Original UAR runtime epoch no longer recoverable"
+          }
+        }
+      }
+    },
+    "/api/uar/diagnostics/delegation": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "summary": "Authenticated Owner-only full-run diagnostic; no catalog installation.",
+        "operationId": "diagnostic_route",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Real inline diagnostic admission projection; body workspaceId/providerId/model and optional bossTaskId"
+          },
+          "202": {
+            "description": "Admission outcome unresolved; retain task identity for reconciliation"
+          },
+          "503": {
+            "description": "uar-driver feature unavailable"
+          }
+        }
+      }
+    },
+    "/api/uar/disconnect": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_disconnect",
+        "responses": {
+          "200": {
+            "description": "Detached locally; UAR and its tasks are not stopped"
+          }
+        }
+      }
+    },
     "/api/uar/models": {
       "get": {
         "tags": [
@@ -14894,6 +15089,19 @@
         }
       }
     },
+    "/api/uar/reconnect": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_reconnect",
+        "responses": {
+          "200": {
+            "description": "Revalidated selected connection; never restarts UAR"
+          }
+        }
+      }
+    },
     "/api/uar/restart": {
       "post": {
         "tags": [
@@ -14902,10 +15110,7 @@
         "operationId": "uar_restart",
         "responses": {
           "200": {
-            "description": "UAR restarted and ready"
-          },
-          "503": {
-            "description": "UAR failed to restart"
+            "description": "Deprecated connection-only alias for reconnect"
           }
         }
       }
@@ -14918,10 +15123,7 @@
         "operationId": "uar_start",
         "responses": {
           "200": {
-            "description": "UAR started and ready"
-          },
-          "503": {
-            "description": "UAR failed to start"
+            "description": "Deprecated connection-only alias for connect"
           }
         }
       }
@@ -14947,7 +15149,7 @@
         "operationId": "uar_stop",
         "responses": {
           "200": {
-            "description": "UAR stopped"
+            "description": "Deprecated connection-only alias for disconnect"
           }
         }
       }
@@ -18027,12 +18229,12 @@
           "message": {
             "type": "string"
           },
-          "reasoning_mode": {
+          "reasoning_effort": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Per-task reasoning mode: `\"none\"` | `\"low\"` | `\"high\"` | `\"max\"` (#7946).\n\nTop rung of the resolution order — per-call > per-agent (`agent.toml`\n`[thinking] reasoning_mode`) > global (`config.toml` `[thinking]\nreasoning_mode`) > compiled default (the `budget_tokens` bucket).\n\nAdded alongside [`Self::thinking`] rather than widening it, because the\nboolean is in the wire contract of every existing client and a JSON\n`true` cannot grow a third value without breaking them. The two are not\nredundant either: `thinking: false` merely omits the reasoning opt-in,\nwhile `reasoning_mode: \"none\"` sends the provider's explicit non-think\ntoggle — the difference between \"we did not ask it to think\" and \"we\nasked it not to\", which is the whole point on a model that reasons by\ndefault.",
+            "description": "Per-task reasoning effort: `\"none\"` | `\"low\"` | `\"medium\"` | `\"high\"`\n| `\"xhigh\"` | `\"max\"` | `\"minimal\"` — or any token the target model's\ncatalog entry declares (#7946, open vocabulary #8591).\n\nTop rung of the resolution order — per-call > per-session\n(`PATCH /api/sessions/{id}/reasoning`) > per-agent (`agent.toml`\n`[thinking] reasoning_effort`) > global (`config.toml` `[thinking]\nreasoning_effort`) > compiled default (the `budget_tokens` bucket).\n\nAdded alongside [`Self::thinking`] rather than widening it, because the\nboolean is in the wire contract of every existing client and a JSON\n`true` cannot grow a third value without breaking them. The two are not\nredundant either: `thinking: false` merely omits the reasoning opt-in,\nwhile `reasoning_effort: \"none\"` sends the provider's explicit non-think\ntoggle — the difference between \"we did not ask it to think\" and \"we\nasked it not to\", which is the whole point on a model that reasons by\ndefault.\n\n`reasoning_mode` is accepted as a deprecated alias on the wire\n(#8591); responses and documentation use `reasoning_effort`.",
             "example": "high"
           },
           "sender_id": {
@@ -18068,7 +18270,7 @@
               "boolean",
               "null"
             ],
-            "description": "Per-call deep-thinking override.\n\n- `Some(true)`: force thinking on (even if the manifest has it off)\n- `Some(false)`: force thinking off (even if the manifest has it on)\n- `None`: use the manifest/global default\n\nKept as a boolean for backward compatibility. Prefer\n[`Self::reasoning_mode`], which is strictly more expressive and wins\nwhen both are present (#7946)."
+            "description": "Per-call deep-thinking override.\n\n- `Some(true)`: force thinking on (even if the manifest has it off)\n- `Some(false)`: force thinking off (even if the manifest has it on)\n- `None`: use the manifest/global default\n\nKept as a boolean for backward compatibility. Prefer\n[`Self::reasoning_effort`], which is strictly more expressive and wins\nwhen both are present (#7946)."
           },
           "was_mentioned": {
             "type": "boolean",

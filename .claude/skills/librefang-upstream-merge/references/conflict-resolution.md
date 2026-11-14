@@ -26,7 +26,7 @@ upstream additions (e.g. new fields) manually if needed.
 | `crates/librefang-cli/Cargo.toml` `[[bin]]` block | dual binary | `bossfang` (primary) + `librefang` (legacy alias), both from `src/main.rs` |
 | `crates/librefang-api/src/versioning.rs` `VENDOR_PREFIXES` | dual vendor prefix | Array of both `application/vnd.bossfang.` and `application/vnd.librefang.` for back-compat |
 | `crates/librefang-skills/src/marketplace.rs` `MarketplaceConfig::default()` | github_org default | `"GQAdonis"` (NOT `"librefang-skills"`) |
-| `crates/librefang-api/src/webchat.rs` dashboard release URL | hardcoded BossFang | `https://github.com/GQAdonis/librefang/releases/latest/download/dashboard-dist.tar.gz` |
+| `crates/librefang-api/src/webchat.rs` `dashboard_release_url` | hardcoded BossFang host | Take upstream's version pin, keep the host: `https://github.com/GQAdonis/librefang/releases/download/v{version}/dashboard-dist.tar.gz`, and flip the expectation in `dashboard_sync_url_is_pinned_to_running_version` to match |
 | `crates/librefang-runtime/src/registry_sync.rs` | upstream URL constants intentionally preserved as the empty-`base_url` rollback path | `DEFAULT_REGISTRY_BASE_URL` constant comment explaining empty = upstream fallback |
 | `scripts/enforce-branding.py` | scan dirs + token mappings | Keep BossFang ember replacements and the desktop-crate scan dirs |
 | `.github/SECRETS.md` | TAURI_SIGNING_PRIVATE_KEY descriptor | Note that BossFang uses its own minisign keypair (not upstream's) |

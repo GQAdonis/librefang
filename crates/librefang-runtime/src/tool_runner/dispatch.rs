@@ -353,9 +353,14 @@ async fn dispatch_tool_call(
     let acl_gated: Option<TypedToolResult> = match tool_name {
         "shared_memory_remember" | "shared_memory_retrieve" | "shared_memory_search" => Some(
             super::shared_memory::execute(
-                tool_name.trim_start_matches("shared_memory_"), input, *kernel,
-                *caller_agent_id, *sender_id, *channel,
-            ).await,
+                tool_name.trim_start_matches("shared_memory_"),
+                input,
+                *kernel,
+                *caller_agent_id,
+                *sender_id,
+                *channel,
+            )
+            .await,
         ),
         "memory_store" => Some(tool_memory_store(
             input,
@@ -1482,7 +1487,12 @@ async fn dispatch_tool_call(
             match browser_ctx {
                 Some(mgr) => {
                     let aid = caller_agent_id.unwrap_or("default");
-                    crate::browser_tools::tool_browser_navigate(input, mgr, aid).await
+                    let ctx: Option<&WebToolsContext> = *web_ctx;
+                    let allowed_hosts: &[String] = ctx
+                        .map(|c| c.fetch.config().ssrf_allowed_hosts.as_slice())
+                        .unwrap_or(&[]);
+                    crate::browser_tools::tool_browser_navigate(input, mgr, aid, allowed_hosts)
+                        .await
                 }
                 None => Err(ToolError::Unavailable("Browser tools")),
             }

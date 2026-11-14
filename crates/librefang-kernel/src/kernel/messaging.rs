@@ -36,14 +36,19 @@ impl LibreFangKernel {
         agent_id: AgentId,
         message: &str,
         dispatch: uar_harness::ResolvedDispatch,
-    ) -> Result<uar_harness::JobDispatchOutcome<AgentLoopResult>, uar_harness::JobDispatchError> {
+    ) -> Result<uar_harness::JobDispatchOutcome<AgentLoopResult>, uar_harness::JobDispatchError>
+    {
         match dispatch {
-            uar_harness::ResolvedDispatch::Native => self.send_message(agent_id, message)
-                .await.map(uar_harness::JobDispatchOutcome::Native)
+            uar_harness::ResolvedDispatch::Native => self
+                .send_message(agent_id, message)
+                .await
+                .map(uar_harness::JobDispatchOutcome::Native)
                 .map_err(uar_harness::JobDispatchError::Native),
-            uar_harness::ResolvedDispatch::Uar(selected) =>
-                uar_harness::dispatch_selected(self, agent_id, *selected).await
-                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt))),
+            uar_harness::ResolvedDispatch::Uar(selected) => {
+                uar_harness::dispatch_selected(self, agent_id, *selected)
+                    .await
+                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt)))
+            }
         }
     }
 
@@ -55,18 +60,23 @@ impl LibreFangKernel {
         message: &str,
         kernel_handle: Option<Arc<dyn KernelHandle>>,
         dispatch: uar_harness::ResolvedDispatch,
-    ) -> Result<uar_harness::JobDispatchOutcome<(
-        tokio::sync::mpsc::Receiver<StreamEvent>,
-        tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
-    )>, uar_harness::JobDispatchError> {
+    ) -> Result<
+        uar_harness::JobDispatchOutcome<(
+            tokio::sync::mpsc::Receiver<StreamEvent>,
+            tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
+        )>,
+        uar_harness::JobDispatchError,
+    > {
         match dispatch {
-            uar_harness::ResolvedDispatch::Native =>
-                self.send_message_streaming(agent_id, message, kernel_handle)
-                    .map(uar_harness::JobDispatchOutcome::Native)
-                    .map_err(uar_harness::JobDispatchError::Native),
-            uar_harness::ResolvedDispatch::Uar(selected) =>
-                uar_harness::dispatch_selected(self, agent_id, *selected).await
-                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt))),
+            uar_harness::ResolvedDispatch::Native => self
+                .send_message_streaming(agent_id, message, kernel_handle)
+                .map(uar_harness::JobDispatchOutcome::Native)
+                .map_err(uar_harness::JobDispatchError::Native),
+            uar_harness::ResolvedDispatch::Uar(selected) => {
+                uar_harness::dispatch_selected(self, agent_id, *selected)
+                    .await
+                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt)))
+            }
         }
     }
 
@@ -81,7 +91,8 @@ impl LibreFangKernel {
     ) -> Result<AgentLoopResult, uar_harness::JobDispatchError> {
         dispatch.require_native_ephemeral()?;
         self.send_message_ephemeral(agent_id, message, sender_context, owner)
-            .await.map_err(uar_harness::JobDispatchError::Native)
+            .await
+            .map_err(uar_harness::JobDispatchError::Native)
     }
 
     /// The output budget this turn will send, resolved through the catalog exactly as `execute_llm_agent` resolves it.
@@ -779,6 +790,7 @@ impl LibreFangKernel {
             context_window_tokens: 0,
             label: Some("ephemeral /btw".to_string()),
             model_override: None,
+            reasoning_effort: None,
             messages_generation: 0,
             last_repaired_generation: None,
             peer_id: None,
@@ -1999,6 +2011,42 @@ impl LibreFangKernel {
         .await
     }
 
+    /// Streaming entry point for the WebSocket chat (#8591): the sibling of
+    /// [`Self::send_message_streaming_with_sender_context_routing_thinking_and_session`]
+    /// that also carries the frame's open-vocabulary `reasoning_effort` token.
+    ///
+    /// Kept as a separate entry point rather than widening the existing
+    /// signature so callers that only know the boolean toggle (the channel
+    /// bridge's `/think` preference, #7140) are untouched. The two per-call
+    /// keys collapse through [`librefang_types::config::ThinkingOverride::resolve`],
+    /// so `reasoning_effort` wins over `thinking` exactly as it does on the HTTP
+    /// message routes.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn send_message_streaming_with_reasoning_effort(
+        self: &Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        sender: &SenderContext,
+        thinking_override: Option<bool>,
+        reasoning_effort: Option<librefang_types::config::ReasoningMode>,
+        session_id_override: Option<SessionId>,
+    ) -> KernelResult<(
+        tokio::sync::mpsc::Receiver<StreamEvent>,
+        tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
+    )> {
+        let handle = kernel_handle.unwrap_or_else(|| self.kernel_handle());
+        self.send_message_streaming_resolved(
+            agent_id,
+            message,
+            handle,
+            Some(sender),
+            librefang_types::config::ThinkingOverride::resolve(thinking_override, reasoning_effort),
+            session_id_override,
+        )
+        .await
+    }
+
     /// Send a message to an agent with streaming responses.
     ///
     /// Returns a receiver for incremental `StreamEvent`s and a `JoinHandle`
@@ -2579,6 +2627,7 @@ impl LibreFangKernel {
                 context_window_tokens: meta.context_window_tokens,
                 label: None,
                 model_override: meta.model_override,
+                reasoning_effort: meta.reasoning_effort,
                 messages_generation: 0,
                 last_repaired_generation: None,
                 peer_id: meta.peer_id,
@@ -2591,6 +2640,7 @@ impl LibreFangKernel {
                 context_window_tokens: 0,
                 label: None,
                 model_override: None,
+                reasoning_effort: None,
                 messages_generation: 0,
                 last_repaired_generation: None,
                 peer_id: peer_id_for_new_session.clone(),
@@ -2742,8 +2792,24 @@ impl LibreFangKernel {
             manifest.thinking = cfg.thinking.clone();
         }
 
+        // Apply the per-session reasoning override (#8591): the rung between
+        // agent/global and per-call. After the backfill so it beats the agent
+        // or global level, before `apply_thinking_override` so a per-message
+        // token still wins — frame > session > agent > global > compiled.
+        if let Some(token) = session.reasoning_effort.as_deref() {
+            super::manifest_helpers::apply_session_reasoning_effort(&mut manifest, token);
+        }
+
         // Apply per-call thinking override (from API request).
         apply_thinking_override(&mut manifest, thinking_override);
+
+        // Coercion (#8591): the catalog's declared policy is authoritative, and
+        // this is the last point before the request is built — so it sees the
+        // effective token after every override. A token outside the set is
+        // mapped to the nearest supported rung with a warning, never forwarded
+        // and never 400-ed.
+        let reasoning_policy = self.lookup_reasoning_policy(&manifest.model.model);
+        super::manifest_helpers::coerce_reasoning_effort_to_model(&mut manifest, &reasoning_policy);
 
         // Lazy backfill: create workspace for existing agents spawned before workspaces
         if manifest.workspace.is_none() {

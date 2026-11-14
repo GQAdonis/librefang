@@ -1357,6 +1357,41 @@ fn webui_sender_identity(
     }
 }
 
+/// Parse the optional per-message `reasoning_effort` token from a chat frame
+/// (#8591).
+///
+/// - absent / `null` → `None`: inherit the session, agent, or global level.
+/// - a string → the validated token, verbatim. The vocabulary is open, so a
+///   well-formed token the four-value enum could not express (`medium`,
+///   `minimal`, `xhigh`) is accepted here and travelled through the kernel
+///   chain; malformed input (empty, whitespace) is a client error.
+/// - anything else → client error.
+///
+/// `reasoning_mode` is accepted as a deprecated alias key, with
+/// `reasoning_effort` winning when a frame carries both.
+///
+/// Rejection is an error frame, not a silent drop: mirroring the HTTP route's
+/// 400 on the same key, because silently ignoring the requested level is how a
+/// turn reasons at the wrong depth with no signal an operator would see.
+fn parse_reasoning_effort(
+    parsed: &serde_json::Value,
+) -> Result<Option<librefang_types::config::ReasoningMode>, String> {
+    match parsed
+        .get("reasoning_effort")
+        .or_else(|| parsed.get("reasoning_mode"))
+    {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(token)) => {
+            librefang_types::config::ReasoningMode::new(token.clone())
+                .map(Some)
+                .map_err(|e| format!("Invalid 'reasoning_effort': {e}"))
+        }
+        Some(other) => Err(format!(
+            "Invalid 'reasoning_effort': expected a string, got {other}"
+        )),
+    }
+}
+
 async fn handle_text_message(
     sender: &Arc<Mutex<SplitSink<WebSocket, Message>>>,
     state: &Arc<AppState>,
@@ -1403,8 +1438,28 @@ async fn handle_text_message(
 
             // Per-message toggles from the chat UI.
             // `thinking`: override deep-thinking for this call (None = manifest default).
+            // `reasoning_effort`: open-vocabulary reasoning token for this call (#8591),
+            // e.g. `"none" | "low" | "medium" | "high" | "xhigh" | "max" | "minimal"`.
+            // It wins over `thinking` when both are present, and over the session /
+            // agent / global defaults (frame > session > agent > global > compiled).
             // `show_thinking`: whether to surface thinking deltas/content to the UI.
             let thinking_override: Option<bool> = parsed["thinking"].as_bool();
+            let reasoning_effort = match parse_reasoning_effort(&parsed) {
+                Ok(mode) => mode,
+                Err(message) => {
+                    return send_json_or_close(
+                        sender,
+                        &stamp_message_id(
+                            serde_json::json!({
+                                "type": "error",
+                                "content": message,
+                            }),
+                            message_id.as_deref(),
+                        ),
+                    )
+                    .await;
+                }
+            };
             let show_thinking: bool = parsed["show_thinking"].as_bool().unwrap_or(true);
 
             // Sanitize inbound user input
@@ -1426,18 +1481,46 @@ async fn handle_text_message(
             #[cfg(feature = "uar-driver")]
             if crate::routes::uar_delegation::chat::configured(state, agent_id) {
                 use crate::routes::uar_delegation::chat::{transport, turns::TurnRequest};
-                let request = TurnRequest { message: content,
+                let request = TurnRequest {
+                    message: content,
                     session_id: client.explicit_session.map(|id| id.to_string()),
-                    turn_id: message_id.as_deref().map(|id| uuid::Uuid::parse_str(id)
-                        .unwrap_or_else(|_| uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, id.as_bytes())))
-                        .unwrap_or_else(uuid::Uuid::new_v4).to_string() };
-                match transport::events(Arc::clone(state), agent_id,
-                    client.authenticated_user.clone().map(axum::Extension), request).await {
-                    Ok(mut events) => while let Some(event) = events.recv().await {
-                        send_json_or_close(sender, &stamp_message_id(event, message_id.as_deref())).await?;
-                    },
-                    Err(error) => { send_json_or_close(sender, &stamp_message_id(
-                        serde_json::json!({"type":"error","content":error}),message_id.as_deref())).await?; }
+                    turn_id: message_id
+                        .as_deref()
+                        .map(|id| {
+                            uuid::Uuid::parse_str(id).unwrap_or_else(|_| {
+                                uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, id.as_bytes())
+                            })
+                        })
+                        .unwrap_or_else(uuid::Uuid::new_v4)
+                        .to_string(),
+                };
+                match transport::events(
+                    Arc::clone(state),
+                    agent_id,
+                    client.authenticated_user.clone().map(axum::Extension),
+                    request,
+                )
+                .await
+                {
+                    Ok(mut events) => {
+                        while let Some(event) = events.recv().await {
+                            send_json_or_close(
+                                sender,
+                                &stamp_message_id(event, message_id.as_deref()),
+                            )
+                            .await?;
+                        }
+                    }
+                    Err(error) => {
+                        send_json_or_close(
+                            sender,
+                            &stamp_message_id(
+                                serde_json::json!({"type":"error","content":error}),
+                                message_id.as_deref(),
+                            ),
+                        )
+                        .await?;
+                    }
                 }
                 return Ok(());
             }
@@ -1658,12 +1741,13 @@ async fn handle_text_message(
             match state
                 .kernel
                 .clone()
-                .send_message_streaming_with_sender_context_routing_thinking_and_session(
+                .send_message_streaming_with_reasoning_effort(
                     agent_id,
                     &content,
                     Some(kernel_handle),
                     sender_ctx.clone(),
                     thinking_override,
+                    reasoning_effort,
                     client.explicit_session,
                 )
                 .await
@@ -2020,10 +2104,17 @@ async fn handle_text_message(
             let args = parsed["args"].as_str().unwrap_or("");
             #[cfg(feature = "uar-driver")]
             if cmd == "stop" && crate::routes::uar_delegation::chat::configured(state, agent_id) {
-                let response = crate::routes::uar_delegation::chat::stop(axum::extract::State(Arc::clone(state)),
-                    axum::extract::Path(agent_id.to_string()), client.authenticated_user.clone().map(axum::Extension),
-                    axum::Json(crate::routes::uar_delegation::chat::turns::ConversationQuery {
-                        session_id:client.explicit_session.map(|id|id.to_string()) })).await;
+                let response = crate::routes::uar_delegation::chat::stop(
+                    axum::extract::State(Arc::clone(state)),
+                    axum::extract::Path(agent_id.to_string()),
+                    client.authenticated_user.clone().map(axum::Extension),
+                    axum::Json(
+                        crate::routes::uar_delegation::chat::turns::ConversationQuery {
+                            session_id: client.explicit_session.map(|id| id.to_string()),
+                        },
+                    ),
+                )
+                .await;
                 return send_json_or_close(sender,&serde_json::json!({"type":"command_result","command":"stop",
                     "message":if response.status().is_success(){"Cancellation requested"}else{"UAR cancellation could not be confirmed"}})).await;
             }
@@ -3644,5 +3735,62 @@ mod tests {
         assert!(!is_liveness_ping(""));
         assert!(!is_liveness_ping("{not json"));
         assert!(!is_liveness_ping(r#"{"type":42}"#));
+    }
+
+    /// The per-message `reasoning_effort` (#8591) is an open token, not a
+    /// four-value enum: an absent key inherits, a malformed token is a client
+    /// error, and an open-vocabulary token travels verbatim. The deprecated
+    /// `reasoning_mode` key is accepted; `reasoning_effort` wins when a frame
+    /// carries both.
+    #[test]
+    fn parse_reasoning_effort_accepts_the_open_vocabulary() {
+        // Absent / null → inherit.
+        assert_eq!(
+            parse_reasoning_effort(&serde_json::json!({})).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_reasoning_effort(&serde_json::json!({"reasoning_effort": null})).unwrap(),
+            None
+        );
+
+        // Legacy four plus the rungs the enum could not express.
+        for token in ["none", "low", "medium", "high", "xhigh", "max", "minimal"] {
+            let parsed = parse_reasoning_effort(&serde_json::json!({"reasoning_effort": token}))
+                .unwrap()
+                .expect("token present");
+            assert_eq!(parsed.as_str(), token, "token {token}");
+        }
+
+        // Deprecated alias key: accepted, and the canonical key wins.
+        assert_eq!(
+            parse_reasoning_effort(&serde_json::json!({"reasoning_mode": "medium"}))
+                .unwrap()
+                .expect("alias token present")
+                .as_str(),
+            "medium",
+        );
+        assert_eq!(
+            parse_reasoning_effort(
+                &serde_json::json!({"reasoning_mode": "low", "reasoning_effort": "xhigh"})
+            )
+            .unwrap()
+            .expect("token present")
+            .as_str(),
+            "xhigh",
+            "the canonical key must win over the alias",
+        );
+
+        // Malformed input is rejected loudly rather than dropped.
+        for bad in [
+            serde_json::json!({"reasoning_effort": ""}),
+            serde_json::json!({"reasoning_effort": "high low"}),
+            serde_json::json!({"reasoning_effort": 3}),
+        ] {
+            assert!(
+                parse_reasoning_effort(&bad).is_err(),
+                "frame {bad} must be rejected"
+            );
+        }
     }
 }

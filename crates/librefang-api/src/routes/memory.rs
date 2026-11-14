@@ -1815,220 +1815,222 @@ pub async fn memory_config_patch(
 
     #[cfg(not(feature = "surreal-backend"))]
     {
-    let config_path = state.kernel.config_path().to_path_buf();
+        let config_path = state.kernel.config_path().to_path_buf();
 
-    let content = match tokio::fs::read_to_string(&config_path).await {
-        Ok(c) => c,
-        Err(e) => {
-            return ApiErrorResponse::internal_scrub(e).into_json_tuple();
-        }
-    };
-    let mut table: toml::Value = match toml::from_str(&content) {
-        Ok(t) => t,
-        Err(e) => {
-            return ApiErrorResponse::internal_scrub(e).into_json_tuple();
-        }
-    };
+        let content = match tokio::fs::read_to_string(&config_path).await {
+            Ok(c) => c,
+            Err(e) => {
+                return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+            }
+        };
+        let mut table: toml::Value = match toml::from_str(&content) {
+            Ok(t) => t,
+            Err(e) => {
+                return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+            }
+        };
 
-    let root = table.as_table_mut().unwrap();
+        let root = table.as_table_mut().unwrap();
 
-    // Update [memory] section. `entry(..).or_insert_with` only inserts the
-    // default table when the key is ABSENT; if config.toml already holds a
-    // scalar at `memory` (e.g. a hand-edited `memory = 5`), `as_table_mut`
-    // returns None. Fail gracefully instead of panicking (the pre-existing
-    // `.unwrap()` turned a malformed-config edit into a 500 with a panic log).
-    let memory_tbl = match root
-        .entry("memory")
-        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
-        .as_table_mut()
-    {
-        Some(t) => t,
-        None => {
-            return ApiErrorResponse::bad_request(
-                "config.toml has a non-table `[memory]` entry; expected a table",
-            )
-            .into_json_tuple();
-        }
-    };
-    apply_optional_string_patch(memory_tbl, &req, "embedding_provider");
-    apply_optional_string_patch(memory_tbl, &req, "embedding_model");
-    apply_optional_string_patch(memory_tbl, &req, "embedding_api_key_env");
-    if let Some(v) = req.get("decay_rate").and_then(|v| v.as_f64()) {
-        memory_tbl.insert("decay_rate".into(), toml::Value::Float(v));
-    }
-
-    // Update [proactive_memory] section
-    if let Some(pm) = req.get("proactive_memory") {
-        let pm_tbl = match root
-            .entry("proactive_memory")
+        // Update [memory] section. `entry(..).or_insert_with` only inserts the
+        // default table when the key is ABSENT; if config.toml already holds a
+        // scalar at `memory` (e.g. a hand-edited `memory = 5`), `as_table_mut`
+        // returns None. Fail gracefully instead of panicking (the pre-existing
+        // `.unwrap()` turned a malformed-config edit into a 500 with a panic log).
+        let memory_tbl = match root
+            .entry("memory")
             .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
             .as_table_mut()
         {
             Some(t) => t,
             None => {
                 return ApiErrorResponse::bad_request(
-                    "config.toml has a non-table `[proactive_memory]` entry; expected a table",
+                    "config.toml has a non-table `[memory]` entry; expected a table",
                 )
                 .into_json_tuple();
             }
         };
-        if let Some(v) = pm.get("enabled").and_then(|v| v.as_bool()) {
-            pm_tbl.insert("enabled".into(), toml::Value::Boolean(v));
+        apply_optional_string_patch(memory_tbl, &req, "embedding_provider");
+        apply_optional_string_patch(memory_tbl, &req, "embedding_model");
+        apply_optional_string_patch(memory_tbl, &req, "embedding_api_key_env");
+        if let Some(v) = req.get("decay_rate").and_then(|v| v.as_f64()) {
+            memory_tbl.insert("decay_rate".into(), toml::Value::Float(v));
         }
-        if let Some(v) = pm.get("auto_memorize").and_then(|v| v.as_bool()) {
-            pm_tbl.insert("auto_memorize".into(), toml::Value::Boolean(v));
-        }
-        if let Some(v) = pm.get("auto_retrieve").and_then(|v| v.as_bool()) {
-            pm_tbl.insert("auto_retrieve".into(), toml::Value::Boolean(v));
-        }
-        if let Some(v) = pm.get("extraction_model").and_then(|v| v.as_str()) {
-            pm_tbl.insert(
-                "extraction_model".into(),
-                toml::Value::String(v.to_string()),
-            );
-        }
-        if let Some(v) = pm.get("session_scoped_recall").and_then(|v| v.as_bool()) {
-            pm_tbl.insert("session_scoped_recall".into(), toml::Value::Boolean(v));
-        }
-        if let Some(v) = pm.get("max_retrieve").and_then(|v| v.as_u64()) {
-            pm_tbl.insert("max_retrieve".into(), toml::Value::Integer(v as i64));
-        }
-    }
 
-    let new_content = match toml::to_string_pretty(&table) {
-        Ok(content) => content,
-        Err(e) => return ApiErrorResponse::internal_scrub(e).into_json_tuple(),
-    };
-    let write_path = config_path.clone();
-    let write_result = tokio::task::spawn_blocking(move || {
-        crate::atomic_write(&write_path, new_content.as_bytes())
-    })
-    .await;
-    match write_result {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) => return ApiErrorResponse::internal_scrub(e).into_json_tuple(),
-        Err(e) => {
-            return ApiErrorResponse::internal_scrub(format!(
-                "memory config write task failed: {e}"
-            ))
-            .into_json_tuple();
+        // Update [proactive_memory] section
+        if let Some(pm) = req.get("proactive_memory") {
+            let pm_tbl = match root
+                .entry("proactive_memory")
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+                .as_table_mut()
+            {
+                Some(t) => t,
+                None => {
+                    return ApiErrorResponse::bad_request(
+                        "config.toml has a non-table `[proactive_memory]` entry; expected a table",
+                    )
+                    .into_json_tuple();
+                }
+            };
+            if let Some(v) = pm.get("enabled").and_then(|v| v.as_bool()) {
+                pm_tbl.insert("enabled".into(), toml::Value::Boolean(v));
+            }
+            if let Some(v) = pm.get("auto_memorize").and_then(|v| v.as_bool()) {
+                pm_tbl.insert("auto_memorize".into(), toml::Value::Boolean(v));
+            }
+            if let Some(v) = pm.get("auto_retrieve").and_then(|v| v.as_bool()) {
+                pm_tbl.insert("auto_retrieve".into(), toml::Value::Boolean(v));
+            }
+            if let Some(v) = pm.get("extraction_model").and_then(|v| v.as_str()) {
+                pm_tbl.insert(
+                    "extraction_model".into(),
+                    toml::Value::String(v.to_string()),
+                );
+            }
+            if let Some(v) = pm.get("session_scoped_recall").and_then(|v| v.as_bool()) {
+                pm_tbl.insert("session_scoped_recall".into(), toml::Value::Boolean(v));
+            }
+            if let Some(v) = pm.get("max_retrieve").and_then(|v| v.as_u64()) {
+                pm_tbl.insert("max_retrieve".into(), toml::Value::Integer(v as i64));
+            }
         }
-    }
 
-    // M12: hot-reload the new config so the running kernel picks up the
-    // change without an operator restart. Pre-fix the endpoint just
-    // wrote the file and returned `restart_required: true`, which
-    // confused dashboard users who saw GET return new values but the
-    // live behaviour (ProactiveMemoryStore::config, decay engine, etc.)
-    // stayed on the boot snapshot.
-    //
-    // **Response contract — clients MUST inspect `body.status`, not
-    // just the HTTP status.** PATCH always returns 200 OK on disk
-    // write; `status` discriminates:
-    //   - `"applied"` — file written + live config hot-reloaded.
-    //                   `restart_required` reflects whether any
-    //                   diff field needed a restart anyway.
-    //   - `"partial"` — file written but live reload failed (e.g.
-    //                   operator hand-edited an unrelated section
-    //                   into an invalid shape between PATCH writes).
-    //                   The new values are on disk for the next boot;
-    //                   `reload_error` carries the validator output
-    //                   for the operator. `restart_required` is
-    //                   always `true` in this branch.
-    //
-    // Review-followup #3: 207 / 500 were both considered for the
-    // partial case and both rejected. 500 implies the operator's
-    // PATCH was rejected, which is false — the disk write succeeded.
-    // 207 Multi-Status is awkward for a single-resource PATCH and
-    // would force every existing client to re-classify success. The
-    // body-status pattern mirrors `import_agent_memory` (the
-    // post-#3832 partial-import contract).
-    let reload_result = state.kernel.reload_config().await;
-    let (status, restart_required, reload_error) = match reload_result {
-        Ok(plan) => ("applied", plan.restart_required, None),
-        Err(e) => {
-            tracing::warn!("Memory config PATCH wrote disk but reload failed: {e}");
-            ("partial", true, Some(e))
+        let new_content = match toml::to_string_pretty(&table) {
+            Ok(content) => content,
+            Err(e) => return ApiErrorResponse::internal_scrub(e).into_json_tuple(),
+        };
+        let write_path = config_path.clone();
+        let write_result = tokio::task::spawn_blocking(move || {
+            crate::atomic_write(&write_path, new_content.as_bytes())
+        })
+        .await;
+        match write_result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return ApiErrorResponse::internal_scrub(e).into_json_tuple(),
+            Err(e) => {
+                return ApiErrorResponse::internal_scrub(format!(
+                    "memory config write task failed: {e}"
+                ))
+                .into_json_tuple();
+            }
         }
-    };
 
-    tracing::info!(status, "Memory config updated via API");
+        // M12: hot-reload the new config so the running kernel picks up the
+        // change without an operator restart. Pre-fix the endpoint just
+        // wrote the file and returned `restart_required: true`, which
+        // confused dashboard users who saw GET return new values but the
+        // live behaviour (ProactiveMemoryStore::config, decay engine, etc.)
+        // stayed on the boot snapshot.
+        //
+        // **Response contract — clients MUST inspect `body.status`, not
+        // just the HTTP status.** PATCH always returns 200 OK on disk
+        // write; `status` discriminates:
+        //   - `"applied"` — file written + live config hot-reloaded.
+        //                   `restart_required` reflects whether any
+        //                   diff field needed a restart anyway.
+        //   - `"partial"` — file written but live reload failed (e.g.
+        //                   operator hand-edited an unrelated section
+        //                   into an invalid shape between PATCH writes).
+        //                   The new values are on disk for the next boot;
+        //                   `reload_error` carries the validator output
+        //                   for the operator. `restart_required` is
+        //                   always `true` in this branch.
+        //
+        // Review-followup #3: 207 / 500 were both considered for the
+        // partial case and both rejected. 500 implies the operator's
+        // PATCH was rejected, which is false — the disk write succeeded.
+        // 207 Multi-Status is awkward for a single-resource PATCH and
+        // would force every existing client to re-classify success. The
+        // body-status pattern mirrors `import_agent_memory` (the
+        // post-#3832 partial-import contract).
+        let reload_result = state.kernel.reload_config().await;
+        let (status, restart_required, reload_error) = match reload_result {
+            Ok(plan) => ("applied", plan.restart_required, None),
+            Err(e) => {
+                tracing::warn!("Memory config PATCH wrote disk but reload failed: {e}");
+                ("partial", true, Some(e))
+            }
+        };
 
-    // Return the canonical entity (matches GET /api/memory/config shape) sourced
-    // from the freshly-written TOML table so callers can `setQueryData` without a
-    // follow-up GET. See issue #3832.
-    let memory_section = table.get("memory").and_then(|v| v.as_table());
-    let proactive_section = table.get("proactive_memory").and_then(|v| v.as_table());
+        tracing::info!(status, "Memory config updated via API");
 
-    let toml_str = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<String> {
-        t.and_then(|m| m.get(k))
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
-    };
-    let toml_bool = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<bool> {
-        t.and_then(|m| m.get(k)).and_then(|v| v.as_bool())
-    };
-    let toml_f64 = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<f64> {
-        t.and_then(|m| m.get(k)).and_then(|v| v.as_float())
-    };
-    let toml_u64 = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<u64> {
-        t.and_then(|m| m.get(k))
-            .and_then(|v| v.as_integer())
-            .and_then(|n| u64::try_from(n).ok())
-    };
+        // Return the canonical entity (matches GET /api/memory/config shape) sourced
+        // from the freshly-written TOML table so callers can `setQueryData` without a
+        // follow-up GET. See issue #3832.
+        let memory_section = table.get("memory").and_then(|v| v.as_table());
+        let proactive_section = table.get("proactive_memory").and_then(|v| v.as_table());
 
-    let provider_cleared = req
-        .get("embedding_provider")
-        .is_some_and(serde_json::Value::is_null);
-    let model_cleared = req
-        .get("embedding_model")
-        .is_some_and(serde_json::Value::is_null);
-    let api_key_env_cleared = req
-        .get("embedding_api_key_env")
-        .is_some_and(serde_json::Value::is_null);
-    let live = state.kernel.config_ref();
-    let body = serde_json::json!({
-        "embedding_provider": if provider_cleared {
-            None
-        } else {
-            toml_str(memory_section, "embedding_provider")
-                .or_else(|| live.memory.embedding_provider.clone())
-        },
-        "embedding_model": if model_cleared {
-            librefang_types::config::MemoryConfig::default().embedding_model
-        } else {
-            toml_str(memory_section, "embedding_model")
-                .unwrap_or_else(|| live.memory.embedding_model.clone())
-        },
-        "embedding_api_key_env": if api_key_env_cleared {
-            None
-        } else {
-            toml_str(memory_section, "embedding_api_key_env")
-                .or_else(|| live.memory.embedding_api_key_env.clone())
-        },
-        "decay_rate": toml_f64(memory_section, "decay_rate")
-            .unwrap_or(live.memory.decay_rate),
-        "proactive_memory": {
-            "enabled": toml_bool(proactive_section, "enabled")
-                .unwrap_or(live.proactive_memory.enabled),
-            "auto_memorize": toml_bool(proactive_section, "auto_memorize")
-                .unwrap_or(live.proactive_memory.auto_memorize),
-            "auto_retrieve": toml_bool(proactive_section, "auto_retrieve")
-                .unwrap_or(live.proactive_memory.auto_retrieve),
-            "extraction_model": toml_str(proactive_section, "extraction_model")
-                .or_else(|| live.proactive_memory.extraction_model.clone()),
-            "session_scoped_recall": toml_bool(proactive_section, "session_scoped_recall")
-                .unwrap_or(live.proactive_memory.session_scoped_recall),
-            "max_retrieve": toml_u64(proactive_section, "max_retrieve")
-                .unwrap_or(live.proactive_memory.max_retrieve as u64),
-        },
-        "status": status,
-        "restart_required": restart_required,
-        "reload_error": reload_error,
-    });
-    drop(live);
+        let toml_str =
+            |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<String> {
+                t.and_then(|m| m.get(k))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            };
+        let toml_bool =
+            |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<bool> {
+                t.and_then(|m| m.get(k)).and_then(|v| v.as_bool())
+            };
+        let toml_f64 = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<f64> {
+            t.and_then(|m| m.get(k)).and_then(|v| v.as_float())
+        };
+        let toml_u64 = |t: Option<&toml::map::Map<String, toml::Value>>, k: &str| -> Option<u64> {
+            t.and_then(|m| m.get(k))
+                .and_then(|v| v.as_integer())
+                .and_then(|n| u64::try_from(n).ok())
+        };
 
-    (StatusCode::OK, Json(body))
+        let provider_cleared = req
+            .get("embedding_provider")
+            .is_some_and(serde_json::Value::is_null);
+        let model_cleared = req
+            .get("embedding_model")
+            .is_some_and(serde_json::Value::is_null);
+        let api_key_env_cleared = req
+            .get("embedding_api_key_env")
+            .is_some_and(serde_json::Value::is_null);
+        let live = state.kernel.config_ref();
+        let body = serde_json::json!({
+            "embedding_provider": if provider_cleared {
+                None
+            } else {
+                toml_str(memory_section, "embedding_provider")
+                    .or_else(|| live.memory.embedding_provider.clone())
+            },
+            "embedding_model": if model_cleared {
+                librefang_types::config::MemoryConfig::default().embedding_model
+            } else {
+                toml_str(memory_section, "embedding_model")
+                    .unwrap_or_else(|| live.memory.embedding_model.clone())
+            },
+            "embedding_api_key_env": if api_key_env_cleared {
+                None
+            } else {
+                toml_str(memory_section, "embedding_api_key_env")
+                    .or_else(|| live.memory.embedding_api_key_env.clone())
+            },
+            "decay_rate": toml_f64(memory_section, "decay_rate")
+                .unwrap_or(live.memory.decay_rate),
+            "proactive_memory": {
+                "enabled": toml_bool(proactive_section, "enabled")
+                    .unwrap_or(live.proactive_memory.enabled),
+                "auto_memorize": toml_bool(proactive_section, "auto_memorize")
+                    .unwrap_or(live.proactive_memory.auto_memorize),
+                "auto_retrieve": toml_bool(proactive_section, "auto_retrieve")
+                    .unwrap_or(live.proactive_memory.auto_retrieve),
+                "extraction_model": toml_str(proactive_section, "extraction_model")
+                    .or_else(|| live.proactive_memory.extraction_model.clone()),
+                "session_scoped_recall": toml_bool(proactive_section, "session_scoped_recall")
+                    .unwrap_or(live.proactive_memory.session_scoped_recall),
+                "max_retrieve": toml_u64(proactive_section, "max_retrieve")
+                    .unwrap_or(live.proactive_memory.max_retrieve as u64),
+            },
+            "status": status,
+            "restart_required": restart_required,
+            "reload_error": reload_error,
+        });
+        drop(live);
+
+        (StatusCode::OK, Json(body))
     }
 }
 
@@ -2191,6 +2193,26 @@ fn assert_kv_owner_or_admin(
     }
 }
 
+/// Whether `key` is in the platform's reserved compaction-mirror namespace (#8645).
+///
+/// `compaction_summary_<sid>` rows are per-conversation summaries the prompt path trusts as the
+/// conversation's own history, and the memory tools already refuse the prefix. The REST KV
+/// surface is the other way in: listing or exporting them hands one conversation's summary to
+/// whoever reads the agent's KV, and writing or importing one plants a summary that a later turn
+/// on that sid injects into its prompt. The rows are platform state rather than agent memory, so
+/// they are hidden from listings and exports and refused on writes.
+fn is_reserved_kv_key(key: &str) -> bool {
+    key.starts_with(librefang_memory::COMPACTION_SUMMARY_KEY_PREFIX)
+}
+
+fn reserved_kv_key_error(key: &str) -> (StatusCode, Json<serde_json::Value>) {
+    ApiErrorResponse::bad_request(format!(
+        "key '{key}' uses the reserved '{}' prefix",
+        librefang_memory::COMPACTION_SUMMARY_KEY_PREFIX
+    ))
+    .into_json_tuple()
+}
+
 /// GET /api/memory/agents/:id/kv — List KV pairs for an agent.
 #[utoipa::path(get, path = "/api/memory/agents/{id}/kv", tag = "memory", params(("id" = String, Path, description = "Agent ID")), responses((status = 200, description = "Agent KV store", body = crate::types::JsonObject)))]
 pub async fn get_agent_kv(
@@ -2208,6 +2230,7 @@ pub async fn get_agent_kv(
         Ok(pairs) => {
             let kv: Vec<serde_json::Value> = pairs
                 .into_iter()
+                .filter(|(k, _)| !is_reserved_kv_key(k))
                 .map(|(k, v)| serde_json::json!({"key": k, "value": v}))
                 .collect();
             (StatusCode::OK, Json(serde_json::json!({"kv_pairs": kv}))).into_response()
@@ -2287,6 +2310,12 @@ pub async fn set_agent_kv_key(
     };
     if let Err(resp) = assert_kv_owner_or_admin(&state, agent_id, api_user.as_ref(), &t) {
         return crate::extensions::with_agent_id(agent_id, resp);
+    }
+    if is_reserved_kv_key(&key) {
+        return crate::extensions::with_agent_id(
+            agent_id,
+            reserved_kv_key_error(&key).into_response(),
+        );
     }
     let value = body.get("value").cloned().unwrap_or(body);
 
@@ -2375,7 +2404,10 @@ pub async fn export_agent_memory(
 
     let body = match state.kernel.memory_substrate().list_kv(agent_id) {
         Ok(pairs) => {
-            let kv_map: serde_json::Map<String, serde_json::Value> = pairs.into_iter().collect();
+            let kv_map: serde_json::Map<String, serde_json::Value> = pairs
+                .into_iter()
+                .filter(|(k, _)| !is_reserved_kv_key(k))
+                .collect();
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -2458,6 +2490,12 @@ pub async fn import_agent_memory(
         }
     };
 
+    // Refuse the whole import before anything is cleared or written, so a rejected body leaves
+    // the agent's memory exactly as it was.
+    if let Some(key) = kv.keys().find(|k| is_reserved_kv_key(k)) {
+        return crate::extensions::with_agent_id(agent_id, reserved_kv_key_error(key));
+    }
+
     let clear_existing = body
         .get("clear_existing")
         .and_then(|v| v.as_bool())
@@ -2467,7 +2505,9 @@ pub async fn import_agent_memory(
     if clear_existing {
         match state.kernel.memory_substrate().list_kv(agent_id) {
             Ok(existing) => {
-                for (key, _) in existing {
+                // The compaction mirrors are not part of the KV surface this endpoint exposes,
+                // so clearing it leaves them to the session lifecycle that owns them.
+                for (key, _) in existing.into_iter().filter(|(k, _)| !is_reserved_kv_key(k)) {
                     if let Err(e) = state
                         .kernel
                         .memory_substrate()

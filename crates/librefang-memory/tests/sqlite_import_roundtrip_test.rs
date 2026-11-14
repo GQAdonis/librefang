@@ -84,6 +84,7 @@ fn seed_sqlite(path: &Path) -> Fixture {
         label: None,
         parent_session_id: None,
         model_override: Some("provider/model".to_string()),
+        reasoning_effort: None,
         messages_generation: 0,
         last_repaired_generation: None,
         peer_id: None,
@@ -93,6 +94,10 @@ fn seed_sqlite(path: &Path) -> Fixture {
     substrate
         .set_session_model_override(session.id, Some("provider/model"))
         .expect("set model override");
+    // Nor the reasoning-effort pin (#8591, SQLite v65); set it through its own setter so the import carries a real v65 column.
+    substrate
+        .set_session_reasoning_effort(session.id, Some("high"))
+        .expect("set reasoning effort");
 
     let canonical = vec![Message::user("remember this"), Message::assistant("noted")];
     substrate
@@ -156,6 +161,7 @@ async fn import_and_verify(store: &SurrealSession, sqlite_path: &Path, fx: &Fixt
     assert_eq!(loaded.context_window_tokens, 4321);
     assert_eq!(loaded.label, None);
     assert_eq!(loaded.model_override.as_deref(), Some("provider/model"));
+    assert_eq!(loaded.reasoning_effort.as_deref(), Some("high"));
     assert_eq!(
         sessions.get_agent_session_ids(fx.agent).expect("list"),
         vec![fx.session.id]

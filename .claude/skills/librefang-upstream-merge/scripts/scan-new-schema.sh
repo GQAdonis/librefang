@@ -14,18 +14,27 @@
 
 set -euo pipefail
 
-base="${1:-HEAD^}"
+# Range of the incoming change.
+# During an in-progress merge (MERGE_HEAD exists) nothing is committed yet, so the old `HEAD^..HEAD` default scanned the fork's previous commit and reported a false "ok" (2026-11-13 sync): diff the pre-merge HEAD against the resolved working tree instead.
+# After the merge commit, HEAD^ (first parent) is the pre-merge fork, so `HEAD^..HEAD` is the resolved incoming change.
+if [ -n "${1:-}" ]; then
+  base="$1"; range=("$1..HEAD"); label="$1..HEAD"
+elif git rev-parse --quiet --verify MERGE_HEAD >/dev/null 2>&1; then
+  base="HEAD"; range=("HEAD"); label="HEAD..<merge working tree>"
+else
+  base="HEAD^"; range=("HEAD^..HEAD"); label="HEAD^..HEAD"
+fi
 
 if ! git rev-parse --quiet --verify "$base" >/dev/null 2>&1; then
   echo "[scan-new-schema] FAIL: base ref '$base' does not exist" >&2
   exit 1
 fi
 
-echo "[scan-new-schema] scanning $base..HEAD for new SQLite schema..."
+echo "[scan-new-schema] scanning $label for new SQLite schema..."
 
 # Grep for schema-defining statements in the additions of the diff.
 # `git diff --unified=0` keeps context low; `^+` matches added lines.
-hits="$(git diff --unified=0 "$base..HEAD" -- '*.rs' '*.sql' 2>/dev/null \
+hits="$(git diff --unified=0 "${range[@]}" -- '*.rs' '*.sql' 2>/dev/null \
   | grep -E '^\+[^+].*(CREATE TABLE|ALTER TABLE|ADD COLUMN|CREATE INDEX|CREATE UNIQUE INDEX)' \
   || true)"
 
@@ -35,9 +44,9 @@ if [ -z "$hits" ]; then
 fi
 
 # Find which files contain the hits.
-files="$(git diff --name-only "$base..HEAD" -- '*.rs' '*.sql' 2>/dev/null \
+files="$(git diff --name-only "${range[@]}" -- '*.rs' '*.sql' 2>/dev/null \
   | while read -r f; do
-      if git diff --unified=0 "$base..HEAD" -- "$f" 2>/dev/null \
+      if git diff --unified=0 "${range[@]}" -- "$f" 2>/dev/null \
          | grep -qE '^\+[^+].*(CREATE TABLE|ALTER TABLE|ADD COLUMN|CREATE INDEX|CREATE UNIQUE INDEX)'; then
         echo "$f"
       fi

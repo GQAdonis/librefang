@@ -149,11 +149,19 @@ case "$play_pkg" in
   "$android_id") ok "release.yml Play packageName = $android_id" ;;
   *) fail "release.yml Play packageName = '$play_pkg' (expected '$android_id' from tauri.android.conf.json, preferably derived)" ;;
 esac
+# The interpreter on PATH may be a shim that refuses to run script files, and the safety test needs PyYAML, so prefer uv (2026-11-13 sync).
+run_py() {
+  if command -v uv >/dev/null 2>&1; then
+    uv run --quiet --with pyyaml python "$@"
+  else
+    python3 "$@"
+  fi
+}
 safety_test="$toplevel/scripts/tests/test_release_tag_workflow_safety.py"
 if [ -f "$safety_test" ]; then
   if grep -qE '"ai\.librefang\.' "$safety_test"; then
     fail "$(basename "$safety_test") still expects ai.librefang.* identifiers — flip its expectation table to ai.bossfang.*"
-  elif python3 "$safety_test" >/dev/null 2>&1; then
+  elif run_py "$safety_test" >/dev/null 2>&1; then
     ok "$(basename "$safety_test") passes"
   else
     fail "$(basename "$safety_test") fails — run it directly for the message"
